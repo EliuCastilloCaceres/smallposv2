@@ -1,0 +1,359 @@
+/* src/components/Settings/tabs/rolesTab.css */
+/* Extiende settings.css — solo define lo específico del tab de roles */
+
+/* ── Layout dos columnas ─────────────────────────────────── */
+.rol-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .rol-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Lista de roles ──────────────────────────────────────── */
+.rol-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rol-card {
+  position: relative;
+  width: 100%;
+  background: var(--set-surface);
+  border: 1.5px solid var(--set-border);
+  border-radius: var(--set-radius);
+  padding: 14px 14px 14px 20px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.rol-card:hover { border-color: #cbd5e1; box-shadow: 0 2px 8px rgba(15,23,42,.06); }
+.rol-card--selected {
+  border-color: var(--set-accent);
+  background: var(--set-accent-bg);
+}
+.rol-card--inactive { opacity: .6; }
+
+.rol-card__body { display: flex; flex-direction: column; gap: 10px; }
+
+.rol-card__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rol-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rol-card__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--set-text);
+}
+
+.rol-card__desc {
+  font-size: 12px;
+  color: var(--set-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rol-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--set-muted);
+  flex-wrap: wrap;
+}
+.rol-card__meta i { font-size: 12px; }
+
+/* ── Columna del editor ──────────────────────────────────── */
+.rol-editor-col {
+  position: sticky;
+  top: 20px;
+}
+
+/* ── Editor de permisos ──────────────────────────────────── */
+.rol-editor {
+  background: var(--set-surface);
+  border: 1px solid var(--set-border);
+  border-radius: var(--set-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.rol-editor__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--set-border);
+  background: var(--set-bg);
+  flex-wrap: wrap;
+}
+
+.rol-editor__head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rol-editor__title {
+  font-size: 14px;
+  color: var(--set-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.rol-editor__title i { color: var(--set-accent); font-size: 16px; }
+
+.rol-editor__count {
+  font-size: 12px;
+  color: var(--set-muted);
+  background: var(--set-border);
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rol-editor__dirty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--set-warn);
+  padding: 8px 16px;
+  border-top: 1px solid var(--set-border);
+  margin: 0;
+}
+.rol-editor__dirty i { font-size: 13px; }
+
+/* ── Módulos ─────────────────────────────────────────────── */
+.rol-modules {
+  display: flex;
+  flex-direction: column;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.rol-module {
+  border-bottom: 1px solid var(--set-border);
+}
+.rol-module:last-child { border-bottom: none; }
+
+.rol-module__header {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--set-surface);
+  transition: background .12s;
+}
+.rol-module__header:hover { background: var(--set-bg); }
+.rol-module--open .rol-module__header { background: var(--set-accent-bg); }
+
+.rol-module__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rol-module__check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--set-accent);
+  cursor: pointer;
+}
+
+.rol-module__toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 10px 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  min-height: 44px;
+}
+
+.rol-module__icon {
+  font-size: 15px;
+  color: var(--set-muted);
+  flex-shrink: 0;
+}
+.rol-module--open .rol-module__icon { color: var(--set-accent); }
+
+.rol-module__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--set-text);
+  flex: 1;
+}
+
+.rol-module__pill {
+  font-size: 11px;
+  color: var(--set-muted);
+  background: var(--set-border);
+  padding: 2px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.rol-module--open .rol-module__pill {
+  background: rgba(79,142,247,.15);
+  color: var(--set-accent);
+}
+
+.rol-module__chevron {
+  font-size: 13px;
+  color: var(--set-muted);
+  transition: transform .2s;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.rol-module__chevron--open { transform: rotate(180deg); }
+
+/* ── Filas de permisos ───────────────────────────────────── */
+.rol-module__body {
+  background: var(--set-bg);
+  border-top: 1px solid var(--set-border);
+}
+
+.rol-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 10px 44px;
+  cursor: pointer;
+  transition: background .1s;
+  border-bottom: 1px solid rgba(226,232,240,.5);
+}
+.rol-perm-row:last-child { border-bottom: none; }
+.rol-perm-row:hover { background: rgba(79,142,247,.04); }
+
+.rol-perm-row__check {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--set-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.rol-perm-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rol-perm-row__action {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--set-text);
+}
+
+.rol-perm-row__desc {
+  font-size: 11px;
+  color: var(--set-muted);
+}
+
+/* ── Modal (reutiliza clases set-modal de settings.css) ──── */
+/* Las clases set-overlay, set-modal, set-modal__header, etc.
+   deben estar definidas en settings.css o en un archivo compartido.
+   Si no existen aún, agregar esto a settings.css:            */
+
+.set-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: set-fade .2s ease;
+}
+@keyframes set-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.set-modal {
+  background: var(--set-surface);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 460px;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 48px rgba(15,23,42,.16);
+  animation: set-scale .2s ease;
+  overflow: hidden;
+}
+@keyframes set-scale {
+  from { opacity: 0; transform: scale(.96) translateY(6px); }
+  to   { opacity: 1; transform: scale(1)   translateY(0);   }
+}
+
+.set-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--set-border);
+  flex-shrink: 0;
+}
+
+.set-modal__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--set-text);
+  margin: 0;
+}
+.set-modal__title i { color: var(--set-accent); }
+
+.set-modal__close {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--set-muted); cursor: pointer;
+  border-radius: 8px; font-size: 16px;
+  transition: background .15s, color .15s;
+}
+.set-modal__close:hover { background: var(--set-bg); color: var(--set-text); }
+
+.set-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.set-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+}

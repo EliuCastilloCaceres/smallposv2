@@ -1,0 +1,168 @@
+/* src/components/Common/confirm-dialog.css */
+
+/* ── Variables — hereda de app.css ──────────────────────────
+   Si se usa fuera de un contexto que ya tenga estas variables,
+   definir un fallback en el componente padre. ─────────────── */
+
+/* ── Overlay ─────────────────────────────────────────────── */
+.cfd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,.45);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;   /* mobile: slide desde abajo */
+  justify-content: center;
+  padding: 0;
+  animation: cfd-fade-in .15s ease;
+}
+
+@media (min-width: 560px) {
+  .cfd-overlay {
+    align-items: center;
+    padding: 20px;
+  }
+}
+
+@keyframes cfd-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Modal ───────────────────────────────────────────────── */
+.cfd-modal {
+  width: 100%;
+  max-width: 540px;
+  background: var(--app-surface, #ffffff);
+  border-radius: var(--app-radius, 10px) var(--app-radius, 10px) 0 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 92dvh;
+  animation: cfd-slide-up .2s ease;
+  overflow: hidden;
+}
+
+@media (min-width: 560px) {
+  .cfd-modal {
+    border-radius: var(--app-radius, 10px);
+    max-height: 90dvh;
+  }
+}
+
+.cfd-modal--sm { max-width: 400px; }
+
+@keyframes cfd-slide-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Modal header ────────────────────────────────────────── */
+.cfd-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--app-border, #e2e8f0);
+  flex-shrink: 0;
+}
+
+.cfd-modal__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+.cfd-modal__title i { color: var(--app-accent, #4f8ef7); font-size: 18px; }
+
+.cfd-modal__close {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  color: #64748b;
+  transition: background .15s, color .15s;
+}
+.cfd-modal__close:hover { background: #f1f5f9; color: #0f172a; }
+.cfd-modal__close i { font-size: 16px; }
+
+/* ── Modal body ──────────────────────────────────────────── */
+.cfd-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+/* ── Modal footer ────────────────────────────────────────── */
+.cfd-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--app-border, #e2e8f0);
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+/* ── Confirm text ────────────────────────────────────────── */
+.cfd-confirm__text {
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.6;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.cfd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  min-height: 44px;
+  transition: background .15s, color .15s, border-color .15s, opacity .15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+.cfd-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.cfd-btn--ghost {
+  background: transparent;
+  color: #64748b;
+  border-color: var(--app-border, #e2e8f0);
+}
+.cfd-btn--ghost:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.cfd-btn--primary {
+  background: var(--app-accent, #4f8ef7);
+  color: #fff;
+  border-color: var(--app-accent, #4f8ef7);
+}
+.cfd-btn--primary:hover:not(:disabled) { background: #3a7de0; border-color: #3a7de0; }
+.cfd-btn--primary:active:not(:disabled) { transform: scale(.97); }
+
+.cfd-btn--danger {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+.cfd-btn--danger:hover:not(:disabled) { background: #b91c1c; border-color: #b91c1c; }
+.cfd-btn--danger:active:not(:disabled) { transform: scale(.97); }

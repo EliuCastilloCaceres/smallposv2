@@ -1,0 +1,208 @@
+/* src/components/Common/branch-picker.css */
+
+/* ── Variables (misma fuente que el resto de la app) ─────── */
+.bp-root,
+.bp-active-bar {
+  --bp-accent:    var(--app-accent,  #4f8ef7);
+  --bp-accent-bg: rgba(79,142,247,.10);
+  --bp-surface:   var(--app-surface, #ffffff);
+  --bp-border:    var(--app-border,  #e2e8f0);
+  --bp-bg:        var(--app-bg,      #f1f5f9);
+  --bp-text:      #0f172a;
+  --bp-muted:     #64748b;
+  --bp-radius:    var(--app-radius,  10px);
+  --bp-radius-sm: 8px;
+  --bp-green:     #16a34a;
+  --bp-red:       #dc2626;
+  --touch-min:    44px;
+}
+
+/* ── Root — centra el picker en el área de contenido ─────── */
+.bp-root {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  min-height: 60dvh;
+}
+
+/* ── Card contenedor ─────────────────────────────────────── */
+.bp-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bp-surface);
+  border: 1px solid var(--bp-border);
+  border-radius: var(--bp-radius);
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(15,23,42,.06);
+}
+
+/* ── Header — icono + texto ──────────────────────────────── */
+.bp-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 24px 20px;
+  text-align: center;
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.bp-icon {
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  background: var(--bp-accent-bg);
+  color: var(--bp-accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+}
+
+.bp-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--bp-text);
+  margin: 0;
+}
+
+.bp-desc {
+  font-size: 13px;
+  color: var(--bp-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Lista de sucursales ─────────────────────────────────── */
+.bp-list {
+  list-style: none;
+  margin: 0; padding: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+/* ── Item / botón de sucursal ────────────────────────────── */
+.bp-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--bp-radius-sm);
+  cursor: pointer;
+  transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+  min-height: var(--touch-min);
+}
+.bp-item:hover { background: var(--bp-bg); }
+.bp-item:active { background: var(--bp-accent-bg); }
+
+.bp-item__avatar {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--bp-accent-bg);
+  color: var(--bp-accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: .5px;
+  flex-shrink: 0;
+}
+
+.bp-item__info {
+  display: flex; flex-direction: column; gap: 3px;
+  flex: 1; min-width: 0;
+}
+
+.bp-item__name {
+  font-size: 14px; font-weight: 600; color: var(--bp-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.bp-item__meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--bp-muted);
+}
+.bp-item__meta i { font-size: 11px; }
+
+.bp-item__arrow {
+  font-size: 13px; color: var(--bp-muted);
+  flex-shrink: 0;
+  transition: transform .15s, color .15s;
+}
+.bp-item:hover .bp-item__arrow {
+  transform: translateX(3px);
+  color: var(--bp-accent);
+}
+
+/* ── Skeleton ────────────────────────────────────────────── */
+.bp-skeleton {
+  height: 52px;
+  border-radius: var(--bp-radius-sm);
+  background: linear-gradient(90deg, var(--bp-bg) 25%, #e9eef5 50%, var(--bp-bg) 75%);
+  background-size: 200% 100%;
+  animation: bp-shimmer 1.4s infinite;
+  margin: 2px 0;
+}
+@keyframes bp-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Error / empty ───────────────────────────────────────── */
+.bp-error,
+.bp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 24px;
+  font-size: 13px;
+  color: var(--bp-muted);
+  text-align: center;
+}
+.bp-error i { font-size: 24px; color: var(--bp-red); }
+.bp-empty i { font-size: 28px; }
+
+/* ── Barra activa — "viendo Sucursal X  [Cambiar]" ──────── */
+.bp-active-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--bp-accent-bg);
+  border: 1px solid rgba(79,142,247,.2);
+  border-radius: var(--bp-radius-sm);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.bp-active-bar__info {
+  display: flex; align-items: center; gap: 7px;
+  color: var(--bp-accent); font-weight: 600;
+}
+.bp-active-bar__info i { font-size: 15px; flex-shrink: 0; }
+
+.bp-active-bar__name {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.bp-active-bar__change {
+  all: unset;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--bp-radius-sm);
+  font-size: 12px; font-weight: 500;
+  color: var(--bp-accent);
+  border: 1px solid rgba(79,142,247,.3);
+  background: var(--bp-surface);
+  white-space: nowrap;
+  transition: background .15s, border-color .15s;
+  min-height: 32px;
+  -webkit-tap-highlight-color: transparent;
+}
+.bp-active-bar__change:hover {
+  background: var(--bp-accent);
+  color: #fff;
+  border-color: var(--bp-accent);
+}
+.bp-active-bar__change i { font-size: 13px; }

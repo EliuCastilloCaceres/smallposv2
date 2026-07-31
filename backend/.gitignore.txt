@@ -1,0 +1,66 @@
+# ============================================
+# Dependencias
+# ============================================
+node_modules/
+*/node_modules/
+**/node_modules/
+.pnp
+.pnp.js
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# ============================================
+# Variables de entorno
+# ============================================
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+*/.env
+**/.env
+
+# ============================================
+# Logs
+# ============================================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ============================================
+# Directorios de build / dist
+# ============================================
+dist/
+build/
+*/dist/
+*/build/
+out/
+.next/
+.nuxt/
+.cache/
+coverage/
+*.tsbuildinfo
+
+# ============================================
+# Sistema operativo
+# ============================================
+.DS_Store
+Thumbs.db
+
+# ============================================
+# IDEs y editores
+# ============================================
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

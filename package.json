@@ -1,0 +1,26 @@
+{
+  "name": "smallposv2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev:back": "npm run dev --prefix backend",
+    "dev:front": "npm run dev --prefix frontend",
+    "dev": "concurrently --names \"BACK,FRONT\" --prefix-colors \"blue,green\" \"npm run dev:back\" \"npm run dev:front\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EliuCastilloCaceres/smallposv2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/EliuCastilloCaceres/smallposv2/issues"
+  },
+  "homepage": "https://github.com/EliuCastilloCaceres/smallposv2#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.4"
+  }
+}

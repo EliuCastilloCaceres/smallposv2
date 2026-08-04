@@ -150,19 +150,26 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
   try {
     await conn.beginTransaction();
 
+    // [NUEVO] Join con branches para tener el nombre listo para el reporte
     const [registers] = await conn.query(
-      `SELECT * FROM cash_registers
-       WHERE cash_register_id = ? AND branch_id = ? AND is_active = 1
+      `SELECT cr.*, b.name AS branch_name
+       FROM cash_registers cr
+       JOIN branches b ON cr.branch_id = b.branch_id
+       WHERE cr.cash_register_id = ? AND cr.branch_id = ? AND cr.is_active = 1
        FOR UPDATE`,
       [cashRegisterId, branchId]
     );
     if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
     if (!registers[0].is_open) throw new ValidationError('La caja ya está cerrada');
+    const register = registers[0];
 
+    // [NUEVO] Join con users para tener el nombre del cajero para el reporte
     const [sessions] = await conn.query(
-      `SELECT * FROM cash_register_sessions
-       WHERE cash_register_id = ? AND closed_at IS NULL
-       ORDER BY session_id DESC LIMIT 1`,
+      `SELECT s.*, u.first_name, u.last_name
+       FROM cash_register_sessions s
+       JOIN users u ON s.user_id = u.user_id
+       WHERE s.cash_register_id = ? AND s.closed_at IS NULL
+       ORDER BY s.session_id DESC LIMIT 1`,
       [cashRegisterId]
     );
     if (sessions.length === 0) throw new NotFoundError('No hay sesión activa para esta caja');
@@ -178,6 +185,80 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
     const expectedClose = session.open_amount + movs[0].total_in - movs[0].total_out;
     const difference    = closeAmount - expectedClose;
 
+    // [NUEVO] Movimientos detallados de la sesión — para el reporte de corte
+    const [movements] = await conn.query(
+      `SELECT cm.movement_type, cm.amount, cm.description, cm.created_at,
+              u.first_name AS user_name
+       FROM cash_movements cm
+       JOIN users u ON cm.user_id = u.user_id
+       WHERE cm.session_id = ?
+       ORDER BY cm.cash_movement_id ASC`,
+      [session.session_id]
+    );
+
+    // [NUEVO] Total vendido por método de pago en esta sesión (mismo patrón
+    // que getSessionStatus — cash_movements solo cubre efectivo, el resto
+    // sale de order_payments de las órdenes de esta caja).
+    const [methodRows] = await conn.query(
+      `SELECT pm.payment_method_id, pm.code, pm.name,
+              COALESCE(SUM(op.amount), 0) AS total
+       FROM payment_methods pm
+       LEFT JOIN order_payments op ON op.payment_method_id = pm.payment_method_id
+       LEFT JOIN orders o ON o.order_id = op.order_id
+         AND o.cash_register_id = ?
+         AND o.status = 'completed'
+         AND o.created_at >= ?
+       WHERE pm.is_active = 1
+       GROUP BY pm.payment_method_id, pm.code, pm.name
+       ORDER BY pm.name ASC`,
+      [cashRegisterId, session.opened_at]
+    );
+    const paymentBreakdown = methodRows.map(m => ({
+      payment_method_id: m.payment_method_id,
+      code:               m.code,
+      name:               m.name,
+      total:              m.code === 'cash' ? +expectedClose.toFixed(2) : +Number(m.total).toFixed(2),
+    }));
+
+    // [NUEVO] Productos vendidos en la sesión + stock restante actual.
+    // Nombre "Padre - Variante" se arma en el frontend con product_name/variant_label.
+    const [productsSold] = await conn.query(
+      `SELECT
+         od.product_id, od.variant_id,
+         p.name  AS product_name,
+         pv.label AS variant_label,
+         SUM(od.quantity) AS total_sold,
+         COALESCE(s.quantity, 0) AS remaining_stock
+       FROM order_details od
+       JOIN orders o   ON od.order_id   = o.order_id
+       JOIN products p ON od.product_id = p.product_id
+       LEFT JOIN product_variants pv ON od.variant_id = pv.variant_id
+       LEFT JOIN inventory_stock s
+         ON s.branch_id  = o.branch_id
+         AND s.product_id = od.product_id
+         AND s.variant_id <=> od.variant_id
+       WHERE o.cash_register_id = ? AND o.status = 'completed' AND o.created_at >= ?
+       GROUP BY od.product_id, od.variant_id, p.name, pv.label, s.quantity
+       ORDER BY total_sold DESC`,
+      [cashRegisterId, session.opened_at]
+    );
+
+    // [NUEVO] Estadísticas generales de la sesión
+    const [[salesStats]] = await conn.query(
+      `SELECT COUNT(*) AS total_orders,
+              COALESCE(SUM(total), 0) AS total_sales,
+              COALESCE(SUM(discount), 0) AS total_discounts
+       FROM orders
+       WHERE cash_register_id = ? AND status = 'completed' AND created_at >= ?`,
+      [cashRegisterId, session.opened_at]
+    );
+    const [[cancelledStats]] = await conn.query(
+      `SELECT COUNT(*) AS cancelled_count
+       FROM orders
+       WHERE cash_register_id = ? AND status = 'cancelled' AND created_at >= ?`,
+      [cashRegisterId, session.opened_at]
+    );
+
     await conn.query(
       `UPDATE cash_register_sessions
        SET closed_at = NOW(), close_amount = ?
@@ -191,12 +272,37 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
     );
 
     await conn.commit();
+
+    const totalOrders = Number(salesStats.total_orders);
+
     return {
       sessionId:     session.session_id,
       openAmount:    session.open_amount,
       expectedClose: +expectedClose.toFixed(2),
       closeAmount,
       difference:    +difference.toFixed(2),
+
+      // [NUEVO] Todo lo necesario para el reporte imprimible del corte —
+      // se genera aquí porque una vez cerrada la sesión, getSessionStatus
+      // ya no la encuentra (filtra closed_at IS NULL).
+      branchName:   register.branch_name,
+      registerName: register.name,
+      cashierName:  `${session.first_name} ${session.last_name ?? ''}`.trim(),
+      openedAt:     session.opened_at,
+      closedAt:     new Date(),
+      movements,
+      paymentBreakdown,
+      productsSold,
+      stats: {
+        totalOrders,
+        totalSales:     +Number(salesStats.total_sales).toFixed(2),
+        totalDiscounts: +Number(salesStats.total_discounts).toFixed(2),
+        avgTicket:      totalOrders > 0 ? +(salesStats.total_sales / totalOrders).toFixed(2) : 0,
+        cancelledCount: Number(cancelledStats.cancelled_count),
+        topProduct:     productsSold[0]
+          ? `${productsSold[0].product_name}${productsSold[0].variant_label ? ' - ' + productsSold[0].variant_label : ''}`
+          : null,
+      },
     };
   } catch (err) {
     await conn.rollback();

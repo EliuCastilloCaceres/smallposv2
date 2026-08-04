@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { usePos } from '../../../Context/PosContext'
+import { openCorteReportWindow } from '../printCorteReport'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -78,13 +79,25 @@ const CloseRegisterModal = ({ onClose }) => {
         })
       }
       const data = await closeRegister(finalCashBalance)
-      if (data) setResult({ ...data, withdrawAmt })
-      else setError('No se pudo cerrar la caja, intenta de nuevo')
+      if (data) {
+        const fullResult = { ...data, withdrawAmt }
+        setResult(fullResult)
+        // Se genera el reporte automáticamente al cerrar, como pediste.
+        // Si el navegador bloquea la ventana emergente, queda el botón
+        // "Imprimir reporte" en la pantalla de resultado como respaldo.
+        openCorteReportWindow(fullResult)
+      } else {
+        setError('No se pudo cerrar la caja, intenta de nuevo')
+      }
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al procesar el corte de caja')
     } finally {
       setIsSaving(false)
     }
+  }
+
+  const handlePrintReport = () => {
+    if (result) openCorteReportWindow(result)
   }
 
   return (
@@ -199,9 +212,14 @@ const CloseRegisterModal = ({ onClose }) => {
               </button>
             </>
           ) : (
-            <button type="button" className="pos-btn pos-btn--primary pos-btn--block" onClick={onClose}>
-              <i className="bi bi-check-lg" /> Listo
-            </button>
+            <>
+              <button type="button" className="pos-btn pos-btn--ghost" onClick={handlePrintReport}>
+                <i className="bi bi-printer" /> Imprimir reporte
+              </button>
+              <button type="button" className="pos-btn pos-btn--primary" style={{ flex: 1 }} onClick={onClose}>
+                <i className="bi bi-check-lg" /> Listo
+              </button>
+            </>
           )}
         </div>
       </div>

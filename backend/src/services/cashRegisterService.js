@@ -201,7 +201,7 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
     // sale de order_payments de las órdenes de esta caja).
     const [methodRows] = await conn.query(
       `SELECT pm.payment_method_id, pm.code, pm.name,
-              COALESCE(SUM(op.amount), 0) AS total
+              COALESCE(SUM(CASE WHEN o.order_id IS NOT NULL THEN op.amount ELSE 0 END), 0) AS total
        FROM payment_methods pm
        LEFT JOIN order_payments op ON op.payment_method_id = pm.payment_method_id
        LEFT JOIN orders o ON o.order_id = op.order_id
@@ -382,7 +382,7 @@ const getSessionStatus = async ({ cashRegisterId, branchId }) => {
   // órdenes de ESTA sesión (mismo patrón que reportsService.getSalesByPaymentMethod).
   const [methodRows] = await db.query(
     `SELECT pm.payment_method_id, pm.code, pm.name,
-            COALESCE(SUM(op.amount), 0) AS expected
+            COALESCE(SUM(CASE WHEN o.order_id IS NOT NULL THEN op.amount ELSE 0 END), 0) AS expected
      FROM payment_methods pm
      LEFT JOIN order_payments op ON op.payment_method_id = pm.payment_method_id
      LEFT JOIN orders o ON o.order_id = op.order_id

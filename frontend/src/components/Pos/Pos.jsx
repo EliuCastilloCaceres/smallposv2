@@ -97,30 +97,37 @@ const PosInner = () => {
   const [closeModalOpen,     setCloseModalOpen]     = useState(false)
   const [movementsModalOpen, setMovementsModalOpen] = useState(false)
 
-  if (!isRegisterOpen) {
-    return (
-      <div className="pos-root">
-        <RegisterGate />
-      </div>
-    )
-  }
-
+  // [FIX] Un solo return, con CloseRegisterModal siempre en la misma posición
+  // del árbol (último hijo de .pos-root). Antes había dos returns distintos
+  // según isRegisterOpen, y el modal quedaba en una posición distinta en
+  // cada uno (después de header+SaleScreen vs. después de RegisterGate) —
+  // React lo interpretaba como un componente diferente y lo desmontaba/
+  // remontaba al cerrar la caja, perdiendo la pantalla de resultado y
+  // disparando un fetchRegisterStatus() nuevo que ya fallaba (sin caja
+  // activa), mostrando el error "No se pudo cargar el estado de la caja"
+  // en vez del resumen del corte.
   return (
     <div className="pos-root">
-      <header className="pos-header">
-        <span className="pos-header__register">
-          <i className="bi bi-circle-fill" style={{ fontSize: 8, color: 'var(--pos-green)' }} />
-          {activeRegister?.name}
-        </span>
-        <div className="pos-header__actions">
-          <UserMenu
-            onOpenMovements={() => setMovementsModalOpen(true)}
-            onOpenClose={() => setCloseModalOpen(true)}
-          />
-        </div>
-      </header>
+      {!isRegisterOpen ? (
+        <RegisterGate />
+      ) : (
+        <>
+          <header className="pos-header">
+            <span className="pos-header__register">
+              <i className="bi bi-circle-fill" style={{ fontSize: 8, color: 'var(--pos-green)' }} />
+              {activeRegister?.name}
+            </span>
+            <div className="pos-header__actions">
+              <UserMenu
+                onOpenMovements={() => setMovementsModalOpen(true)}
+                onOpenClose={() => setCloseModalOpen(true)}
+              />
+            </div>
+          </header>
 
-      <SaleScreen />
+          <SaleScreen />
+        </>
+      )}
 
       {closeModalOpen && <CloseRegisterModal onClose={() => setCloseModalOpen(false)} />}
       {movementsModalOpen && <CashMovementsModal onClose={() => setMovementsModalOpen(false)} />}

@@ -9,7 +9,7 @@
 // caja — así el backend recalcula el esperado ya neto del retiro y la
 // diferencia sigue cuadrando correctamente.
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { usePos } from '../../../Context/PosContext'
 import { openCorteReportWindow } from '../printCorteReport'
 
@@ -32,8 +32,19 @@ const CloseRegisterModal = ({ onClose }) => {
   const [error,         setError]         = useState(null)
   const [result,        setResult]        = useState(null)
 
+  // [FIX] fetchRegisterStatus viene de PosContext con useCallback dependiente
+  // de activeRegisterId — al cerrar la caja, closeRegister() pone
+  // activeRegisterId en null ANTES de resolver, lo que cambia la identidad
+  // de fetchRegisterStatus. Si el useEffect de abajo la trae en su arreglo
+  // de dependencias, se vuelve a disparar en ese instante, ya sin caja
+  // activa, y falla — mostrando el error un instante hasta que `result` se
+  // setea. Con una ref siempre apuntamos a la versión más reciente de la
+  // función pero el effect solo corre una vez, al montar.
+  const fetchRegisterStatusRef = useRef(fetchRegisterStatus)
+  useEffect(() => { fetchRegisterStatusRef.current = fetchRegisterStatus })
+
   useEffect(() => {
-    fetchRegisterStatus()
+    fetchRegisterStatusRef.current()
       .then(data => {
         setStatus(data)
         // Precargar cada "contado" con el esperado — el cajero solo ajusta
@@ -44,7 +55,7 @@ const CloseRegisterModal = ({ onClose }) => {
       })
       .catch(() => setError('No se pudo cargar el estado de la caja'))
       .finally(() => setLoadingStatus(false))
-  }, [fetchRegisterStatus])
+  }, [])
 
   const cashRow = status?.paymentBreakdown.find(m => m.code === 'cash')
   const cashCounted = Number(counted[cashRow?.payment_method_id]) || 0
@@ -78,14 +89,13 @@ const CloseRegisterModal = ({ onClose }) => {
           description:  'Retiro en corte de caja',
         })
       }
-      const data = await closeRegister(finalCashBalance)
+      const data = await closeRegister(cashCounted, withdrawAmt)
       if (data) {
-        const fullResult = { ...data, withdrawAmt }
-        setResult(fullResult)
+        setResult(data)
         // Se genera el reporte automáticamente al cerrar, como pediste.
         // Si el navegador bloquea la ventana emergente, queda el botón
         // "Imprimir reporte" en la pantalla de resultado como respaldo.
-        openCorteReportWindow(fullResult)
+        openCorteReportWindow(data)
       } else {
         setError('No se pudo cerrar la caja, intenta de nuevo')
       }
@@ -189,7 +199,10 @@ const CloseRegisterModal = ({ onClose }) => {
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--pos-muted)' }}>Esperado (neto del retiro)</span><span>{money(result.expectedClose)}</span>
+                <span style={{ color: 'var(--pos-muted)' }}>Efectivo esperado</span><span>{money(result.expectedClose)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--pos-muted)' }}>Efectivo contado</span><span>{money(result.cashCounted)}</span>
               </div>
               {result.withdrawAmt > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
@@ -197,7 +210,7 @@ const CloseRegisterModal = ({ onClose }) => {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--pos-muted)' }}>Queda en caja</span><span>{money(result.closeAmount)}</span>
+                <span style={{ color: 'var(--pos-muted)' }}>Saldo en caja</span><span>{money(result.closeAmount)}</span>
               </div>
             </div>
           )}

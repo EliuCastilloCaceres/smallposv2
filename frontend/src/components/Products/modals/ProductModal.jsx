@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../../../services/api'
 
-const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'paq']
+const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'paq', 'set']
 
 const EMPTY = {
   name:           '',

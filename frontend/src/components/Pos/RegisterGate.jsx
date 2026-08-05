@@ -154,7 +154,7 @@ const RegisterGate = () => {
                           <div className="pos-session-row pos-session-row--highlight">
                             <i className="bi bi-cash-coin" />
                             <span>
-                              <strong>Último cierre:</strong>{' '}
+                              <strong>Saldo en caja:</strong>{' '}
                               <span className="pos-session-amount">{formatCurrency(r.last_close_amount)}</span>
                             </span>
                           </div>

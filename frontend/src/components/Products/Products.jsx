@@ -263,6 +263,7 @@ const Products = () => {
                   <th>Producto</th>
                   <th>Categoría</th>
                   <th>Proveedor</th>
+                  <th>UM</th>
                   <th className="num">Precio venta</th>
                   <th>Estado</th>
                   {canEdit && <th></th>}
@@ -309,6 +310,9 @@ const Products = () => {
                       }
                     </td>
                     <td className="prd-muted">{p.provider_name ?? '—'}</td>
+                    <td>
+                      <span className="prd-uom-badge">{p.uom ?? '—'}</span>
+                    </td>
                     <td className="num">{fmtMXN(p.sale_price)}</td>
                     <td>
                       <span className={`prd-status ${p.is_active ? 'prd-status--on' : 'prd-status--off'}`}>
@@ -395,6 +399,10 @@ const Products = () => {
                   <div className="prd-card__price-item">
                     <span className="prd-muted">Venta</span>
                     <strong>{fmtMXN(p.sale_price)}</strong>
+                  </div>
+                  <div className="prd-card__price-item">
+                    <span className="prd-muted">UM</span>
+                    <span className="prd-uom-badge">{p.uom ?? '—'}</span>
                   </div>
                 </div>
 

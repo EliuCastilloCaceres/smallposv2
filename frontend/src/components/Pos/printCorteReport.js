@@ -12,6 +12,18 @@ const fmtDateTime = (d) => d
     })
   : '—'
 
+// DDMMAAAAHHmm (24hrs) para el título de la ventana/pestaña — ej. cierre
+// 04/08/2026 10:50pm -> "040820262250"
+const fmtFileDate = (d) => {
+  const date = d ? new Date(d) : new Date()
+  const dd   = String(date.getDate()).padStart(2, '0')
+  const mm   = String(date.getMonth() + 1).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const hh   = String(date.getHours()).padStart(2, '0')
+  const min  = String(date.getMinutes()).padStart(2, '0')
+  return `${dd}${mm}${yyyy}${hh}${min}`
+}
+
 const MOVEMENT_LABELS = {
   sale:            'Venta',
   income:          'Ingreso manual',
@@ -47,6 +59,9 @@ export const openCorteReportWindow = (report) => {
       <td class="num">${money(m.total)}</td>
     </tr>
   `).join('')
+  const totalVendido = report.paymentBreakdown.reduce((sum, m) => sum + Number(m.total ?? 0), 0)
+  const registerSlug = String(report.registerName ?? '').replace(/\s+/g, '')
+  const windowTitle   = `Corte-${registerSlug}-${fmtFileDate(report.closedAt)}`
 
   const movementRows = report.movements.length > 0
     ? report.movements.map(m => `
@@ -75,7 +90,7 @@ export const openCorteReportWindow = (report) => {
     <html lang="es">
     <head>
       <meta charset="utf-8" />
-      <title>Corte de caja — ${escapeHtml(report.registerName)}</title>
+      <title>${escapeHtml(windowTitle)}</title>
       <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 24px; font-family: Arial, Helvetica, sans-serif; color: #0f172a; font-size: 13px; }
@@ -88,6 +103,7 @@ export const openCorteReportWindow = (report) => {
         th { background: #f1f5f9; font-size: 11px; text-transform: uppercase; color: #64748b; }
         td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
         td.empty { text-align: center; color: #94a3b8; font-style: italic; }
+        tfoot .total-row td { border-bottom: none; border-top: 2px solid #cbd5e1; font-weight: 700; }
         .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 24px; margin-top: 4px; }
         .summary-grid .row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dashed #e2e8f0; }
         .diff-box {
@@ -113,12 +129,13 @@ export const openCorteReportWindow = (report) => {
         <span>Cierre: <strong>${fmtDateTime(report.closedAt)}</strong></span>
       </div>
 
-      <h2>Resumen financiero</h2>
+      <h2>Resumen de caja</h2>
       <div class="summary-grid">
         <div class="row"><span>Monto de apertura</span><span>${money(report.openAmount)}</span></div>
-        <div class="row"><span>Efectivo esperado</span><span>${money(report.expectedClose)}</span></div>
-        <div class="row"><span>Efectivo contado</span><span>${money(report.closeAmount)}</span></div>
+        <div class="row"><span>Efectivo esperado(Monto Apertura + Ventas Efectivo + Entradas - Salidas)</span><span>${money(report.expectedClose)}</span></div>
+        <div class="row"><span>Efectivo contado</span><span>${money(report.cashCounted)}</span></div>
         <div class="row"><span>Retirado en el corte</span><span>${money(report.withdrawAmt)}</span></div>
+        <div class="row"><span>Saldo en caja</span><span>${money(report.closeAmount)}</span></div>
       </div>
       <div class="diff-box">${diffLabel}</div>
 
@@ -126,6 +143,7 @@ export const openCorteReportWindow = (report) => {
       <table>
         <thead><tr><th>Método</th><th class="num">Total</th></tr></thead>
         <tbody>${paymentRows}</tbody>
+        <tfoot><tr class="total-row"><td>Total vendido</td><td class="num">${money(totalVendido)}</td></tr></tfoot>
       </table>
 
       <h2>Estadísticas de la sesión</h2>

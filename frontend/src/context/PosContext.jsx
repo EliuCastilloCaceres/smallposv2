@@ -280,11 +280,11 @@ export const PosContextProvider = ({ children }) => {
     }
   }, [branchId, fetchRegisters])
 
-  const closeRegister = useCallback(async (closeAmount) => {
+  const closeRegister = useCallback(async (cashCounted, withdrawAmt = 0) => {
     if (!activeRegisterId) return null
     setRegisterError(null)
     try {
-      const { data } = await api.patch(`cash-registers/${activeRegisterId}/close?branch_id=${branchId}`, { closeAmount })
+      const { data } = await api.patch(`cash-registers/${activeRegisterId}/close?branch_id=${branchId}`, { cashCounted, withdrawAmt })
       clearStoredSession()
       setActiveRegisterId(null)
       setSessionId(null)
@@ -293,7 +293,7 @@ export const PosContextProvider = ({ children }) => {
       setSuspendedCarts([])
       clearStoredCartState()  // [NUEVO]
       await fetchRegisters()
-      return data.data // { openAmount, expectedClose, closeAmount, difference }
+      return data.data // { openAmount, expectedClose, cashCounted, withdrawAmt, closeAmount, difference }
     } catch (err) {
       setRegisterError(err.response?.data?.message ?? 'Error al cerrar la caja')
       return null

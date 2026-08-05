@@ -145,7 +145,7 @@ const openRegister = async ({ cashRegisterId, branchId, userId, openAmount }) =>
 
 // ─── Cierre ───────────────────────────────────────────────────────────────────
 
-const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) => {
+const closeRegister = async ({ cashRegisterId, branchId, userId, cashCounted, withdrawAmt = 0 }) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -182,8 +182,19 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
        FROM cash_movements WHERE session_id = ?`,
       [session.session_id]
     );
-    const expectedClose = session.open_amount + movs[0].total_in - movs[0].total_out;
-    const difference    = closeAmount - expectedClose;
+    // [FIX] cash_movements ya incluye el retiro de este corte (el frontend
+    // lo inserta con createCashMovement ANTES de llamar a este endpoint),
+    // así que total_out ya lo trae descontado. "Efectivo esperado" debe
+    // mostrar lo que debió quedar en caja por ventas y movimientos, SIN
+    // contar todavía este retiro — se vuelve a sumar aquí para
+    // reconstruir ese valor pre-retiro.
+    const expectedAfterWithdrawal = session.open_amount + movs[0].total_in - movs[0].total_out;
+    const expectedClose = expectedAfterWithdrawal + withdrawAmt;
+    // "Saldo en caja": lo que físicamente queda en la caja después de
+    // sacar el retiro. "Efectivo contado" (cashCounted) es lo que el
+    // cajero contó ANTES de restar el retiro.
+    const closeAmount = +(cashCounted - withdrawAmt).toFixed(2);
+    const difference  = +(cashCounted - expectedClose).toFixed(2);
 
     // [NUEVO] Movimientos detallados de la sesión — para el reporte de corte
     const [movements] = await conn.query(
@@ -213,11 +224,16 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
        ORDER BY pm.name ASC`,
       [cashRegisterId, session.opened_at]
     );
+    // [FIX] Antes se sobreescribía el total de la fila "cash" con
+    // expectedClose (saldo neto del retiro) — por eso en "Ventas por método
+    // de pago" el efectivo mostraba el saldo que quedó en caja después del
+    // retiro, en vez de la suma real de ventas en efectivo. Ahora usa
+    // siempre m.total, igual que los demás métodos.
     const paymentBreakdown = methodRows.map(m => ({
       payment_method_id: m.payment_method_id,
       code:               m.code,
       name:               m.name,
-      total:              m.code === 'cash' ? +expectedClose.toFixed(2) : +Number(m.total).toFixed(2),
+      total:              +Number(m.total).toFixed(2),
     }));
 
     // [NUEVO] Productos vendidos en la sesión + stock restante actual.
@@ -279,6 +295,8 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, closeAmount }) 
       sessionId:     session.session_id,
       openAmount:    session.open_amount,
       expectedClose: +expectedClose.toFixed(2),
+      cashCounted:   +Number(cashCounted).toFixed(2),
+      withdrawAmt:   +Number(withdrawAmt).toFixed(2),
       closeAmount,
       difference:    +difference.toFixed(2),
 

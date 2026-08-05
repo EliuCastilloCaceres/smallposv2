@@ -104,7 +104,8 @@ const close = async (req, res, next) => {
       cashRegisterId: parseInt(registerId, 10),
       branchId:       resolveBranchId(req),
       userId:         req.user.user_id,
-      closeAmount:    parseFloat(req.body.closeAmount ?? 0),
+      cashCounted:    parseFloat(req.body.cashCounted ?? 0),
+      withdrawAmt:    parseFloat(req.body.withdrawAmt ?? 0),
     });
     res.json({ status: 'success', data });
   } catch (err) { next(err); }

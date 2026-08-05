@@ -129,6 +129,12 @@
   background: rgba(147,51,234,.1); color: #9333ea;
 }
 .prd-badge-variable i { font-size: 11px; }
+.prd-uom-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--prd-accent-bg); color: var(--prd-accent);
+  text-transform: uppercase;
+}
 
 /* ── Stock ───────────────────────────────────────────────── */
 .prd-stock {

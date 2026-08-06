@@ -261,6 +261,37 @@
   position: relative;
 }
 
+.pos-gate__topbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 0;
+}
+
+.pos-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  flex-shrink: 0;
+  border-radius: var(--pos-radius-sm);
+  border: 1.5px solid var(--pos-border);
+  background: var(--pos-surface);
+  color: var(--pos-text);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, transform .15s, opacity .15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.pos-icon-btn i { font-size: 18px; }
+.pos-icon-btn:hover:not(:disabled) { background: var(--pos-bg); border-color: #cbd5e1; }
+.pos-icon-btn:active:not(:disabled) { transform: scale(.94); }
+.pos-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pos-icon-btn--spinning i { animation: pos-spin .65s linear infinite; }
+
 .pos-gate__brand {
   flex-shrink: 0;
   display: flex;

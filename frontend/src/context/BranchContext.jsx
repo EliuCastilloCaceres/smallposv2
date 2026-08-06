@@ -24,17 +24,29 @@ export const BranchContextProvider = ({ children }) => {
   const [isLoading,  setIsLoading]  = useState(false)
   const [error,      setError]      = useState(null)
 
-  // Si el usuario no es admin, su sucursal ES su branch_id — no necesita elegir
-  // La cargamos automáticamente desde el objeto user para tenerla disponible en contexto
+  // Si el usuario no es admin, su sucursal ES su branch_id — no necesita elegir,
+  // pero sí necesitamos el objeto completo (incluye `receipt`) para poder
+  // imprimir tickets en el POS — por eso se pide por API en vez de armarlo
+  // a mano desde el token (que solo trae branch_id/branch_name).
   useEffect(() => {
     if (!user) return
 
     if (!isAdmin) {
-      // Usuario normal: su sucursal viene directamente del token
-      setSelectedBranch({
-        branch_id: user.branch_id,
-        name:      user.branch_name ?? `Sucursal #${user.branch_id}`,
-      })
+      setIsLoading(true)
+      setError(null)
+      api.get('branches/me')
+        .then(({ data }) => setSelectedBranch(data.data))
+        .catch(() => {
+          // [FIX] Fallback mínimo si falla la petición, para no dejar el
+          // POS sin sucursal seleccionada — sin receipt hasta que se
+          // pueda recargar.
+          setSelectedBranch({
+            branch_id: user.branch_id,
+            name:      user.branch_name ?? `Sucursal #${user.branch_id}`,
+          })
+          setError('No se pudieron cargar los datos de la sucursal')
+        })
+        .finally(() => setIsLoading(false))
       return
     }
 

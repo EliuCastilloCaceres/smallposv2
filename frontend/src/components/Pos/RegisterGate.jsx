@@ -1,5 +1,6 @@
 // src/components/Pos/RegisterGate.jsx
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { usePos } from '../../Context/PosContext'
 
 const formatDateTime = (iso) => {
@@ -36,13 +37,22 @@ const formatCurrency = (amount) => {
 const RegisterGate = () => {
   const {
     registers, registersLoading, registerError,
-    openRegister,
+    openRegister, fetchRegisters,
   } = usePos()
+
+  const navigate = useNavigate()
 
   const [expandedId,  setExpandedId]  = useState(null)
   const [openAmount,  setOpenAmount]  = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [localError,  setLocalError]  = useState(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await fetchRegisters()
+    setIsRefreshing(false)
+  }
 
   const startOpen = (registerId) => {
     setExpandedId(registerId)
@@ -74,6 +84,26 @@ const RegisterGate = () => {
 
   return (
     <div className="pos-gate">
+      <div className="pos-gate__topbar">
+        <button
+          type="button"
+          className="pos-icon-btn"
+          onClick={() => navigate('/dashboard')}
+          title="Volver al dashboard"
+        >
+          <i className="bi bi-arrow-left" />
+        </button>
+        <button
+          type="button"
+          className={`pos-icon-btn ${registersLoading || isRefreshing ? 'pos-icon-btn--spinning' : ''}`}
+          onClick={handleRefresh}
+          disabled={registersLoading || isRefreshing}
+          title="Actualizar cajas"
+        >
+          <i className="bi bi-arrow-clockwise" />
+        </button>
+      </div>
+
       <div className="pos-gate__brand">
         <i className="bi bi-pc-display-horizontal" />
         <h1>Punto de venta</h1>

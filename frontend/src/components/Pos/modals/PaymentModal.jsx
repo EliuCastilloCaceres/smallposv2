@@ -6,7 +6,10 @@
 
 import { useState, useMemo } from 'react'
 import { usePos } from '../../../Context/PosContext'
+import { useBranch } from '../../../Context/BranchContext'
+import { useUser } from '../../../Context/UserContext'
 import api from '../../../services/api'
+import { openReceiptWindow } from '../printReceipt'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const QUICK_AMOUNTS = [20, 50, 100, 200, 500, 1000]
@@ -14,8 +17,10 @@ const QUICK_AMOUNTS = [20, 50, 100, 200, 500, 1000]
 const PaymentModal = ({ onClose }) => {
   const {
     cart, subtotal, total, paymentMethods,
-    activeRegisterId, branchId, completeSale,
+    activeRegisterId, activeRegister, branchId, completeSale,
   } = usePos()
+  const { selectedBranch } = useBranch()
+  const { user } = useUser()
 
   const [lines,        setLines]        = useState([]) // { payment_method_id, code, name, amount, cash_received, cash_change }
   const [cashPanel,     setCashPanel]    = useState(false)
@@ -121,7 +126,20 @@ const PaymentModal = ({ onClose }) => {
   }
 
   const handlePrint = () => {
-    window.print()
+    if (!result) return
+    openReceiptWindow({
+      orderId:      result.orderId,
+      receipt:      selectedBranch?.receipt ?? null,
+      branchName:   selectedBranch?.name,
+      registerName: activeRegister?.name,
+      cashierName:  user?.username,
+      items:        cart.items,
+      subtotal,
+      discount:     cart.discount.applied,
+      total,
+      payments:     lines,
+      totalChange,
+    })
   }
 
   return (

@@ -74,4 +74,22 @@ const upsertReceipt = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getAll, getById, create, update, toggleStatus, upsertReceipt };
+// GET /branches/me
+// Cualquier usuario autenticado puede consultar SU PROPIA sucursal (incluye
+// receipt) — a diferencia de GET /branches/:id, que exige el permiso
+// settings:read porque es para administración. Un cajero necesita estos
+// datos para imprimir el ticket, no para "administrar" sucursales.
+const getMyBranch = async (req, res, next) => {
+  try {
+    if (req.user.branch_id === null) {
+      return res.status(400).json({ status: 'error', message: 'Este usuario no tiene una sucursal asignada' });
+    }
+    const branch = await branchService.getById({
+      branchId:       req.user.branch_id,
+      requestingUser: req.user,
+    });
+    res.json({ status: 'success', data: branch });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getAll, getById, getMyBranch, create, update, toggleStatus, upsertReceipt };

@@ -174,7 +174,7 @@ VALUES
 INSERT IGNORE INTO `providers`
   (`provider_id`, `name`, `rfc`, `zip_code`, `address`, `state`, `city`, `phone_number`, `email`, `is_active`)
 VALUES
-  (1,  'ElectroMundo SA de CV',       'EME010101ABC', '01000', 'Av. Reforma 100, Col. Centro',              'Ciudad de México', 'Cuauhtémoc',   '5555111111', 'ventas@electromundo.com',    1),
+  (1,  'Proveedor generico', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 1),
   (2,  'Hogar y Estilo SRL',          'HYE020202DEF', '44100', 'Calle Juárez 45, Zona Centro',              'Jalisco',          'Guadalajara',  '3333222222', 'contacto@hogaryestilo.mx',   1),
   (3,  'Distribuidora del Norte',     'DDN030303GHI', '64000', 'Av. Lincoln 890, Col. Mitras',              'Nuevo León',       'Monterrey',    '8183333333', 'pedidos@delnorte.com',       1),
   (4,  'Alimentos Frescos del Valle', 'AFV040404JKL', '72500', 'Calle 5 de Mayo 234, Col. Centro',          'Puebla',           'Puebla',       '2224444444', 'ventas@frescosvalle.com',    1),
@@ -191,7 +191,7 @@ VALUES
 INSERT IGNORE INTO `customers`
   (`customer_id`, `first_name`, `last_name`, `address`, `state`, `city`, `zip_code`, `phone_number`, `rfc`, `email`, `credit_limit`, `credit_balance`, `is_active`)
 VALUES
-  (1,  'Juan',      'Pérez García',    'Calle Allende 123, Col. Centro',           'Ciudad de México', 'Coyoacán',      '04000', '5511111111', 'PEGJ800101ABC', 'juan.perez@gmail.com',      5000.00,  0.00, 1),
+  (1,  'Publico en general',  NULL,    NULL, NULL, NULL, NULL, NULL, 'PEGJ800101ABC', NULL,  0.00,  0.00, 1),
   (2,  'Ana',       'López Hernández', 'Av. Hidalgo 456, Col. Juárez',             'Jalisco',          'Guadalajara',   '44100', '3322222222', 'LOHA850202DEF', 'ana.lopez@hotmail.com',     8000.00,  0.00, 1),
   (3,  'Roberto',   'Martínez Silva',  'Calle Madero 789, Col. Obispado',          'Nuevo León',       'Monterrey',     '64000', '8133333333', 'MASR900303GHI', 'roberto.mtz@outlook.com',   3000.00,  0.00, 1),
   (4,  'Carmen',    'Ramírez Torres',  'Av. Juárez 101, Col. Centro',              'Puebla',           'Puebla',        '72000', '2224444444', 'RATC880404JKL', 'carmen.rt@gmail.com',       10000.00, 0.00, 1),

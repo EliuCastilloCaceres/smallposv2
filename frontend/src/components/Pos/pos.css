@@ -1117,6 +1117,11 @@
 .pos-pay-quick-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
+.pos-pay-quick-exact {
+  grid-column: 1 / -1;
+  border-color: var(--pos-accent); color: var(--pos-accent); font-weight: 700;
+}
+.pos-pay-quick-exact:hover { background: var(--pos-accent-bg); }
 .pos-pay-change-preview {
   text-align: center; font-size: 14px; color: var(--pos-green);
   padding: 8px; background: var(--pos-green-bg); border-radius: var(--pos-radius-sm);

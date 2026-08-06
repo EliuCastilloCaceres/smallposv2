@@ -211,6 +211,10 @@ const PaymentModal = ({ onClose }) => {
                     />
                   </div>
                   <div className="pos-pay-quick-grid">
+                    <button type="button" className="pos-btn pos-btn--ghost pos-pay-quick-exact"
+                      onClick={() => setCashReceived(String(remaining))}>
+                      Exacto
+                    </button>
                     {QUICK_AMOUNTS.map(n => (
                       <button key={n} type="button" className="pos-btn pos-btn--ghost" onClick={() => addQuickAmount(n)}>
                         +${n}

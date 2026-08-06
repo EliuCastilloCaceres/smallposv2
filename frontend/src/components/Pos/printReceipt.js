@@ -145,7 +145,13 @@ export const openReceiptWindow = (sale) => {
       ${r?.footer_text ? `<hr /><div class="footer">${escapeHtml(r.footer_text)}</div>` : ''}
 
       <script>
-        window.onload = function () { window.focus(); window.print(); };
+        window.onload = function () {
+          window.focus()
+          window.print()
+        }
+        // onafterprint se dispara tanto si se imprime como si se cancela el
+        // diálogo — en ambos casos ya no hace falta la ventana.
+        window.onafterprint = function () { window.close() }
       </script>
     </body>
     </html>

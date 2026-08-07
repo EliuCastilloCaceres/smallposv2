@@ -7,7 +7,8 @@ const {resolveBranchId} = require('../helpers/helper');
 
 const getOrderById = async (req, res, next) => {
   try {
-    const data = await orderService.getOrderById(parseInt(req.params.orderId));
+    const branchId = resolveBranchId(req);
+    const data = await orderService.getOrderById(parseInt(req.params.orderId), branchId);
     res.json({ status: 'success', data });
   } catch (err) {
     next(err);
@@ -16,17 +17,17 @@ const getOrderById = async (req, res, next) => {
 
 const getOrdersByDateRange = async (req, res, next) => {
   try {
-    const { startDate, endDate, status } = req.query;
+    const { startDate, endDate, status, search, page, limit } = req.query;
 
     const branchId = resolveBranchId(req)
 
-    const data = await orderService.getOrdersByBranchAndDateRange({
+    const result = await orderService.getOrdersByBranchAndDateRange({
       branchId,
       startDate: startDate ?? '1970-01-01',
       endDate:   endDate   ?? new Date().toISOString().split('T')[0],
-      status,
+      status, search, page, limit,
     });
-    res.json({ status: 'success', data });
+    res.json({ status: 'success', ...result });
   } catch (err) {
     next(err);
   }
@@ -65,10 +66,11 @@ const createOrder = async (req, res, next) => {
 
 const cancelOrder = async (req, res, next) => {
   try {
-    const orderId = parseInt(req.params.orderId);
-    const userId  = req.user.user_id;
+    const orderId  = parseInt(req.params.orderId);
+    const userId   = req.user.user_id;
+    const branchId = resolveBranchId(req);
 
-    const result = await orderService.cancelOrder({ orderId, userId });
+    const result = await orderService.cancelOrder({ orderId, userId, branchId });
     res.json({ status: 'success', data: result });
   } catch (err) {
     next(err);

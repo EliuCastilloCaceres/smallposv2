@@ -7,7 +7,7 @@
 const db           = require('../config/db');
 const stockService = require('./stockService');
 const creditService = require('./creditService');
-const { NotFoundError, ValidationError } = require('../errors/AppError');
+const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
 
 // ─── Validar pagos ───────────────────────────────────────────────────────────
 
@@ -174,7 +174,7 @@ const createOrder = async ({
 
 // ─── Cancelar venta ───────────────────────────────────────────────────────────
 
-const cancelOrder = async ({ orderId, userId }) => {
+const cancelOrder = async ({ orderId, userId, branchId }) => {
   const conn = await db.getConnection();
 
   try {
@@ -185,6 +185,13 @@ const cancelOrder = async ({ orderId, userId }) => {
     );
     if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
     const order = orders[0];
+    // [FIX] No había validación de sucursal — cualquiera con permiso
+    // orders:cancel podía cancelar una orden de OTRA sucursal si adivinaba
+    // el orderId. branchId llega ya resuelto por resolveBranchId (fija
+    // para no-admin, elegida por el admin vía BranchGate).
+    if (branchId !== undefined && order.branch_id !== branchId) {
+      throw new ForbiddenError('Esta orden pertenece a otra sucursal');
+    }
     if (order.status === 'cancelled') throw new ValidationError('La orden ya está cancelada');
 
     const [details] = await conn.query(
@@ -199,6 +206,44 @@ const cancelOrder = async ({ orderId, userId }) => {
       referenceType: 'order',
       userId,
     });
+
+    // [FIX] Antes cancelar una orden restauraba el stock pero no tocaba
+    // caja: el movimiento 'sale' original seguía sumando en
+    // "Efectivo esperado" del corte aunque la venta ya no contara como
+    // completada. Ahora se inserta un movimiento 'return' por el monto
+    // pagado en efectivo, en la sesión ABIERTA de ese registro en este
+    // momento. Si esa sesión ya cerró, no se toca nada — ese corte ya
+    // quedó hecho con ese ingreso contado, no se puede corregir
+    // retroactivamente desde aquí.
+    const [[{ cash_amount: cashAmount }]] = await conn.query(
+      `SELECT COALESCE(SUM(op.amount), 0) AS cash_amount
+       FROM order_payments op
+       JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
+       WHERE op.order_id = ? AND pm.code = 'cash'`,
+      [orderId]
+    );
+
+    if (Number(cashAmount) > 0) {
+      const [session] = await conn.query(
+        `SELECT session_id FROM cash_register_sessions
+         WHERE cash_register_id = ? AND closed_at IS NULL
+         ORDER BY session_id DESC LIMIT 1`,
+        [order.cash_register_id]
+      );
+      if (session.length > 0) {
+        await conn.query(
+          `INSERT INTO cash_movements
+             (session_id, movement_type, amount, description, user_id)
+           VALUES (?, 'return', ?, ?, ?)`,
+          [session[0].session_id, Number(cashAmount), `Cancelación de venta #${orderId}`, userId]
+        );
+      }
+    }
+
+    // [FIX] Revertir la porción a crédito, si la hubo (lanza ValidationError
+    // y aborta la transacción si el cliente ya abonó — ver comentario en
+    // creditService.cancelCreditSale).
+    await creditService.cancelCreditSale(conn, { orderId });
 
     await conn.query(
       `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE order_id = ?`,
@@ -218,7 +263,7 @@ const cancelOrder = async ({ orderId, userId }) => {
 
 // ─── Queries de lectura ───────────────────────────────────────────────────────
 
-const getOrderById = async (orderId) => {
+const getOrderById = async (orderId, branchId) => {
   const [orders] = await db.query(
     `SELECT o.*,
             c.first_name as customer_firstname, c.last_name as customer_lastname,
@@ -233,6 +278,11 @@ const getOrderById = async (orderId) => {
     [orderId]
   );
   if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
+  // [FIX] Sin esto, cualquier usuario con permiso orders:read podía ver el
+  // detalle de una orden de OTRA sucursal adivinando el orderId.
+  if (branchId !== undefined && orders[0].branch_id !== branchId) {
+    throw new ForbiddenError('Esta orden pertenece a otra sucursal');
+  }
 
   const [details] = await db.query(
     `SELECT od.*, p.name as product_name, p.sku,
@@ -256,7 +306,13 @@ const getOrderById = async (orderId) => {
   return { order: orders[0], details, payments };
 };
 
-const getOrdersByBranchAndDateRange = async ({ branchId, startDate, endDate, status = null }) => {
+const getOrdersByBranchAndDateRange = async ({
+  branchId, startDate, endDate, status = null, search, page = 1, limit = 20,
+}) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+  const offset    = (safePage - 1) * safeLimit;
+
   let where = 'WHERE o.branch_id = ? AND o.created_at BETWEEN ? AND ?';
   const params = [branchId, startDate, `${endDate} 23:59:59`];
 
@@ -264,6 +320,21 @@ const getOrdersByBranchAndDateRange = async ({ branchId, startDate, endDate, sta
     where += ' AND o.status = ?';
     params.push(status);
   }
+
+  if (search) {
+    const asId = parseInt(search);
+    const like = `%${search}%`;
+    where += ' AND (o.order_id = ? OR c.first_name LIKE ? OR c.last_name LIKE ?)';
+    params.push(isNaN(asId) ? 0 : asId, like, like);
+  }
+
+  const [[{ total }]] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM orders o
+     JOIN customers c ON o.customer_id = c.customer_id
+     ${where}`,
+    params
+  );
 
   const [rows] = await db.query(
     `SELECT o.order_id, o.subtotal, o.discount, o.total,
@@ -276,10 +347,20 @@ const getOrdersByBranchAndDateRange = async ({ branchId, startDate, endDate, sta
      JOIN users u           ON o.user_id           = u.user_id
      JOIN cash_registers cr ON o.cash_register_id  = cr.cash_register_id
      ${where}
-     ORDER BY o.created_at DESC`,
-    params
+     ORDER BY o.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [...params, safeLimit, offset]
   );
-  return rows;
+
+  return {
+    data: rows,
+    pagination: {
+      total,
+      page:       safePage,
+      limit:      safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    },
+  };
 };
 
 module.exports = { createOrder, cancelOrder, getOrderById, getOrdersByBranchAndDateRange };

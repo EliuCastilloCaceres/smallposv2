@@ -1,0 +1,204 @@
+// src/components/Sales/modals/OrderDetailModal.jsx
+import { useState, useEffect } from 'react'
+import { useBranch } from '../../../Context/BranchContext'
+import api from '../../../services/api'
+import ConfirmDialog from '../../Common/ConfirmDialog'
+import { openReceiptWindow } from '../../Pos/printReceipt'
+
+const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
+const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
+  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+})
+
+const itemLabel = (d) => d.variant_label ? `${d.product_name} - ${d.variant_label}` : d.product_name
+
+const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
+  const { selectedBranch } = useBranch()
+
+  const [data,      setData]      = useState(null) // { order, details, payments }
+  const [isLoading, setIsLoading] = useState(true)
+  const [error,     setError]     = useState(null)
+
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [isCancelling,  setIsCancelling]  = useState(false)
+  const [cancelError,   setCancelError]   = useState(null)
+
+  useEffect(() => {
+    if (!selectedBranch) return
+    setIsLoading(true)
+    setError(null)
+    api.get(`orders/${orderId}?branch_id=${selectedBranch.branch_id}`)
+      .then(({ data }) => setData(data.data))
+      .catch(err => setError(err.response?.data?.message ?? 'No se pudo cargar la venta'))
+      .finally(() => setIsLoading(false))
+  }, [orderId, selectedBranch])
+
+  const handleReprint = () => {
+    if (!data) return
+    const { order, details, payments } = data
+    openReceiptWindow({
+      orderId:      order.order_id,
+      date:         order.created_at,
+      receipt:      selectedBranch?.receipt ?? null,
+      branchName:   selectedBranch?.name ?? order.branch_name,
+      registerName: order.cash_register_name,
+      cashierName:  `${order.user_firstname ?? ''} ${order.user_lastname ?? ''}`.trim(),
+      items: details.map(d => ({
+        name:         d.product_name,
+        variant_label: d.variant_label,
+        quantity:      d.quantity,
+        unit_price:    d.unit_price,
+        subtotal:      d.subtotal,
+      })),
+      subtotal: order.subtotal,
+      discount: order.discount,
+      total:    order.total,
+      payments: payments.map(p => ({
+        name:          p.method_name,
+        amount:        p.amount,
+        cash_received: p.cash_received,
+        cash_change:   p.cash_change,
+      })),
+      totalChange: payments.reduce((s, p) => s + Number(p.cash_change ?? 0), 0),
+    })
+  }
+
+  const handleCancel = async () => {
+    setIsCancelling(true)
+    setCancelError(null)
+    try {
+      await api.patch(`orders/${orderId}/cancel?branch_id=${selectedBranch.branch_id}`)
+      setData(prev => ({ ...prev, order: { ...prev.order, status: 'cancelled' } }))
+      onCancelled?.(orderId)
+      setConfirmCancel(false)
+    } catch (err) {
+      setCancelError(err.response?.data?.message ?? 'Error al cancelar la venta')
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const order = data?.order
+
+  return (
+    <div className="sls-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="sls-modal">
+        <div className="sls-modal__header">
+          <h3 className="sls-modal__title">
+            <i className="bi bi-receipt" /> Venta {order ? `#${order.order_id}` : ''}
+          </h3>
+          <button className="sls-modal__close" onClick={onClose} aria-label="Cerrar">
+            <i className="bi bi-x-lg" />
+          </button>
+        </div>
+
+        <div className="sls-modal__body">
+          {error && (
+            <div className="sls-alert">
+              <i className="bi bi-exclamation-circle" /><span>{error}</span>
+            </div>
+          )}
+          {cancelError && (
+            <div className="sls-alert">
+              <i className="bi bi-exclamation-circle" /><span>{cancelError}</span>
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="sls-detail-loading">
+              <span className="sls-spinner sls-spinner--dark" /> Cargando venta...
+            </div>
+          ) : data && (
+            <>
+              {/* Encabezado */}
+              <div className="sls-detail__meta">
+                <div><span className="sls-muted">Fecha</span><strong>{fmtDateTime(order.created_at)}</strong></div>
+                <div><span className="sls-muted">Cliente</span><strong>{order.customer_firstname} {order.customer_lastname}</strong></div>
+                <div><span className="sls-muted">Cajero</span><strong>{order.user_firstname} {order.user_lastname}</strong></div>
+                <div><span className="sls-muted">Caja</span><strong>{order.cash_register_name}</strong></div>
+                <div>
+                  <span className="sls-muted">Estado</span>
+                  <span className={`sls-status ${order.status === 'completed' ? 'sls-status--on' : 'sls-status--off'}`}>
+                    <span className="sls-status__dot" />
+                    {order.status === 'completed' ? 'Completada' : 'Cancelada'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="sls-detail__section">
+                <span className="sls-detail__section-title">Productos</span>
+                <div className="sls-detail-items">
+                  {data.details.map((d, i) => (
+                    <div key={i} className="sls-detail-item">
+                      <div className="sls-detail-item__info">
+                        <span className="sls-detail-item__name">{itemLabel(d)}</span>
+                        <span className="sls-muted">{d.quantity} x {money(d.unit_price)}</span>
+                      </div>
+                      <span className="sls-detail-item__subtotal">{money(d.subtotal)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Totales */}
+              <div className="sls-detail__totals">
+                <div className="sls-detail__row"><span>Subtotal</span><span>{money(order.subtotal)}</span></div>
+                {order.discount > 0 && (
+                  <div className="sls-detail__row"><span>Descuento</span><span>-{money(order.discount)}</span></div>
+                )}
+                <div className="sls-detail__row sls-detail__row--total"><span>Total</span><span>{money(order.total)}</span></div>
+              </div>
+
+              {/* Notas */}
+              {order.notes && (
+                <div className="sls-detail__section">
+                  <span className="sls-detail__section-title">Notas</span>
+                  <p className="sls-detail__notes">{order.notes}</p>
+                </div>
+              )}
+
+              {/* Pagos */}
+              <div className="sls-detail__section">
+                <span className="sls-detail__section-title">Pagos</span>
+                <div className="sls-detail-items">
+                  {data.payments.map((p, i) => (
+                    <div key={i} className="sls-detail-item">
+                      <span className="sls-detail-item__name">{p.method_name}</span>
+                      <span className="sls-detail-item__subtotal">{money(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="sls-modal__footer">
+          <button type="button" className="sls-btn sls-btn--ghost" onClick={handleReprint} disabled={!data}>
+            <i className="bi bi-printer" /> Reimprimir ticket
+          </button>
+          {canCancel && order?.status === 'completed' && (
+            <button type="button" className="sls-btn sls-btn--danger-ghost"
+              onClick={() => setConfirmCancel(true)}>
+              <i className="bi bi-x-circle" /> Cancelar venta
+            </button>
+          )}
+        </div>
+      </div>
+
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Cancelar venta"
+          message={`¿Cancelar la venta #${orderId}? Se restaurará el stock de los productos y se revertirá el efectivo/crédito de esta venta. Esta acción no se puede deshacer.`}
+          confirmLabel="Cancelar venta"
+          variant="danger"
+          onClose={() => setConfirmCancel(false)}
+          onConfirm={handleCancel}
+        />
+      )}
+    </div>
+  )
+}
+
+export default OrderDetailModal

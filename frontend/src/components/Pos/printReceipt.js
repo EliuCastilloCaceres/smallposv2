@@ -32,6 +32,7 @@ const itemLabel = (i) => {
 /**
  * @param {object} sale
  * @param {number} sale.orderId
+ * @param {string|Date} [sale.date] — fecha de la venta; si no se manda, usa la fecha/hora actual (venta recién hecha en el POS)
  * @param {object} sale.receipt        — selectedBranch.receipt (puede ser null)
  * @param {string} sale.branchName     — selectedBranch.name (respaldo si no hay receipt)
  * @param {string} sale.registerName   — activeRegister?.name
@@ -102,6 +103,17 @@ export const openReceiptWindow = (sale) => {
         .totals .grand td { font-size: 14px; font-weight: 700; padding-top: 4px; }
         .footer { text-align: center; font-size: 11px; margin-top: 10px; white-space: pre-wrap; }
         .ticket-id { text-align: center; font-size: 12px; margin: 6px 0; }
+        /* Botón manual — reemplaza el auto-cierre por afterprint, que en
+           varios navegadores móviles se dispara al abrir la hoja de
+           compartir/preview (no al terminar), cerrando la ventana antes
+           de que el usuario pudiera guardar el PDF. */
+        .close-btn {
+          display: block; width: 100%; margin-top: 14px; padding: 10px;
+          font-family: inherit; font-size: 13px; font-weight: 700;
+          background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1;
+          border-radius: 6px;
+        }
+        @media print { .close-btn { display: none; } }
       </style>
     </head>
     <body>
@@ -114,7 +126,7 @@ export const openReceiptWindow = (sale) => {
       </div>
 
       <hr />
-      <p class="meta">Fecha: ${fmtDateTime(new Date())}</p>
+      <p class="meta">Fecha: ${fmtDateTime(sale.date ?? new Date())}</p>
       ${sale.registerName ? `<p class="meta">Caja: ${escapeHtml(sale.registerName)}</p>` : ''}
       ${sale.cashierName  ? `<p class="meta">Atendió: ${escapeHtml(sale.cashierName)}</p>` : ''}
       <p class="ticket-id">Ticket #${sale.orderId}</p>
@@ -144,14 +156,13 @@ export const openReceiptWindow = (sale) => {
 
       ${r?.footer_text ? `<hr /><div class="footer">${escapeHtml(r.footer_text)}</div>` : ''}
 
+      <button class="close-btn" onclick="window.close()">Cerrar</button>
+
       <script>
         window.onload = function () {
           window.focus()
           window.print()
         }
-        // onafterprint se dispara tanto si se imprime como si se cancela el
-        // diálogo — en ambos casos ya no hace falta la ventana.
-        window.onafterprint = function () { window.close() }
       </script>
     </body>
     </html>

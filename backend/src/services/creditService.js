@@ -284,9 +284,43 @@ const updateCreditLimit = async ({ customerId, newLimit, approvedBy }) => {
   return { customerId, newLimit };
 };
 
+// ─── Cancelar crédito (se llama desde orderService cuando se cancela la orden) ──
+// Solo revierte créditos SIN abonos — si el cliente ya pagó algo, mezclar esa
+// cancelación con pagos ya cobrados es un caso de negocio ambiguo (¿se le
+// devuelve el dinero? ¿se le abona a otra cosa?) que debe resolverse a mano
+// desde el módulo de créditos, no de forma automática aquí.
+const cancelCreditSale = async (conn, { orderId }) => {
+  const [credits] = await conn.query(
+    `SELECT * FROM credit_sales WHERE order_id = ? FOR UPDATE`,
+    [orderId]
+  );
+  if (credits.length === 0) return null; // la orden no tenía porción a crédito
+  const credit = credits[0];
+
+  if (credit.status === 'cancelled') return credit;
+
+  if (Number(credit.amount_paid) > 0) {
+    throw new ValidationError(
+      'No se puede cancelar la venta: el cliente ya abonó a este crédito. Ajusta el crédito manualmente desde el módulo de créditos antes de cancelar.'
+    );
+  }
+
+  await conn.query(
+    `UPDATE credit_sales SET status = 'cancelled', balance = 0, updated_at = NOW() WHERE credit_sale_id = ?`,
+    [credit.credit_sale_id]
+  );
+
+  await conn.query(
+    `UPDATE customers SET credit_balance = credit_balance - ?, updated_at = NOW() WHERE customer_id = ?`,
+    [credit.total_amount, credit.customer_id]
+  );
+
+  return credit;
+};
+
 module.exports = {
   getCreditsByCustomer, getCreditById,
   getOverdueCredits, getActiveCreditsByBranch,
-  createCreditSale, addPayment,
+  createCreditSale, cancelCreditSale, addPayment,
   markOverdueCredits, updateCreditLimit,
 };

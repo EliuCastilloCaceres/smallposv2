@@ -16,6 +16,7 @@ import Products           from './components/Products/Products.jsx'
 import Inventory          from './components/Inventory/Inventory.jsx'
 import Providers          from './components/Providers/Providers.jsx'
 import Pos                from './components/Pos/Pos.jsx'
+import Orders from './components/Orders/Orders.jsx'
 // Módulos nuevos
 //import Layaways           from './components/Layaways/Layaways.jsx'
 //import Credits            from './components/Credits/Credits.jsx'
@@ -31,6 +32,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path='/' element={<App />}>
             <Route path='pos'                             element={<Pos/>}/>
             <Route path='dashboard'                       element={<Dashboard />} />
+            <Route path='orders'                       element={<Orders />} />
             <Route path='products'                        element={<Products/>}/>
             <Route path='inventory'                        element={<Inventory/>}/>
             <Route path='customers'                        element={<Customers/>}/>

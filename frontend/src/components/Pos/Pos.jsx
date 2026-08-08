@@ -581,7 +581,7 @@ const SaleScreen = () => {
                       <span className="pos-cart-item__name">{item.name}</span>
                     </div>
                     <button type="button" className="pos-cart-item__remove"
-                      onClick={() => removeItem(item.product_id, item.variant_id)}>
+                      onClick={() => { removeItem(item.product_id, item.variant_id); focusSearch() }}>
                       <i className="bi bi-trash3" />
                     </button>
                   </div>

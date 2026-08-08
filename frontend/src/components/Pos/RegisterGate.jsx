@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePos } from '../../Context/PosContext'
+import { useUser } from '../../Context/UserContext'
 
 const formatDateTime = (iso) => {
   if (!iso) return '—'
@@ -37,8 +38,9 @@ const formatCurrency = (amount) => {
 const RegisterGate = () => {
   const {
     registers, registersLoading, registerError,
-    openRegister, fetchRegisters,
+    openRegister, joinRegister, fetchRegisters,
   } = usePos()
+  const { user } = useUser()
 
   const navigate = useNavigate()
 
@@ -133,6 +135,8 @@ const RegisterGate = () => {
             const isOpen       = !!r.is_open
             const isExpanded   = expandedId === r.cash_register_id
             const hasLastClose = r.last_closed_at != null
+            // Misma sesión, otro dispositivo: mismo user_id que la abrió.
+            const isMine = isOpen && r.opened_by_user_id === user?.user_id
 
             return (
               <div
@@ -161,7 +165,7 @@ const RegisterGate = () => {
                       <div className="pos-session-row">
                         <i className="bi bi-person-fill" />
                         <span>
-                          <strong>Abierta por:</strong> {r.opened_by ?? 'Desconocido'}
+                          <strong>Abierta por:</strong> {r.opened_by ?? 'Desconocido'}{isMine && ' (tú)'}
                         </span>
                       </div>
                       <div className="pos-session-row">
@@ -220,14 +224,24 @@ const RegisterGate = () => {
                 {/* Footer: acción */}
                 <div className="pos-register-card__footer">
                   {isOpen ? (
-                    <button
-                      type="button"
-                      className="pos-btn pos-btn--ghost pos-btn--block"
-                      disabled
-                      title="Esta caja está siendo utilizada"
-                    >
-                      <i className="bi bi-lock" /> Caja ocupada
-                    </button>
+                    isMine ? (
+                      <button
+                        type="button"
+                        className="pos-btn pos-btn--primary pos-btn--block"
+                        onClick={() => joinRegister(r.cash_register_id, r.session_id)}
+                      >
+                        <i className="bi bi-box-arrow-in-right" /> Entrar a la caja
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="pos-btn pos-btn--ghost pos-btn--block"
+                        disabled
+                        title="Esta caja está siendo utilizada por otro usuario"
+                      >
+                        <i className="bi bi-lock" /> Caja ocupada
+                      </button>
+                    )
                   ) : isExpanded ? (
                     <div className="pos-register-card__open-form">
                       {localError && (

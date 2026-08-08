@@ -280,6 +280,18 @@ export const PosContextProvider = ({ children }) => {
     }
   }, [branchId, fetchRegisters])
 
+  // [NUEVO] Unirse a una caja que YA está abierta con una sesión activa —
+  // caso típico: el mismo usuario entra desde otro dispositivo (PC y luego
+  // celular). No llama a /open (esa caja ya está abierta), solo adopta
+  // localmente ese registerId/sessionId, igual que hace fetchRegisters al
+  // reanudar desde localStorage — la diferencia es que aquí no depende de
+  // que este dispositivo ya tuviera esa sesión guardada.
+  const joinRegister = useCallback((registerId, sessionId) => {
+    setActiveRegisterId(registerId)
+    setSessionId(sessionId)
+    writeStoredSession({ branchId, registerId, sessionId })
+  }, [branchId])
+
   const closeRegister = useCallback(async (cashCounted, withdrawAmt = 0) => {
     if (!activeRegisterId) return null
     setRegisterError(null)
@@ -427,7 +439,7 @@ export const PosContextProvider = ({ children }) => {
       // Caja / sesión
       registers, registersLoading, activeRegister, activeRegisterId, sessionId,
       isRegisterOpen, registerError,
-      fetchRegisters, openRegister, closeRegister, fetchRegisterStatus, createCashMovement,
+      fetchRegisters, openRegister, joinRegister, closeRegister, fetchRegisterStatus, createCashMovement,
       // Carrito activo
       cart, subtotal, total,
       addItem, removeItem, updateQty, updatePrice,

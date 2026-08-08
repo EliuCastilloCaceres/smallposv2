@@ -21,7 +21,8 @@ const getAllRegisters = async (branchId) => {
        s.session_id,
        s.opened_at,
        s.open_amount,
-       u.first_name AS opened_by,
+       s.user_id         AS opened_by_user_id,
+       u.first_name      AS opened_by,
 
        -- Última sesión CERRADA
        ls.close_amount   AS last_close_amount,

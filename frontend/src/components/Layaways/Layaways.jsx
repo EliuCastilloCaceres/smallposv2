@@ -105,7 +105,7 @@ const LayawaysInner = () => {
           <i className="bi bi-search lwy-search__icon" />
           <input
             type="text" className="lwy-search__input"
-            placeholder="Buscar por cliente o teléfono..."
+            placeholder="Buscar por # de apartado, cliente o teléfono..."
             value={search} onChange={e => handleSearch(e.target.value)}
           />
         </div>

@@ -53,11 +53,11 @@ const Settings = () => {
       </div>
 
       <div className="set-content">
-        {activeTab === 'branches'  && <BranchesTab   isAdmin={isAdmin} />}
+        {activeTab === 'branches'  && <BranchesTab   isAdmin={isAdmin} branchId={user?.branch_id} />}
         {activeTab === 'receipt'   && <ReceiptTab     isAdmin={isAdmin} branchId={user?.branch_id} />}
         {activeTab === 'cash'      && <CashTab        isAdmin={isAdmin} branchId={user?.branch_id} />}
         {activeTab === 'category'  && <CategoriesTab  isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'roles' && isAdmin    && <RolesTab       isAdmin={isAdmin} />}
+        {activeTab === 'roles' && isAdmin    && <RolesTab isAdmin={isAdmin} branchId={user?.branch_id} />}
         {activeTab === 'payment-methods' && isAdmin && <PaymentMethodsTab isAdmin={isAdmin} />}
       </div>
     </div>

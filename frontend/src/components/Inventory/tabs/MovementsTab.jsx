@@ -5,14 +5,16 @@ import api from '../../../services/api'
 const PAGE_SIZE = 30
 
 const OPERATION_LABELS = {
-  entry:        { label: 'Entrada',       cls: 'inv-op--entry'    },
-  exit:         { label: 'Salida',        cls: 'inv-op--exit'     },
-  purchase:     { label: 'Compra',        cls: 'inv-op--entry'    },
-  sale:         { label: 'Venta',         cls: 'inv-op--exit'     },
-  return:       { label: 'Devolución',    cls: 'inv-op--exit'    },
-  adjustment:   { label: 'Ajuste',        cls: 'inv-op--adjust'   },
-  transfer_out: { label: 'Traspaso salida', cls: 'inv-op--exit'   },
-  transfer_in:  { label: 'Traspaso entrada', cls: 'inv-op--entry' },
+  entry:             { label: 'Entrada',            cls: 'inv-op--entry'    },
+  exit:              { label: 'Salida',             cls: 'inv-op--exit'     },
+  purchase:          { label: 'Compra',             cls: 'inv-op--entry'    },
+  sale:              { label: 'Venta',              cls: 'inv-op--exit'     },
+  return:            { label: 'Devolución',         cls: 'inv-op--entry'    },
+  layaway_reserve:   { label: 'Apartado',           cls: 'inv-op--exit'    },
+  layaway_cancelled: { label: 'Apartado Cancelado', cls: 'inv-op--entry'    },
+  adjustment:        { label: 'Ajuste',             cls: 'inv-op--adjust'   },
+  transfer_out:      { label: 'Traspaso salida',    cls: 'inv-op--exit'   },
+  transfer_in:       { label: 'Traspaso entrada',   cls: 'inv-op--entry' },
 }
 
 const OpBadge = ({ type }) => {

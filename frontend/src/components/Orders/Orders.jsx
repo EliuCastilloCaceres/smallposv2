@@ -30,6 +30,23 @@ const STATUS_META = {
   cancelled: { label: 'Cancelada',  cls: 'sls-status--off' },
 }
 
+// No tengo orders.css a la mano para confirmar si existen variantes de
+// color más allá de --on/--off, así que este badge usa estilos inline
+// autocontenidos en vez de una clase nueva sin verificar.
+const SaleTypeBadge = ({ isCredit }) => (
+  <span style={{
+    display: 'inline-flex', alignItems: 'center', gap: 5,
+    fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap',
+    color: isCredit ? '#b45309' : '#64748b',
+  }}>
+    <span style={{
+      width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+      background: isCredit ? '#b45309' : '#94a3b8',
+    }} />
+    {isCredit ? 'Crédito' : 'Contado'}
+  </span>
+)
+
 // ── Componente interno — ya con selectedBranch garantizado por BranchGate ──
 const SalesInner = () => {
   const { hasPermission } = useUser()
@@ -204,6 +221,7 @@ const SalesInner = () => {
                   <th>Cliente</th>
                   <th>Cajero</th>
                   <th>Caja</th>
+                  <th>Tipo</th>
                   <th className="num">Total</th>
                   <th>Estado</th>
                 </tr>
@@ -222,6 +240,7 @@ const SalesInner = () => {
                       <td>{o.customer_firstname} {o.customer_lastname}</td>
                       <td className="sls-td-muted">{o.user_firstname} {o.user_lastname}</td>
                       <td className="sls-td-muted">{o.cash_register_name}</td>
+                      <td><SaleTypeBadge isCredit={!!o.is_credit} /></td>
                       <td className="num">{money(o.total)}</td>
                       <td>
                         <span className={`sls-status ${st.cls}`}>
@@ -257,6 +276,7 @@ const SalesInner = () => {
                   <div className="sls-card__meta">
                     <span className="sls-muted"><i className="bi bi-clock" />{fmtDateTime(o.created_at)}</span>
                     <span className="sls-muted"><i className="bi bi-person-badge" />{o.user_firstname} {o.user_lastname}</span>
+                    <SaleTypeBadge isCredit={!!o.is_credit} />
                   </div>
                   <div className="sls-card__total">
                     <span className="sls-muted">Total</span>

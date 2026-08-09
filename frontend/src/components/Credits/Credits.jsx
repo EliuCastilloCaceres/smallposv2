@@ -133,7 +133,7 @@ const CreditsInner = () => {
           <i className="bi bi-search crd-search__icon" />
           <input
             type="text" className="crd-search__input"
-            placeholder="Buscar por cliente o teléfono..."
+            placeholder="Buscar por # de crédito, cliente o teléfono..."
             value={search} onChange={e => handleSearch(e.target.value)}
           />
         </div>

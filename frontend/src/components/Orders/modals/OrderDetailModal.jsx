@@ -12,6 +12,15 @@ const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
 
 const itemLabel = (d) => d.variant_label ? `${d.product_name} - ${d.variant_label}` : d.product_name
 
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
+const CREDIT_STATUS_META = {
+  active:    { label: 'Activo',    cls: 'sls-status--on' },
+  overdue:   { label: 'Vencido',   cls: 'sls-status--off' },
+  paid:      { label: 'Pagado',    cls: 'sls-status--on' },
+  cancelled: { label: 'Cancelado', cls: 'sls-status--off' },
+}
+
 const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
   const { selectedBranch } = useBranch()
 
@@ -170,6 +179,36 @@ const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
                   ))}
                 </div>
               </div>
+
+              {/* Crédito — solo si la venta tuvo una porción a crédito */}
+              {data.credit && (
+                <div className="sls-detail__section">
+                  <span className="sls-detail__section-title">Crédito</span>
+                  <div className="sls-detail__totals">
+                    <div className="sls-detail__row">
+                      <span>Crédito</span>
+                      <span>#{data.credit.credit_sale_id}</span>
+                    </div>
+                    <div className="sls-detail__row">
+                      <span>Estado</span>
+                      <span className={`sls-status ${(CREDIT_STATUS_META[data.credit.status] ?? {}).cls ?? ''}`}>
+                        <span className="sls-status__dot" />
+                        {(CREDIT_STATUS_META[data.credit.status] ?? {}).label ?? data.credit.status}
+                      </span>
+                    </div>
+                    <div className="sls-detail__row">
+                      <span>Último abono</span>
+                      <span>
+                        {data.credit.last_payment
+                          ? `${money(data.credit.last_payment.amount)} · ${fmtDate(data.credit.last_payment.created_at)}`
+                          : 'Sin abonos aún'}
+                      </span>
+                    </div>
+                    <div className="sls-detail__row"><span>Vence</span><span>{fmtDate(data.credit.due_date)}</span></div>
+                    <div className="sls-detail__row sls-detail__row--total"><span>Saldo pendiente</span><span>{money(data.credit.balance)}</span></div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

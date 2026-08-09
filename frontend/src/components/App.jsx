@@ -22,17 +22,18 @@ function App() {
   const isPosRoute = location.pathname === '/pos'
 
   const navItems = [
-    { to: '/pos',                icon: 'bi-pc-display-horizontal', label: 'POS',         perm: ['pos',       'use']   },
-    { to: '/dashboard',          icon: 'bi-graph-up-arrow',        label: 'Dashboard',   perm: ['reports',   'basic'] },
-    { to: '/orders',             icon: 'bi-clipboard2-data',       label: 'Ventas',      perm: ['orders',    'read']  },
-    { to: '/products',           icon: 'bi-boxes',                 label: 'Productos',   perm: ['products',  'read']  },
+    { to: '/pos',                icon: 'bi-pc-display-horizontal', label: 'POS',          perm: ['pos',       'use']   },
+    { to: '/dashboard',          icon: 'bi-graph-up-arrow',        label: 'Dashboard',    perm: ['reports',   'basic'] },
+    { to: '/orders',             icon: 'bi-clipboard2-data',       label: 'Ventas',       perm: ['orders',    'read']  },
+    { to: '/products',           icon: 'bi-boxes',                 label: 'Productos',    perm: ['products',  'read']  },
     { to: '/inventory',          icon: 'bi-box-seam',              label: 'Inventario',   perm: ['inventory',  'read']  },
-    { to: '/providers',          icon: 'bi-truck',                 label: 'Proveedores', perm: ['providers', 'read']  },
-    { to: '/customers',          icon: 'bi-person-badge',          label: 'Clientes',    perm: ['customers', 'read']  },
-    { to: '/layaways',           icon: 'bi-bookmark-check',        label: 'Apartados',   perm: ['layaway',   'read']  },
-    { to: '/credits',            icon: 'bi-clock-history',         label: 'Créditos',    perm: ['credit',    'read']  },
-    { to: '/reports',            icon: 'bi-bar-chart-line',        label: 'Reportes',    perm: ['reports',   'basic'] },
-    { to: '/users',              icon: 'bi-person',                label: 'Usuarios',    perm: ['users',     'read']  },
+    { to: '/providers',          icon: 'bi-truck',                 label: 'Proveedores',  perm: ['providers', 'read']  },
+    { to: '/customers',          icon: 'bi-person-badge',          label: 'Clientes',     perm: ['customers', 'read']  },
+    { to: '/layaways',           icon: 'bi-bookmark-check',        label: 'Apartados',    perm: ['layaway',   'read']  },
+    { to: '/credits',            icon: 'bi-clock-history',         label: 'Créditos',     perm: ['credit',    'read']  },
+     { to: '/returns',           icon: 'bi-arrow-return-left',     label: 'Devoluciones', perm: ['returns',    'read']  },
+    { to: '/reports',            icon: 'bi-bar-chart-line',        label: 'Reportes',     perm: ['reports',   'basic'] },
+    { to: '/users',              icon: 'bi-person',                label: 'Usuarios',     perm: ['users',     'read']  },
   ].filter(item => hasPermission(...item.perm))
 
   return (

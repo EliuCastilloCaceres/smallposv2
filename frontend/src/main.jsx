@@ -14,6 +14,7 @@ import Settings           from './components/Settings/Settings.jsx'
 import Customers          from './components/Customers/Customers.jsx'
 import Layaways           from './components/Layaways/Layaways.jsx'
 import Credits            from './components/Credits/Credits.jsx'
+import Returns            from './components/Returns/Returns.jsx'
 import Products           from './components/Products/Products.jsx'
 import Inventory          from './components/Inventory/Inventory.jsx'
 import Providers          from './components/Providers/Providers.jsx'
@@ -38,6 +39,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path='customers'                        element={<Customers/>}/>
             <Route path='layaways'                        element={<Layaways/>}/>
             <Route path='credits'                        element={<Credits/>}/>
+            <Route path='returns'                        element={<Returns/>}/>
             <Route path='providers'                        element={<Providers/>}/>
             <Route path='users'                           element={<Users />} />
             <Route path='settings'                        element={<Settings/>}/>

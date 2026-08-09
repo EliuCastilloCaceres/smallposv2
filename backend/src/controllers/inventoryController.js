@@ -24,6 +24,7 @@ const getMovements = async (req, res, next) => {
 // POST /inventory/adjustments
 const createAdjustment = async (req, res, next) => {
   try {
+    console.log(req.body)
     const branchId = resolveBranchId(req);
     const result   = await inventoryService.createAdjustment({
       branchId,

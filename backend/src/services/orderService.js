@@ -319,7 +319,26 @@ const getOrderById = async (orderId, branchId) => {
     [orderId]
   );
 
-  return { order: orders[0], details, payments };
+  // Si la venta incluyó una porción a crédito, traer el estado actual de
+  // ese crédito y su último abono — para mostrarlo en el detalle de la
+  // venta sin que el cajero tenga que ir al módulo de Créditos a buscarlo.
+  let credit = null;
+  const [creditRows] = await db.query(
+    `SELECT credit_sale_id, status, due_date, total_amount, amount_paid, balance
+     FROM credit_sales WHERE order_id = ?`,
+    [orderId]
+  );
+  if (creditRows.length > 0) {
+    credit = creditRows[0];
+    const [lastPayment] = await db.query(
+      `SELECT amount, created_at FROM credit_payments
+       WHERE credit_sale_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [credit.credit_sale_id]
+    );
+    credit.last_payment = lastPayment[0] ?? null;
+  }
+
+  return { order: orders[0], details, payments, credit };
 };
 
 const getOrdersByBranchAndDateRange = async ({
@@ -357,7 +376,12 @@ const getOrdersByBranchAndDateRange = async ({
             o.status, o.created_at,
             c.first_name as customer_firstname, c.last_name as customer_lastname,
             u.first_name as user_firstname,     u.last_name as user_lastname,
-            cr.name as cash_register_name
+            cr.name as cash_register_name,
+            EXISTS (
+              SELECT 1 FROM order_payments op
+              JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
+              WHERE op.order_id = o.order_id AND pm.code = 'credit'
+            ) AS is_credit
      FROM orders o
      JOIN customers c       ON o.customer_id      = c.customer_id
      JOIN users u           ON o.user_id           = u.user_id

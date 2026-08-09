@@ -154,9 +154,10 @@ const getActiveCreditsByBranch = async ({ branchId, status, search, page = 1, li
   }
 
   if (search) {
-    conditions.push('(c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone_number LIKE ?)');
+    const asId = parseInt(search);
     const like = `%${search}%`;
-    params.push(like, like, like);
+    conditions.push('(cs.credit_sale_id = ? OR c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone_number LIKE ?)');
+    params.push(isNaN(asId) ? 0 : asId, like, like, like);
   }
 
   const where = `WHERE ${conditions.join(' AND ')}`;

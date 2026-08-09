@@ -74,6 +74,19 @@ const getCreditById = async (creditSaleId) => {
   );
   if (rows.length === 0) throw new NotFoundError('Crédito no encontrado');
 
+  // Artículos de la venta que generó este crédito — mismo query que usa
+  // orderService.getOrderById, ya que credit_sales.order_id apunta
+  // directamente a esa orden.
+  const [details] = await db.query(
+    `SELECT od.*, p.name as product_name, p.sku,
+            pv.label as variant_label, pv.sku as variant_sku
+     FROM order_details od
+     JOIN products p ON od.product_id = p.product_id
+     LEFT JOIN product_variants pv ON od.variant_id = pv.variant_id
+     WHERE od.order_id = ?`,
+    [rows[0].order_id]
+  );
+
   const [payments] = await db.query(
     `SELECT cp.*, b.name as branch_name, u.first_name as received_by
      FROM credit_payments cp
@@ -106,7 +119,7 @@ const getCreditById = async (creditSaleId) => {
     details: detailsByPayment[p.payment_id] ?? [],
   }));
 
-  return { credit: rows[0], payments: paymentsWithDetails };
+  return { credit: rows[0], details, payments: paymentsWithDetails };
 };
 
 const getOverdueCredits = async () => {
@@ -122,7 +135,41 @@ const getOverdueCredits = async () => {
   return rows;
 };
 
-const getActiveCreditsByBranch = async (branchId) => {
+const getActiveCreditsByBranch = async ({ branchId, status, search, page = 1, limit = 20 }) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+  const offset    = (safePage - 1) * safeLimit;
+
+  const conditions = ['o.branch_id = ?'];
+  const params = [branchId];
+
+  // Sin status explícito, mantiene el comportamiento original: solo
+  // activos/vencidos (para eso era esta función). Con status, filtra por
+  // ese estado puntual (permite ver pagados/cancelados también).
+  if (status) {
+    conditions.push('cs.status = ?');
+    params.push(status);
+  } else {
+    conditions.push(`cs.status IN ('active','overdue')`);
+  }
+
+  if (search) {
+    conditions.push('(c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone_number LIKE ?)');
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
+
+  const where = `WHERE ${conditions.join(' AND ')}`;
+
+  const [[{ total }]] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM credit_sales cs
+     JOIN orders    o ON cs.order_id    = o.order_id
+     JOIN customers c ON cs.customer_id = c.customer_id
+     ${where}`,
+    params
+  );
+
   const [rows] = await db.query(
     `SELECT cs.credit_sale_id, cs.total_amount, cs.amount_paid,
             cs.balance, cs.due_date, cs.status, cs.created_at,
@@ -130,16 +177,43 @@ const getActiveCreditsByBranch = async (branchId) => {
      FROM credit_sales cs
      JOIN orders   o ON cs.order_id   = o.order_id
      JOIN customers c ON cs.customer_id = c.customer_id
-     WHERE o.branch_id = ? AND cs.status IN ('active','overdue')
-     ORDER BY cs.due_date ASC`,
-    [branchId]
+     ${where}
+     ORDER BY cs.due_date ASC
+     LIMIT ? OFFSET ?`,
+    [...params, safeLimit, offset]
   );
-  return rows;
+
+  return {
+    data: rows,
+    pagination: {
+      total,
+      page:       safePage,
+      limit:      safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    },
+  };
 };
 
 // ─── Crear crédito (se llama desde orderService cuando payment_method = 'credit') ──
-
-const createCreditSale = async (conn, { orderId, customerId, totalAmount, dueDate = null }) => {
+//
+// [CAMBIO] Antes se llamaba con totalAmount = solo la porción que quedaba a
+// crédito (ej. venta de $280 con $100 de anticipo → totalAmount = $180), así
+// que el anticipo nunca quedaba registrado en ningún lado del módulo de
+// crédito — el crédito "nacía" ya achicado y el abono era invisible.
+// Ahora totalAmount es el TOTAL de la venta y, si se recibió un anticipo al
+// momento de crear la venta (downPayments), se aplica de inmediato como un
+// abono real (credit_payments + credit_payment_details) dentro de la misma
+// transacción — así el crédito nace por el total correcto y el anticipo
+// aparece en el historial de abonos, con balance ya reflejando el resto.
+//
+// El límite de crédito disponible se sigue validando contra lo que
+// realmente va a quedar pendiente (checkAmount), no contra el total bruto:
+// si el cliente paga parte de contado, esa parte nunca representa una
+// exposición de crédito real, así que no debe consumir línea de crédito.
+const createCreditSale = async (conn, {
+  orderId, customerId, totalAmount, checkAmount = totalAmount, dueDate = null,
+  branchId = null, userId = null, downPayments = [],
+}) => {
   const customer = await getCustomerWithLock(conn, customerId);
 
   if (customer.credit_limit === 0) {
@@ -147,21 +221,24 @@ const createCreditSale = async (conn, { orderId, customerId, totalAmount, dueDat
   }
 
   const availableCredit = customer.credit_limit - customer.credit_balance;
-  if (totalAmount > availableCredit) {
+  if (Number(checkAmount) > availableCredit) {
     throw new ValidationError(
-      `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)}, solicitado: $${totalAmount.toFixed(2)}`
+      `Crédito insuficiente. Disponible: $${availableCredit.toFixed(2)}, solicitado: $${Number(checkAmount).toFixed(2)}`
     );
   }
 
-  // Crear registro de crédito
+  // Crear registro de crédito por el TOTAL de la venta
   const [result] = await conn.query(
     `INSERT INTO credit_sales
        (order_id, customer_id, total_amount, amount_paid, balance, due_date, status)
      VALUES (?, ?, ?, 0, ?, ?, 'active')`,
     [orderId, customerId, totalAmount, totalAmount, dueDate]
   );
+  const creditSaleId = result.insertId;
 
-  // Incrementar saldo del cliente
+  // Incrementar saldo del cliente por el total completo — si hubo anticipo,
+  // se revierte la porción correspondiente unas líneas más abajo, dejando
+  // el neto correcto en una sola transacción.
   await conn.query(
     `UPDATE customers
      SET credit_balance = credit_balance + ?, updated_at = NOW()
@@ -169,12 +246,54 @@ const createCreditSale = async (conn, { orderId, customerId, totalAmount, dueDat
     [totalAmount, customerId]
   );
 
-  return result.insertId;
+  // Anticipo recibido al momento de la venta → se aplica de inmediato como abono
+  const downAmount = downPayments.reduce((s, p) => s + Number(p.amount), 0);
+  if (downAmount > 0) {
+    if (!branchId || !userId) {
+      throw new ValidationError('Se requiere branchId y userId para registrar el anticipo del crédito');
+    }
+
+    const newAmountPaid = downAmount;
+    const newBalance    = +(Number(totalAmount) - downAmount).toFixed(2);
+    const newStatus     = newBalance <= 0 ? 'paid' : 'active';
+
+    await conn.query(
+      `UPDATE credit_sales
+       SET amount_paid = ?, balance = ?, status = ?, updated_at = NOW()
+       WHERE credit_sale_id = ?`,
+      [newAmountPaid, newBalance, newStatus, creditSaleId]
+    );
+
+    await conn.query(
+      `UPDATE customers
+       SET credit_balance = credit_balance - ?, updated_at = NOW()
+       WHERE customer_id = ?`,
+      [downAmount, customerId]
+    );
+
+    const [payResult] = await conn.query(
+      `INSERT INTO credit_payments (credit_sale_id, branch_id, user_id, amount, notes)
+       VALUES (?, ?, ?, ?, ?)`,
+      [creditSaleId, branchId, userId, downAmount, 'Anticipo registrado al momento de la venta']
+    );
+    const paymentId = payResult.insertId;
+
+    for (const p of downPayments) {
+      await conn.query(
+        `INSERT INTO credit_payment_details
+           (payment_id, payment_method_id, amount, cash_received, cash_change, reference)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [paymentId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
+      );
+    }
+  }
+
+  return creditSaleId;
 };
 
 // ─── Registrar abono ──────────────────────────────────────────────────────────
 
-const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = null }) => {
+const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = null, cashRegisterId = null }) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -182,7 +301,8 @@ const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = nu
     // Validar métodos de pago y calcular el monto total del abono
     // sumando el desglose — el monto nunca se recibe como dato separado,
     // así se evita que el total y el desglose se desincronicen.
-    await validatePayments(conn, payments);
+    const methods     = await validatePayments(conn, payments);
+    const methodsById = new Map(methods.map(m => [m.payment_method_id, m]));
     const amount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
     // Bloquear el crédito
@@ -240,6 +360,53 @@ const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = nu
       );
     }
 
+    // [FIX] Un abono hecho desde el módulo de Créditos (no desde el POS) no
+    // trae una sesión de caja "actual" implícita — antes, si el abono era
+    // en efectivo, ese dinero jamás quedaba reflejado en ninguna caja. Ahora,
+    // si alguna porción del abono es en efectivo, es obligatorio indicar a
+    // qué caja se aplica, y esa caja debe estar abierta con una sesión
+    // propia del usuario que registra el abono (misma regla que aplicaría
+    // si lo estuviera cobrando desde el POS).
+    const cashAmount = payments.reduce((sum, p) => {
+      const method = methodsById.get(Number(p.payment_method_id));
+      return method?.code === 'cash' ? sum + Number(p.amount) : sum;
+    }, 0);
+
+    if (cashAmount > 0) {
+      if (!cashRegisterId) {
+        throw new ValidationError('Selecciona la caja donde se registrará el efectivo del abono');
+      }
+
+      const [registers] = await conn.query(
+        `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
+        [cashRegisterId]
+      );
+      if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
+      if (!registers[0].is_open) {
+        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono en efectivo.');
+      }
+
+      const [sessions] = await conn.query(
+        `SELECT session_id, user_id FROM cash_register_sessions
+         WHERE cash_register_id = ? AND closed_at IS NULL
+         ORDER BY session_id DESC LIMIT 1`,
+        [cashRegisterId]
+      );
+      if (sessions.length === 0) {
+        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono en efectivo.');
+      }
+      if (sessions[0].user_id !== userId) {
+        throw new ForbiddenError('Solo puedes registrar el efectivo del abono en una caja que tú mismo tengas abierta.');
+      }
+
+      await conn.query(
+        `INSERT INTO cash_movements
+           (session_id, movement_type, amount, description, user_id)
+         VALUES (?, 'sale', ?, ?, ?)`,
+        [sessions[0].session_id, cashAmount, `Abono a crédito #${creditSaleId}`, userId]
+      );
+    }
+
     await conn.commit();
     return { creditSaleId, newBalance, status: newStatus };
   } catch (err) {
@@ -289,6 +456,8 @@ const updateCreditLimit = async ({ customerId, newLimit, approvedBy }) => {
 // cancelación con pagos ya cobrados es un caso de negocio ambiguo (¿se le
 // devuelve el dinero? ¿se le abona a otra cosa?) que debe resolverse a mano
 // desde el módulo de créditos, no de forma automática aquí.
+const ANTICIPO_NOTE = 'Anticipo registrado al momento de la venta';
+
 const cancelCreditSale = async (conn, { orderId }) => {
   const [credits] = await conn.query(
     `SELECT * FROM credit_sales WHERE order_id = ? FOR UPDATE`,
@@ -300,19 +469,41 @@ const cancelCreditSale = async (conn, { orderId }) => {
   if (credit.status === 'cancelled') return credit;
 
   if (Number(credit.amount_paid) > 0) {
-    throw new ValidationError(
-      'No se puede cancelar la venta: el cliente ya abonó a este crédito. Ajusta el crédito manualmente desde el módulo de créditos antes de cancelar.'
+    // [CAMBIO] Antes CUALQUIER amount_paid > 0 bloqueaba la cancelación
+    // automática. Ahora el crédito puede nacer con un abono ya aplicado
+    // (el anticipo tomado en el momento de la venta — ver createCreditSale),
+    // y ese abono es parte de la MISMA operación que se está cancelando, no
+    // un pago posterior independiente. Si todos los abonos registrados son
+    // ese anticipo (y no hay abonos reales hechos después, en otra visita),
+    // es seguro revertirlo junto con todo lo demás.
+    const [payments] = await conn.query(
+      `SELECT payment_id, notes FROM credit_payments WHERE credit_sale_id = ?`,
+      [credit.credit_sale_id]
     );
+    const onlyInitialAnticipo = payments.length > 0 && payments.every(p => p.notes === ANTICIPO_NOTE);
+
+    if (!onlyInitialAnticipo) {
+      throw new ValidationError(
+        'No se puede cancelar la venta: el cliente ya abonó a este crédito. Ajusta el crédito manualmente desde el módulo de créditos antes de cancelar.'
+      );
+    }
+
+    const paymentIds = payments.map(p => p.payment_id);
+    await conn.query(`DELETE FROM credit_payment_details WHERE payment_id IN (?)`, [paymentIds]);
+    await conn.query(`DELETE FROM credit_payments WHERE payment_id IN (?)`, [paymentIds]);
   }
 
   await conn.query(
-    `UPDATE credit_sales SET status = 'cancelled', balance = 0, updated_at = NOW() WHERE credit_sale_id = ?`,
+    `UPDATE credit_sales SET status = 'cancelled', amount_paid = 0, balance = 0, updated_at = NOW() WHERE credit_sale_id = ?`,
     [credit.credit_sale_id]
   );
 
+  // El neto que este crédito le sumó al saldo del cliente siempre es
+  // credit.balance (total_amount - amount_paid en el momento de cancelar,
+  // ya sea 0 si nunca hubo abono o el resto tras revertir el anticipo).
   await conn.query(
     `UPDATE customers SET credit_balance = credit_balance - ?, updated_at = NOW() WHERE customer_id = ?`,
-    [credit.total_amount, credit.customer_id]
+    [credit.balance, credit.customer_id]
   );
 
   return credit;

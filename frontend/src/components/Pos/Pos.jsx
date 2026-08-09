@@ -11,6 +11,8 @@ import CashMovementsModal    from './modals/CashMovementsModal'
 import CustomerModal         from './modals/CustomerModal'
 import VariantPickerModal    from './modals/VariantPickerModal'
 import PaymentModal          from './modals/PaymentModal'
+import LayawayModal          from './modals/LayawayModal'
+import CreditModal           from './modals/CreditModal'
 import OutOfStockModal       from './modals/OutOfStockModal'
 import api from '../../services/api'
 import './pos.css'
@@ -180,6 +182,8 @@ const SaleScreen = () => {
   // ── Modales ──
   const [customerOpen, setCustomerOpen] = useState(false)
   const [paymentOpen,  setPaymentOpen]  = useState(false)
+  const [layawayOpen,  setLayawayOpen]  = useState(false)
+  const [creditOpen,   setCreditOpen]   = useState(false)
   const [confirmClear, setConfirmClear] = useState(false)
   const [confirmDiscardIdx, setConfirmDiscardIdx] = useState(null)
 
@@ -697,14 +701,37 @@ const SaleScreen = () => {
             </button>
           </div>
 
-          <button
-            type="button"
-            className="pos-btn pos-btn--primary pos-btn--lg pos-btn--block pos-cart-pay-btn"
-            onClick={() => setPaymentOpen(true)}
-            disabled={cart.items.length === 0}
-          >
-            <i className="bi bi-cash-coin" /> Cobrar {money(total)}
-          </button>
+          <div className="pos-cart-checkout-row" style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="pos-btn pos-btn--ghost pos-btn--lg"
+              style={{ flexShrink: 0 }}
+              onClick={() => setLayawayOpen(true)}
+              disabled={cart.items.length === 0}
+              title="Apartar — reserva el stock y cobra el resto después"
+            >
+              <i className="bi bi-bag-check" /> Apartar
+            </button>
+            <button
+              type="button"
+              className="pos-btn pos-btn--ghost pos-btn--lg"
+              style={{ flexShrink: 0 }}
+              onClick={() => setCreditOpen(true)}
+              disabled={cart.items.length === 0}
+              title="Crédito — completa la venta y deja el saldo a la cuenta del cliente"
+            >
+              <i className="bi bi-clock-history" /> Crédito
+            </button>
+            <button
+              type="button"
+              className="pos-btn pos-btn--primary pos-btn--lg pos-cart-pay-btn"
+              style={{ flex: 1 }}
+              onClick={() => setPaymentOpen(true)}
+              disabled={cart.items.length === 0}
+            >
+              <i className="bi bi-cash-coin" /> Cobrar {money(total)}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -718,6 +745,8 @@ const SaleScreen = () => {
       )}
       {customerOpen && <CustomerModal onClose={() => setCustomerOpen(false)} />}
       {paymentOpen && <PaymentModal onClose={() => setPaymentOpen(false)} />}
+      {layawayOpen && <LayawayModal onClose={() => setLayawayOpen(false)} />}
+      {creditOpen && <CreditModal onClose={() => setCreditOpen(false)} />}
       {outOfStockTarget && (
         <OutOfStockModal
           target={outOfStockTarget}

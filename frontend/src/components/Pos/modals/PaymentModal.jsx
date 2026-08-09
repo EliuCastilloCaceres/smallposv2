@@ -3,6 +3,13 @@
 // Flujo rápido: un solo click en un método no-efectivo asigna todo el
 // restante; para efectivo se despliega el panel de monto recibido con
 // botones rápidos ($20/$50/.../$1000, acumulables) y calcula el cambio.
+//
+// [CAMBIO] 'credit' ya NO se ofrece aquí como método de pago mezclable.
+// Antes el cajero podía combinar efectivo + crédito dentro de esta misma
+// pantalla; ahora una venta a crédito tiene su propio flujo (ver
+// CreditModal, calcado del de Apartar) para que el anticipo + saldo a
+// crédito quede claro desde el inicio en vez de armarse línea por línea.
+// Este modal se queda solo con métodos "de contado" (cash, card, etc).
 
 import { useState, useMemo } from 'react'
 import { usePos } from '../../../Context/PosContext'
@@ -33,6 +40,10 @@ const PaymentModal = ({ onClose }) => {
   const assigned  = lines.reduce((s, l) => s + l.amount, 0)
   const remaining = Math.max(0, +(total - assigned).toFixed(2))
   const totalChange = lines.reduce((s, l) => s + (l.cash_change ?? 0), 0)
+
+  // 'credit' se excluye del selector de métodos — tiene su propio flujo en
+  // CreditModal (ver botón "Crédito" junto a "Apartar" en la pantalla de venta).
+  const availableMethods = paymentMethods.filter(m => m.code !== 'credit')
 
   const removeLine = (idx) => setLines(prev => prev.filter((_, i) => i !== idx))
   const updateLineAmount = (idx, value) => {
@@ -213,7 +224,7 @@ const PaymentModal = ({ onClose }) => {
                   <div className="pos-pay-quick-grid">
                     <button type="button" className="pos-btn pos-btn--ghost pos-pay-quick-exact"
                       onClick={() => setCashReceived(String(remaining))}>
-                      Exacto
+                      Exacto ({money(remaining)})
                     </button>
                     {QUICK_AMOUNTS.map(n => (
                       <button key={n} type="button" className="pos-btn pos-btn--ghost" onClick={() => addQuickAmount(n)}>
@@ -237,9 +248,12 @@ const PaymentModal = ({ onClose }) => {
                 </div>
               ) : remaining > 0 && (
                 <div className="pos-pay-methods">
-                  {paymentMethods.map(m => (
-                    <button key={m.payment_method_id} type="button" className="pos-pay-method-btn" onClick={() => pickMethod(m)}>
-                      <i className={`bi ${m.code === 'cash' ? 'bi-cash' : m.code === 'credit' ? 'bi-clock-history' : 'bi-credit-card'}`} />
+                  {availableMethods.map(m => (
+                    <button
+                      key={m.payment_method_id} type="button" className="pos-pay-method-btn"
+                      onClick={() => pickMethod(m)}
+                    >
+                      <i className={`bi ${m.code === 'cash' ? 'bi-cash' : 'bi-credit-card'}`} />
                       <span>{m.name}</span>
                     </button>
                   ))}

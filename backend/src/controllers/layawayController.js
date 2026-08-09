@@ -5,8 +5,9 @@ const {resolveBranchId} = require('../helpers/helper');
 const getByBranch = async (req, res, next) => {
   try {
     const branchId = resolveBranchId(req);
-    const data = await layawayService.getLayawaysByBranch({ branchId, status: req.query.status });
-    res.json({ status: 'success', data });
+    const { status, search, page, limit } = req.query;
+    const result = await layawayService.getLayawaysByBranch({ branchId, status, search, page, limit });
+    res.json({ status: 'success', ...result });
   } catch (err) { next(err); }
 };
 
@@ -48,7 +49,7 @@ const addPayment = async (req, res, next) => {
     const layawayId = parseInt(req.params.layawayId);
     const branchId  = resolveBranchId(req);
     const userId    = req.user.user_id;
-    const { payments, notes } = req.body;
+    const { payments, notes, cashRegisterId } = req.body;
 
     if (!Array.isArray(payments) || payments.length === 0) {
       return res.status(400).json({ status: 'error', message: 'payments debe ser un arreglo con al menos un pago' });
@@ -56,7 +57,7 @@ const addPayment = async (req, res, next) => {
 
     const data = await layawayService.addPayment({
       layawayId, branchId, userId,
-      payments, notes,
+      payments, notes, cashRegisterId,
     });
     res.json({ status: 'success', data });
   } catch (err) { next(err); }

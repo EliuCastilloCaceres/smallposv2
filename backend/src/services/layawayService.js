@@ -7,7 +7,7 @@
 
 const db           = require('../config/db');
 const stockService = require('./stockService');
-const { NotFoundError, ValidationError, ConflictError } = require('../errors/AppError');
+const { NotFoundError, ValidationError, ConflictError, ForbiddenError } = require('../errors/AppError');
 
 // ─── Validar un arreglo de pagos (payment_method_id + amount) ────────────────
 const validatePayments = async (conn, payments) => {
@@ -108,10 +108,33 @@ const getLayawayById = async (layawayId) => {
   return { layaway: rows[0], details, payments: paymentsWithDetails };
 };
 
-const getLayawaysByBranch = async ({ branchId, status = null }) => {
-  let where = 'WHERE l.branch_id = ?';
+const getLayawaysByBranch = async ({ branchId, status = null, search, page = 1, limit = 20 }) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+  const offset    = (safePage - 1) * safeLimit;
+
+  const conditions = ['l.branch_id = ?'];
   const params = [branchId];
-  if (status) { where += ' AND l.status = ?'; params.push(status); }
+
+  if (status) {
+    conditions.push('l.status = ?');
+    params.push(status);
+  }
+  if (search) {
+    conditions.push('(c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone_number LIKE ?)');
+    const like = `%${search}%`;
+    params.push(like, like, like);
+  }
+
+  const where = `WHERE ${conditions.join(' AND ')}`;
+
+  const [[{ total }]] = await db.query(
+    `SELECT COUNT(*) AS total
+     FROM layaways l
+     JOIN customers c ON l.customer_id = c.customer_id
+     ${where}`,
+    params
+  );
 
   const [rows] = await db.query(
     `SELECT l.layaway_id, l.total_amount, l.amount_paid, l.balance,
@@ -120,10 +143,20 @@ const getLayawaysByBranch = async ({ branchId, status = null }) => {
      FROM layaways l
      JOIN customers c ON l.customer_id = c.customer_id
      ${where}
-     ORDER BY l.layaway_id DESC`,
-    params
+     ORDER BY l.layaway_id DESC
+     LIMIT ? OFFSET ?`,
+    [...params, safeLimit, offset]
   );
-  return rows;
+
+  return {
+    data: rows,
+    pagination: {
+      total,
+      page:       safePage,
+      limit:      safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    },
+  };
 };
 
 // ─── Crear apartado ───────────────────────────────────────────────────────────
@@ -240,7 +273,7 @@ const createLayaway = async ({
 
 // ─── Registrar abono ──────────────────────────────────────────────────────────
 
-const addPayment = async ({ layawayId, branchId, userId, payments, notes = null }) => {
+const addPayment = async ({ layawayId, branchId, userId, payments, notes = null, cashRegisterId = null }) => {
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -248,7 +281,8 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null 
     // Validar métodos de pago y derivar el monto sumando el desglose —
     // mismo principio que en creditService: nunca se confía en un total
     // separado que pueda desincronizarse de la suma real.
-    await validatePayments(conn, payments);
+    const methods     = await validatePayments(conn, payments);
+    const methodsById = new Map(methods.map(m => [m.payment_method_id, m]));
     const amount = payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
     const [rows] = await conn.query(
@@ -292,6 +326,51 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null 
            (payment_id, payment_method_id, amount, cash_received, cash_change, reference)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [paymentId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
+      );
+    }
+
+    // [FIX] Igual que en creditService.addPayment: un abono hecho desde el
+    // módulo de Apartados (no desde el POS) no trae una sesión de caja
+    // implícita. Si el abono incluye efectivo, se exige indicar a qué caja
+    // se aplica, y esa caja debe estar abierta con una sesión propia del
+    // usuario que registra el abono.
+    const cashAmount = payments.reduce((sum, p) => {
+      const method = methodsById.get(Number(p.payment_method_id));
+      return method?.code === 'cash' ? sum + Number(p.amount) : sum;
+    }, 0);
+
+    if (cashAmount > 0) {
+      if (!cashRegisterId) {
+        throw new ValidationError('Selecciona la caja donde se registrará el efectivo del abono');
+      }
+
+      const [registers] = await conn.query(
+        `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
+        [cashRegisterId]
+      );
+      if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
+      if (!registers[0].is_open) {
+        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono en efectivo.');
+      }
+
+      const [sessions] = await conn.query(
+        `SELECT session_id, user_id FROM cash_register_sessions
+         WHERE cash_register_id = ? AND closed_at IS NULL
+         ORDER BY session_id DESC LIMIT 1`,
+        [cashRegisterId]
+      );
+      if (sessions.length === 0) {
+        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono en efectivo.');
+      }
+      if (sessions[0].user_id !== userId) {
+        throw new ForbiddenError('Solo puedes registrar el efectivo del abono en una caja que tú mismo tengas abierta.');
+      }
+
+      await conn.query(
+        `INSERT INTO cash_movements
+           (session_id, movement_type, amount, description, user_id)
+         VALUES (?, 'sale', ?, ?, ?)`,
+        [sessions[0].session_id, cashAmount, `Abono a apartado #${layawayId}`, userId]
       );
     }
 

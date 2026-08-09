@@ -12,14 +12,14 @@ import Dashboard          from './components/Dashboard/Dashboard.jsx'
 import Users              from './components/Users/Users'
 import Settings           from './components/Settings/Settings.jsx'
 import Customers          from './components/Customers/Customers.jsx'
+import Layaways           from './components/Layaways/Layaways.jsx'
+import Credits            from './components/Credits/Credits.jsx'
 import Products           from './components/Products/Products.jsx'
 import Inventory          from './components/Inventory/Inventory.jsx'
 import Providers          from './components/Providers/Providers.jsx'
 import Pos                from './components/Pos/Pos.jsx'
 import Orders from './components/Orders/Orders.jsx'
 // Módulos nuevos
-//import Layaways           from './components/Layaways/Layaways.jsx'
-//import Credits            from './components/Credits/Credits.jsx'
 //import Reports            from './components/Reports/Reports.jsx'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -36,6 +36,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path='products'                        element={<Products/>}/>
             <Route path='inventory'                        element={<Inventory/>}/>
             <Route path='customers'                        element={<Customers/>}/>
+            <Route path='layaways'                        element={<Layaways/>}/>
+            <Route path='credits'                        element={<Credits/>}/>
             <Route path='providers'                        element={<Providers/>}/>
             <Route path='users'                           element={<Users />} />
             <Route path='settings'                        element={<Settings/>}/>

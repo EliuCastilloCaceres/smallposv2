@@ -134,17 +134,33 @@ const createOrder = async ({
       );
     }
 
-    // 7. Si alguna porción del pago fue a crédito, registrar el crédito
-    const creditAmount = payments.reduce((sum, p) => {
-      const method = methodsById.get(Number(p.payment_method_id));
-      return method?.code === 'credit' ? sum + Number(p.amount) : sum;
-    }, 0);
+    // 7. Si alguna porción del pago fue a crédito, registrar el crédito por
+    //    el TOTAL de la venta (no solo la porción a crédito) — si además
+    //    hubo un anticipo (el resto de las líneas de payments), se aplica de
+    //    inmediato como abono contra ese crédito, así queda visible en su
+    //    historial en vez de perderse como si el crédito nunca hubiera
+    //    incluido esa parte. El límite disponible solo se valida contra lo
+    //    que realmente queda pendiente (la línea de crédito), no contra el
+    //    total bruto — la porción pagada de contado no consume línea de
+    //    crédito.
+    const creditLines = payments.filter(p => methodsById.get(Number(p.payment_method_id))?.code === 'credit');
 
-    if (creditAmount > 0) {
+    if (creditLines.length > 0) {
+      const creditCheckAmount = creditLines.reduce((sum, p) => sum + Number(p.amount), 0);
+      const downPayments = payments.filter(p => !creditLines.includes(p));
       await creditService.createCreditSale(conn, {
         orderId, customerId,
-        totalAmount: creditAmount,
+        totalAmount: Number(total),
+        checkAmount: creditCheckAmount,
         dueDate,
+        branchId, userId,
+        downPayments: downPayments.map(p => ({
+          payment_method_id: p.payment_method_id,
+          amount:             p.amount,
+          cash_received:      p.cash_received,
+          cash_change:        p.cash_change,
+          reference:          p.reference,
+        })),
       });
     }
 

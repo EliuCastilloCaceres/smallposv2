@@ -1109,6 +1109,19 @@
 .pos-pay-method-btn:hover { border-color: var(--pos-accent); background: var(--pos-accent-bg); }
 .pos-pay-method-btn i { font-size: 22px; color: var(--pos-accent); }
 .pos-pay-method-btn span { font-size: 13px; font-weight: 600; }
+.pos-pay-method-btn:disabled {
+  opacity: .5; cursor: not-allowed; background: var(--pos-surface); border-color: var(--pos-border);
+}
+.pos-pay-method-btn:disabled:hover { border-color: var(--pos-border); background: var(--pos-surface); }
+
+.pos-pay-credit-panel {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px; border: 1.5px solid var(--pos-border); border-radius: var(--pos-radius);
+}
+.pos-pay-credit-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; padding: 8px 10px; background: var(--pos-bg); border-radius: var(--pos-radius-sm);
+}
 
 .pos-pay-cash-panel {
   display: flex; flex-direction: column; gap: 10px;
@@ -1219,6 +1232,18 @@
 }
 .pos-cut-final span { font-size: 13px; color: var(--pos-muted); }
 .pos-cut-final strong { font-size: 18px; color: var(--pos-accent); }
+
+/* Fila de checkout (Apartar / Crédito / Cobrar) — con los tres botones el
+   texto se recorta antes en pantallas angostas; se reduce el padding
+   horizontal de los dos ghost buttons para que el de Cobrar (flex:1) no se
+   quede sin espacio. */
+@media (max-width: 480px) {
+  .pos-cart-checkout-row .pos-btn--ghost.pos-btn--lg {
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 13px;
+  }
+}
 
 /* Corte de caja — ajuste en pantallas angostas */
 @media (max-width: 480px) {

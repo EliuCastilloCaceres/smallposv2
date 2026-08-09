@@ -5,8 +5,9 @@ const {resolveBranchId} = require('../helpers/helper');
 const getByBranch = async (req, res, next) => {
   try {
     const branchId = resolveBranchId(req)
-    const data = await creditService.getActiveCreditsByBranch(branchId);
-    res.json({ status: 'success', data });
+    const { status, search, page, limit } = req.query;
+    const result = await creditService.getActiveCreditsByBranch({ branchId, status, search, page, limit });
+    res.json({ status: 'success', ...result });
   } catch (err) { next(err); }
 };
 
@@ -36,7 +37,7 @@ const addPayment = async (req, res, next) => {
     const creditSaleId = parseInt(req.params.creditSaleId);
     const branchId     = resolveBranchId(req);
     const userId       = req.user.user_id;
-    const { payments, notes } = req.body;
+    const { payments, notes, cashRegisterId } = req.body;
 
     if (!Array.isArray(payments) || payments.length === 0) {
       return res.status(400).json({ status: 'error', message: 'payments debe ser un arreglo con al menos un pago' });
@@ -44,7 +45,7 @@ const addPayment = async (req, res, next) => {
 
     const data = await creditService.addPayment({
       creditSaleId, branchId, userId,
-      payments, notes,
+      payments, notes, cashRegisterId,
     });
     res.json({ status: 'success', data });
   } catch (err) { next(err); }

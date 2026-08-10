@@ -21,13 +21,14 @@ import BranchPicker  from './BranchPicker'
  *   - Admin sin rama  → muestra BranchPicker
  */
 const BranchGate = ({ children, title, description }) => {
-  const { isAdmin }        = useUser()
+  const { isCentralAdmin }        = useUser()
   const { selectedBranch, clearBranch } = useBranch()
 
-  // Usuarios no-admin siempre tienen branch asignada desde el token
-  if (!isAdmin) return children
+  // Usuarios sin alcance central siempre tienen branch asignada (vía
+  // branches/me en BranchContext) — pasan directo, sin importar su rol.
+  if (!isCentralAdmin) return children
 
-  // Admin sin sucursal seleccionada → picker
+  // Admin central sin sucursal seleccionada → picker
   if (!selectedBranch) {
     return <BranchPicker title={title} description={description} />
   }

@@ -4,7 +4,6 @@
 //  · Catálogo de apoyo: métodos de pago, categorías visibles en esta sucursal
 //  · Carritos suspendidos (hasta 4 simultáneos + 1 activo)
 //  · Carrito activo con sus productos, descuento, cliente, nota
-//  · Override de stock (cuando el cajero confirma que hay stock físico)
 //
 // [NUEVO] Persistencia del carrito activo + suspendidos en localStorage.
 // Antes vivían solo en memoria del reducer: si la ruta /pos se desmontaba
@@ -40,8 +39,7 @@ const cartReducer = (state, action) => {
       if (existingIdx >= 0) {
         // Ya existe — incrementar si hay stock
         const existing = state.items[existingIdx]
-        const maxQty   = item.stockOverride ? 999 : item.stock
-        if (existing.quantity >= maxQty) return state // no incrementar
+        if (existing.quantity >= item.stock) return state // no incrementar
         const updated = {
           ...existing,
           quantity: existing.quantity + 1,
@@ -68,10 +66,9 @@ const cartReducer = (state, action) => {
       const key = action.variantId ?? action.productId
       const items = state.items.map(i => {
         if ((i.variant_id ?? i.product_id) !== key) return i
-        const maxQty = i.stockOverride ? 999 : i.stock
         // [FIX] Mínimo relajado a 0.001 (en vez de 1) para soportar productos
         // que se venden por kilo/litro/metro con cantidades decimales.
-        const qty    = Math.max(0.001, Math.min(action.qty, maxQty))
+        const qty = Math.max(0.001, Math.min(action.qty, i.stock))
         return { ...i, quantity: qty, subtotal: i.unit_price * qty }
       })
       return { ...state, items }
@@ -168,7 +165,6 @@ export const PosContextProvider = ({ children }) => {
 
   // Carts suspendidos: array de snapshots completos del carrito
   const [suspendedCarts,  setSuspendedCarts]  = useState(initialStored?.suspendedCarts ?? [])
-  const [stockOverrides,  setStockOverrides]  = useState({}) // { "productId_variantId": true }
 
   const [cart, dispatch] = useReducer(cartReducer, initialStored?.cart ?? newCart(1))
 
@@ -255,7 +251,6 @@ export const PosContextProvider = ({ children }) => {
       setSuspendedCarts([])
       setActiveRegisterId(null)
       setSessionId(null)
-      setStockOverrides({})   // [FIX] Limpiar overrides de stock al cambiar de sucursal
       clearStoredCartState()  // [NUEVO]
     }
     prevBranchId.current = branchId
@@ -300,7 +295,6 @@ export const PosContextProvider = ({ children }) => {
       clearStoredSession()
       setActiveRegisterId(null)
       setSessionId(null)
-      setStockOverrides({})   // [FIX] Limpiar overrides de stock al cerrar caja
       dispatch({ type: 'CLEAR' })
       setSuspendedCarts([])
       clearStoredCartState()  // [NUEVO]
@@ -335,11 +329,8 @@ export const PosContextProvider = ({ children }) => {
 
   // ─── Acciones del carrito activo ──────────────────────────────────────────
   const addItem = useCallback((item) => {
-    // Verificar override de stock
-    const overrideKey  = `${item.product_id}_${item.variant_id ?? 'null'}`
-    const stockOverride = !!stockOverrides[overrideKey]
-    dispatch({ type: 'ADD_ITEM', item: { ...item, stockOverride } })
-  }, [stockOverrides])
+    dispatch({ type: 'ADD_ITEM', item })
+  }, [])
 
   const removeItem    = (productId, variantId) => dispatch({ type: 'REMOVE_ITEM', productId, variantId })
   const updateQty     = (productId, variantId, qty) => dispatch({ type: 'UPDATE_QTY', productId, variantId, qty })
@@ -419,17 +410,6 @@ export const PosContextProvider = ({ children }) => {
     dispatch({ type: 'LOAD', cart: next })
   }, [suspendedCarts])
 
-  // ─── Override de stock (el cajero confirma que hay stock físico) ──────────
-  const addStockOverride = useCallback((productId, variantId) => {
-    const key = `${productId}_${variantId ?? 'null'}`
-    setStockOverrides(prev => ({ ...prev, [key]: true }))
-  }, [])
-
-  const hasStockOverride = useCallback((productId, variantId) => {
-    const key = `${productId}_${variantId ?? 'null'}`
-    return !!stockOverrides[key]
-  }, [stockOverrides])
-
   return (
     <PosContext.Provider value={{
       // Sucursal
@@ -446,8 +426,6 @@ export const PosContextProvider = ({ children }) => {
       setDiscount, removeDiscount, setNote, setCustomer, clearCart,
       // Carritos suspendidos
       suspendedCarts, suspendCart, resumeCart, discardSuspended, completeSale,
-      // Stock override
-      addStockOverride, hasStockOverride,
     }}>
       {children}
     </PosContext.Provider>

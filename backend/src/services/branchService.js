@@ -83,11 +83,11 @@ const getAll = async ({ requestingUser, filters = {} }) => {
   const conditions = [];
   const params     = [];
 
-  // // No-admin: restringir a su propia sucursal
-  // if (requestingUser.branch_id !== null) {
-  //   conditions.push('b.branch_id = ?');
-  //   params.push(requestingUser.branch_id);
-  // }
+  // No-admin (tiene branch_id): restringir a su propia sucursal.
+  if (requestingUser.branch_id !== null) {
+    conditions.push('b.branch_id = ?');
+    params.push(requestingUser.branch_id);
+  }
 
   if (is_active !== undefined && is_active !== '') {
     conditions.push('b.is_active = ?');
@@ -148,7 +148,6 @@ const getById = async ({ branchId, requestingUser }) => {
   );
 
   if (rows.length === 0) throw new NotFoundError('Sucursal no encontrada');
-  console.log(rows[0]);
 
   return withReceipt(rows[0]);
 };

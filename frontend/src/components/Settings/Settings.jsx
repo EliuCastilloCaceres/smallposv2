@@ -10,7 +10,7 @@ import PaymentMethodsTab from './tabs/PaymentMethodsTab'
 import './settings.css'
 
 const Settings = () => {
-  const { user, isAdmin, hasPermission } = useUser()
+  const { user, isCentralAdmin, hasPermission } = useUser()
 
   const tabs = [
     { id: 'branches',        icon: 'bi-building',    label: 'Sucursales',      show: true },
@@ -29,15 +29,17 @@ const Settings = () => {
         <div>
           <h1 className="set-header__title">Configuración</h1>
           <span className="set-header__sub">
-            {isAdmin ? 'Administración central del sistema' : `Sucursal: ${user?.branch_id ?? '—'}`}
+            {isCentralAdmin ? 'Administración central del sistema' : `Sucursal: ${user?.branch_name ?? user?.branch_id ?? '—'}`}
           </span>
         </div>
       </div>
 
       <div className="set-tabs" role="tablist">
         {tabs
-          /* Filtramos los tabs: mostramos todos excepto el de 'roles' cuando no es admin */
-          .filter(tab => tab.id !== 'roles' || isAdmin)
+          /* Filtramos los tabs: 'roles' es exclusivo de admin central — es
+             RBAC del sistema completo, no algo que un admin de sucursal
+             deba poder tocar aunque tenga el rol "admin". */
+          .filter(tab => tab.id !== 'roles' || isCentralAdmin)
           .map(tab => (
             <button
               key={tab.id}
@@ -53,12 +55,12 @@ const Settings = () => {
       </div>
 
       <div className="set-content">
-        {activeTab === 'branches'  && <BranchesTab   isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'receipt'   && <ReceiptTab     isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'cash'      && <CashTab        isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'category'  && <CategoriesTab  isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'roles' && isAdmin    && <RolesTab isAdmin={isAdmin} branchId={user?.branch_id} />}
-        {activeTab === 'payment-methods' && isAdmin && <PaymentMethodsTab isAdmin={isAdmin} />}
+        {activeTab === 'branches'  && <BranchesTab   isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
+        {activeTab === 'receipt'   && <ReceiptTab     isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
+        {activeTab === 'cash'      && <CashTab        isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
+        {activeTab === 'category'  && <CategoriesTab  isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
+        {activeTab === 'roles' && isCentralAdmin    && <RolesTab isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
+        {activeTab === 'payment-methods' && isCentralAdmin && <PaymentMethodsTab isCentralAdmin={isCentralAdmin} />}
       </div>
     </div>
   )

@@ -8,7 +8,7 @@ const STORAGE_KEY = 'selectedBranch'
 const BranchContext = createContext()
 
 export const BranchContextProvider = ({ children }) => {
-  const { user, isAdmin } = useUser()
+  const { user, isCentralAdmin } = useUser()
 
   // Inicializar desde sessionStorage si ya hay una selección previa
   const [selectedBranch, setSelectedBranch] = useState(() => {
@@ -24,14 +24,15 @@ export const BranchContextProvider = ({ children }) => {
   const [isLoading,  setIsLoading]  = useState(false)
   const [error,      setError]      = useState(null)
 
-  // Si el usuario no es admin, su sucursal ES su branch_id — no necesita elegir,
+  // Si el usuario no es admin CENTRAL (tiene branch_id asignado, sin
+  // importar su rol), su sucursal ES ese branch_id — no necesita elegir,
   // pero sí necesitamos el objeto completo (incluye `receipt`) para poder
   // imprimir tickets en el POS — por eso se pide por API en vez de armarlo
   // a mano desde el token (que solo trae branch_id/branch_name).
   useEffect(() => {
     if (!user) return
 
-    if (!isAdmin) {
+    if (!isCentralAdmin) {
       setIsLoading(true)
       setError(null)
       api.get('branches/me')
@@ -50,14 +51,15 @@ export const BranchContextProvider = ({ children }) => {
       return
     }
 
-    // Admin: cargar listado de sucursales activas para el picker
+    // Admin central (branch_id === null): cargar listado de todas las
+    // sucursales activas para el picker.
     setIsLoading(true)
     setError(null)
     api.get('branches?is_active=true&limit=100')
       .then(({ data }) => setBranches(data.data))
       .catch(() => setError('No se pudieron cargar las sucursales'))
       .finally(() => setIsLoading(false))
-  }, [user, isAdmin])
+  }, [user, isCentralAdmin])
 
   // Limpiar selección al hacer logout
   useEffect(() => {

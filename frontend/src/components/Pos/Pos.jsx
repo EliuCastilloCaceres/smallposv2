@@ -145,7 +145,6 @@ const SaleScreen = () => {
     branchId, cart, subtotal, total, visibleCategories,
     addItem, removeItem, updateQty, updatePrice, setNote, setDiscount, removeDiscount, clearCart,
     suspendedCarts, suspendCart, resumeCart, discardSuspended,
-    hasStockOverride,
   } = usePos()
 
   // ── Grid / búsqueda ──
@@ -303,10 +302,10 @@ const SaleScreen = () => {
     setShowDropdown(true)
   }
 
-  // ── Chequeo de stock antes de agregar: si es 0 y no hay override, abre
-  // el modal de "producto agotado" en vez de agregarlo silenciosamente. ──
+  // ── Chequeo de stock antes de agregar: si es 0, abre el modal de
+  // "producto agotado" en vez de agregarlo silenciosamente. ──
   const tryAddItem = (payload) => {
-    if (Number(payload.stock) <= 0 && !hasStockOverride(payload.product_id, payload.variant_id)) {
+    if (Number(payload.stock) <= 0) {
       setOutOfStockTarget(payload)
       return
     }
@@ -615,7 +614,7 @@ const SaleScreen = () => {
                         min="0.001" step="any" inputMode="decimal"
                         className="pos-cart-item__qty-input"
                         value={item.quantity}
-                        maxValue={item.stockOverride ? undefined : item.stock}
+                        maxValue={item.stock}
                         onCommit={(v) => updateQty(item.product_id, item.variant_id, v)}
                         onEnterNext={focusSearch}
                       />

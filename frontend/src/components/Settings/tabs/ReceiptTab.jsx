@@ -7,12 +7,12 @@ const EMPTY_FORM = {
   store_name: '', address: '', rfc: '', phone: '', footer_text: '', logo_image: '',
 }
 
-const ReceiptTab = ({ isAdmin, branchId }) => {
+const ReceiptTab = ({ isCentralAdmin, branchId }) => {
   const { hasPermission } = useUser()
   const canEdit = hasPermission('settings', 'update')
 
   const [branches,       setBranches]       = useState([])
-  const [selectedBranch, setSelectedBranch] = useState(isAdmin ? null : branchId)
+  const [selectedBranch, setSelectedBranch] = useState(isCentralAdmin ? null : branchId)
   const [form,           setForm]           = useState(EMPTY_FORM)
   const [isLoading,      setIsLoading]      = useState(false)
   const [isSaving,       setIsSaving]       = useState(false)
@@ -21,14 +21,14 @@ const ReceiptTab = ({ isAdmin, branchId }) => {
 
   // Admin necesita lista de sucursales para seleccionar
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isCentralAdmin) return
     api.get('branches?is_active=true')
       .then(({ data }) => {
         setBranches(data.data)
         if (data.data.length > 0) setSelectedBranch(data.data[0].branch_id)
       })
       .catch(() => {})
-  }, [isAdmin])
+  }, [isCentralAdmin])
 
   // Cargar recibo cuando cambia la sucursal seleccionada
   const fetchReceipt = useCallback(async () => {
@@ -92,7 +92,7 @@ const ReceiptTab = ({ isAdmin, branchId }) => {
       </div>
 
       {/* Selector de sucursal (solo admin) */}
-      {isAdmin && branches.length > 0 && (
+      {isCentralAdmin && branches.length > 0 && (
         <div className="set-field">
           <label className="set-field__label">Sucursal</label>
           <select

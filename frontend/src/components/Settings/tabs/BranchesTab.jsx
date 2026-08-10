@@ -6,7 +6,7 @@ import BranchModal from '../modals/BranchModal'
 import BranchCategoriesModal from '../modals/BranchCategoriesModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
-const BranchesTab = ({ isAdmin }) => {
+const BranchesTab = ({ isCentralAdmin }) => {
   const { user, hasPermission } = useUser()
   const canEdit = hasPermission('settings', 'update')
 
@@ -83,12 +83,12 @@ const BranchesTab = ({ isAdmin }) => {
         <div>
           <h2 className="set-section__title">Sucursales</h2>
           <p className="set-section__sub">
-            {isAdmin
+            {isCentralAdmin
               ? 'Administra todas las sucursales del negocio'
               : 'Información de tu sucursal'}
           </p>
         </div>
-        {isAdmin && canEdit && (
+        {isCentralAdmin && canEdit && (
           <button
             className="set-btn set-btn--primary"
             onClick={() => setModal({ open: true, branch: null })}
@@ -152,7 +152,7 @@ const BranchesTab = ({ isAdmin }) => {
                 </div>
 
                 {/* Acciones */}
-                {(canEdit && (isAdmin || user?.branch_id === branch.branch_id)) && (
+                {(canEdit && (isCentralAdmin || user?.branch_id === branch.branch_id)) && (
                   <div className="set-card__actions">
                     <button
                       className="set-btn set-btn--ghost"
@@ -162,7 +162,7 @@ const BranchesTab = ({ isAdmin }) => {
                       <span>Categorías POS</span>
                     </button>
 
-                    {isAdmin && (
+                    {isCentralAdmin && (
                       <>
                         <button
                           className="set-btn set-btn--ghost"

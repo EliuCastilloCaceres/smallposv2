@@ -20,6 +20,17 @@ export const UserContextProvider = ({ children }) => {
   // y no dependa de branch_id, que podría tener otros significados en el futuro.
   const isAdmin = user?.role_name === 'admin'
 
+  // [NUEVO] Distinto de isAdmin: esto es "¿tiene alcance sobre TODAS las
+  // sucursales?" — basado en branch_id === null, igual que el backend
+  // (branchService.assertAdmin, paymentMethodService.assertAdmin, etc. — la
+  // mayoría de los "solo admin central" del backend validan branch_id, NO
+  // el rol). Un usuario puede tener role_name = 'admin' Y tener una
+  // sucursal asignada (admin de sucursal) — en ese caso isAdmin es true
+  // pero isCentralAdmin debe ser false, o la UI muestra controles que el
+  // backend va a rechazar. Usa isCentralAdmin para cualquier decisión de
+  // alcance de sucursal (ver/editar todas vs. solo la propia).
+  const isCentralAdmin = user?.branch_id === null
+
   // ─── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(async ({ username, password }) => {
     const { data } = await api.post('auth/login', { username, password })
@@ -85,7 +96,7 @@ export const UserContextProvider = ({ children }) => {
   }, [])
 
   return (
-    <UserContext.Provider value={{ user, isLoading, login, logout, hasPermission, isAdmin }}>
+    <UserContext.Provider value={{ user, isLoading, login, logout, hasPermission, isAdmin, isCentralAdmin }}>
       {children}
     </UserContext.Provider>
   )

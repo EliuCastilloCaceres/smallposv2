@@ -1165,8 +1165,6 @@
   padding: 12px; border: 1.5px solid var(--pos-border); border-radius: var(--pos-radius);
 }
 
-.pos-oos-actions { display: flex; flex-direction: column; gap: 8px; }
-
 /* ═══════════════════════════════════════════════════════════════════════════
    MODAL GRANDE (corte de caja en desktop) + tabla de corte
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -1255,4 +1253,24 @@
   .pos-cut-table__method { font-size: 11px; }
   .pos-cut-table__method i { display: none; }
   .pos-cut-input { font-size: 11px; padding: 0 4px; min-height: 34px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FLECHAS NATIVAS DE INPUTS NUMÉRICOS — quitadas en todo el POS y sus modales
+   ═══════════════════════════════════════════════════════════════════════════
+   .pos-cart-item__qty-input, .pos-cart-item__price-input y .pos-cut-input ya
+   tenían su propia regla (arriba, junto a cada componente). Esta cubre el
+   resto: .pos-field__input (anticipos, efectivo recibido, cantidad a
+   ingresar en OutOfStockModal, etc. — se usa en todos los modales de venta)
+   y .pos-pay-line__amount (línea de pago editable en PaymentModal). */
+.pos-field__input[type="number"]::-webkit-outer-spin-button,
+.pos-field__input[type="number"]::-webkit-inner-spin-button,
+.pos-pay-line__amount::-webkit-outer-spin-button,
+.pos-pay-line__amount::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pos-field__input[type="number"],
+.pos-pay-line__amount {
+  -moz-appearance: textfield;
 }

@@ -5,9 +5,9 @@ import api from '../../../services/api'
 import CategoryModal from '../modals/CategoryModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
-const CategoriesTab = ({ isAdmin }) => {
+const CategoriesTab = ({ isCentralAdmin }) => {
   const { hasPermission } = useUser()
-  const canEdit = isAdmin && hasPermission('products', 'update')
+  const canEdit = isCentralAdmin && hasPermission('products', 'update')
 
   const [categories,    setCategories]    = useState([])
   const [isLoading,     setIsLoading]     = useState(true)

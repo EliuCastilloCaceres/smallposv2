@@ -5,12 +5,12 @@ import api from '../../../services/api'
 import CashModal from '../modals/CashModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
-const CashTab = ({ isAdmin, branchId }) => {
+const CashTab = ({ isCentralAdmin, branchId }) => {
   const { hasPermission } = useUser()
   const canEdit = hasPermission('settings', 'update')
 
   const [branches,       setBranches]       = useState([])
-  const [selectedBranch, setSelectedBranch] = useState(isAdmin ? null : branchId)
+  const [selectedBranch, setSelectedBranch] = useState(isCentralAdmin ? null : branchId)
   const [registers,      setRegisters]      = useState([])
   const [isLoading,      setIsLoading]      = useState(false)
   const [error,          setError]          = useState(null)
@@ -20,14 +20,14 @@ const CashTab = ({ isAdmin, branchId }) => {
 
   // Admin: cargar lista de sucursales
   useEffect(() => {
-    if (!isAdmin) return
+    if (!isCentralAdmin) return
     api.get('branches?is_active=true')
       .then(({ data }) => {
         setBranches(data.data)
         if (data.data.length > 0) setSelectedBranch(data.data[0].branch_id)
       })
       .catch(() => {})
-  }, [isAdmin])
+  }, [isCentralAdmin])
 
   const fetchRegisters = useCallback(async () => {
     if (!selectedBranch) return
@@ -107,7 +107,7 @@ const CashTab = ({ isAdmin, branchId }) => {
       </div>
 
       {/* Selector de sucursal (solo admin) */}
-      {isAdmin && branches.length > 0 && (
+      {isCentralAdmin && branches.length > 0 && (
         <div className="set-field">
           <label className="set-field__label">Sucursal</label>
           <select

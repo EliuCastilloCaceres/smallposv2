@@ -5,9 +5,9 @@ import api from '../../../services/api'
 import PaymentMethodModal from '../modals/PaymentMethodModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
-const PaymentMethodsTab = ({ isAdmin }) => {
+const PaymentMethodsTab = ({ isCentralAdmin }) => {
   const { hasPermission } = useUser()
-  const canEdit = isAdmin && hasPermission('settings', 'update')
+  const canEdit = isCentralAdmin && hasPermission('settings', 'update')
 
   const [methods,       setMethods]       = useState([])
   const [isLoading,     setIsLoading]     = useState(true)
@@ -73,7 +73,7 @@ const PaymentMethodsTab = ({ isAdmin }) => {
         <div>
           <h2 className="set-section__title">Métodos de pago</h2>
           <p className="set-section__sub">
-            {isAdmin
+            {isCentralAdmin
               ? 'Catálogo de métodos disponibles para el punto de venta y abonos'
               : 'Solo el administrador central puede gestionar métodos de pago'}
           </p>

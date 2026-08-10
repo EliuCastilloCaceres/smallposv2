@@ -6,9 +6,9 @@ import RoleModal from '../modals/RoleModal'
 import PermissionsModal from '../modals/PermissionsModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
-const RolesTab = ({ isAdmin }) => {
+const RolesTab = ({ isCentralAdmin }) => {
   const { hasPermission } = useUser()
-  const canEdit = isAdmin && hasPermission('users', 'update')
+  const canEdit = isCentralAdmin && hasPermission('users', 'update')
 
   const [roles,          setRoles]          = useState([])
   const [allPermissions, setAllPermissions] = useState(null)
@@ -87,7 +87,7 @@ const RolesTab = ({ isAdmin }) => {
         <div>
           <h2 className="set-section__title">Roles y permisos</h2>
           <p className="set-section__sub">
-            {isAdmin
+            {isCentralAdmin
               ? 'Gestiona los roles del sistema y sus permisos'
               : 'Solo el administrador central puede gestionar roles'}
           </p>

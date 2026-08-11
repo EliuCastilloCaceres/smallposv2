@@ -1,12 +1,30 @@
 // src/services/roleService.js
 const db = require('../config/db');
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require('../errors/AppError');
+const { isCentralAdminOrAbove } = require('../helpers/roleHelpers');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Antes verificaba rol y sucursal a mano (duplicado del resto de services).
+// Ahora usa el helper compartido — una sola definición de "admin central" en
+// todo el sistema.
 const assertAdmin = (requestingUser) => {
-  if (requestingUser.branch_id !== null)
+  if (!isCentralAdminOrAbove(requestingUser)) {
     throw new ForbiddenError('Solo el administrador central puede gestionar roles');
+  }
+};
+
+// Protege roles del sistema (superadmin, admin) — ya estaba correcto, sin cambios.
+const assertNotSystemRole = async (roleId) => {
+  const [[role]] = await db.query(
+    `SELECT name, is_system FROM roles WHERE role_id = ?`,
+    [roleId]
+  );
+  if (!role) throw new NotFoundError('Rol no encontrado');
+  if (role.is_system) {
+    throw new ForbiddenError(`El rol "${role.name}" es del sistema y no puede modificarse`);
+  }
+  return role;
 };
 
 const validate = {
@@ -20,7 +38,6 @@ const validate = {
   },
 };
 
-// Carga los permisos asignados a un rol como array de strings "module.action"
 const getPermissionsByRoleId = async (roleId) => {
   const [rows] = await db.query(
     `SELECT p.permission_id, p.module, p.action, p.description
@@ -34,10 +51,6 @@ const getPermissionsByRoleId = async (roleId) => {
 };
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
-
-// GET /roles
-// Todos los autenticados pueden leer — el frontend lo usa para poblar selects.
-// Incluye los permisos de cada rol y el conteo de usuarios activos.
 
 const getAllRoles = async ({ filters = {} } = {}) => {
   const { is_active } = filters;
@@ -58,6 +71,7 @@ const getAllRoles = async ({ filters = {} } = {}) => {
        r.name,
        r.description,
        r.is_active,
+       r.is_system,
        COUNT(DISTINCT u.user_id) AS user_count
      FROM roles r
      LEFT JOIN users u ON u.role_id = r.role_id AND u.is_active = 1
@@ -67,7 +81,6 @@ const getAllRoles = async ({ filters = {} } = {}) => {
     params
   );
 
-  // Cargar permisos de todos los roles en una sola query
   const roleIds = rows.map(r => r.role_id);
   let permissionsMap = {};
 
@@ -80,7 +93,6 @@ const getAllRoles = async ({ filters = {} } = {}) => {
        ORDER BY p.module, p.action`,
       [roleIds]
     );
-    // Agrupar por role_id
     permissionsMap = permRows.reduce((acc, row) => {
       if (!acc[row.role_id]) acc[row.role_id] = [];
       acc[row.role_id].push({
@@ -99,11 +111,10 @@ const getAllRoles = async ({ filters = {} } = {}) => {
   }));
 };
 
-// GET /roles/:id
 const getRoleById = async (roleId) => {
   const [[role]] = await db.query(
     `SELECT
-       r.role_id, r.name, r.description, r.is_active,
+       r.role_id, r.name, r.description, r.is_active, r.is_system,
        COUNT(DISTINCT u.user_id) AS user_count
      FROM roles r
      LEFT JOIN users u ON u.role_id = r.role_id AND u.is_active = 1
@@ -118,7 +129,6 @@ const getRoleById = async (roleId) => {
   return { ...role, permissions };
 };
 
-// POST /roles
 const createRole = async ({ data, requestingUser }) => {
   assertAdmin(requestingUser);
 
@@ -139,11 +149,9 @@ const createRole = async ({ data, requestingUser }) => {
   return getRoleById(result.insertId);
 };
 
-// PUT /roles/:id
 const updateRole = async ({ roleId, data, requestingUser }) => {
   assertAdmin(requestingUser);
-
-  await getRoleById(roleId); // verifica que existe
+  await assertNotSystemRole(roleId);
 
   const { name, description } = data;
 
@@ -173,9 +181,9 @@ const updateRole = async ({ roleId, data, requestingUser }) => {
   return getRoleById(roleId);
 };
 
-// PATCH /roles/:id/status
 const toggleRoleStatus = async ({ roleId, is_active, requestingUser }) => {
   assertAdmin(requestingUser);
+  await assertNotSystemRole(roleId);
 
   const role = await getRoleById(roleId);
 
@@ -187,7 +195,6 @@ const toggleRoleStatus = async ({ roleId, is_active, requestingUser }) => {
     [is_active ? 1 : 0, roleId]
   );
 
-  // Advertir si hay usuarios activos con este rol
   let warning = null;
   if (!is_active && role.user_count > 0) {
     warning = `El rol fue desactivado pero ${role.user_count} usuario(s) activo(s) lo tienen asignado.`;
@@ -199,11 +206,6 @@ const toggleRoleStatus = async ({ roleId, is_active, requestingUser }) => {
 
 // ─── Permisos ─────────────────────────────────────────────────────────────────
 
-// GET /permissions
-// Lista completa de permisos agrupados por módulo.
-// Solo lectura — los permisos son un catálogo fijo definido en el schema.
-// Para agregar permisos nuevos usar scripts de migración, no la UI.
-
 const getAllPermissions = async () => {
   const [rows] = await db.query(
     `SELECT permission_id, module, action, description
@@ -211,36 +213,18 @@ const getAllPermissions = async () => {
      ORDER BY module, action`
   );
 
-  // Agrupar por módulo para facilitar el render en el frontend
   const grouped = rows.reduce((acc, perm) => {
     if (!acc[perm.module]) acc[perm.module] = [];
     acc[perm.module].push(perm);
     return acc;
   }, {});
 
-  return {
-    flat:    rows,     // array plano — útil para checkboxes
-    grouped,           // agrupado por módulo — útil para secciones en la UI
-  };
+  return { flat: rows, grouped };
 };
-
-// ─── Asignación de permisos ───────────────────────────────────────────────────
-
-// PUT /roles/:id/permissions
-// Reemplaza TODOS los permisos del rol en una sola transacción.
-// El frontend manda el array completo de permission_ids que deben quedar asignados.
-// Es más seguro que agregar/quitar uno por uno — no hay estados intermedios.
-
-// REEMPLAZAR syncRolePermissions en roleService.js
-// Solo esta función cambia — el resto del service queda igual.
-// El problema: db.query('START TRANSACTION') y db.query('ROLLBACK') pueden
-// ejecutarse en conexiones distintas del pool. Con getConnection() se garantiza
-// que todas las queries van por la misma conexión física.
 
 const syncRolePermissions = async ({ roleId, permissionIds, requestingUser }) => {
   assertAdmin(requestingUser);
-
-  await getRoleById(roleId);
+  await assertNotSystemRole(roleId);
 
   if (!Array.isArray(permissionIds))
     throw new ValidationError('permissionIds debe ser un array');
@@ -258,10 +242,7 @@ const syncRolePermissions = async ({ roleId, permissionIds, requestingUser }) =>
   try {
     await conn.beginTransaction();
 
-    await conn.query(
-      'DELETE FROM role_permissions WHERE role_id = ?',
-      [roleId]
-    );
+    await conn.query('DELETE FROM role_permissions WHERE role_id = ?', [roleId]);
 
     if (permissionIds.length > 0) {
       const values = permissionIds.map(pid => [roleId, pid]);

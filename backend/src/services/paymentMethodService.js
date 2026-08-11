@@ -1,6 +1,7 @@
 // src/services/paymentMethodService.js
 const db = require('../config/db');
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require('../errors/AppError');
+const { isCentralAdminOrAbove } = require('../helpers/roleHelpers');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,8 +21,12 @@ const validate = {
 };
 
 // Solo admin central puede gestionar el catálogo — es global, no por sucursal.
+// FIX: antes solo miraba branch_id === null (asumía que "central" == "admin",
+// sin verificar el rol). Ahora usa el helper compartido: exige rol
+// admin/superadmin Y ser central — mismo fix aplicado en branchService y
+// categoryService.
 const assertAdmin = (requestingUser) => {
-  if (requestingUser.branch_id !== null)
+  if (!isCentralAdminOrAbove(requestingUser))
     throw new ForbiddenError('Solo el administrador central puede gestionar métodos de pago');
 };
 

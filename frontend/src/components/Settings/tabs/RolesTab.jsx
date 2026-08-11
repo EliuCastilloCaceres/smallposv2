@@ -7,8 +7,10 @@ import PermissionsModal from '../modals/PermissionsModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 
 const RolesTab = ({ isCentralAdmin }) => {
-  const { hasPermission } = useUser()
-  const canEdit = isCentralAdmin && hasPermission('users', 'update')
+  const { user: currentUser, hasPermission } = useUser()
+
+  const isSuperadmin = currentUser?.role_name === 'superadmin'
+  const canEdit = (isCentralAdmin || isSuperadmin) && hasPermission('roles', 'update')
 
   const [roles,          setRoles]          = useState([])
   const [allPermissions, setAllPermissions] = useState(null)
@@ -40,7 +42,11 @@ const RolesTab = ({ isCentralAdmin }) => {
   useEffect(() => { fetchAll() }, [fetchAll])
 
   const handleToggleStatus = (role) => {
-    // Si tiene usuarios activos y se va a desactivar, pedir confirmación
+    if (role.is_system) {
+      setError('Los roles del sistema no pueden desactivarse')
+      setTimeout(() => setError(null), 3000)
+      return
+    }
     if (role.is_active && role.user_count > 0) {
       setConfirmTarget(role)
       return
@@ -80,6 +86,14 @@ const RolesTab = ({ isCentralAdmin }) => {
 
   const activeCount = roles.filter(r => r.is_active).length
 
+  // FIX: antes solo se checaba `!role.is_system`, sin exigir `canEdit` —
+  // cualquiera que pudiera VER el tab (gateado hoy por settings.read, no
+  // por roles.update) podía abrir el modal de permisos y llegar hasta
+  // "Guardar" antes de que el backend lo rechazara. Ahora la card solo es
+  // clickeable si además tiene permiso real de editar roles — el mismo
+  // criterio que ya se usaba para el botón interno "Permisos".
+  const canOpenPermissions = (role) => canEdit && !role.is_system
+
   return (
     <div className="set-section">
       {/* ── Header ── */}
@@ -87,7 +101,7 @@ const RolesTab = ({ isCentralAdmin }) => {
         <div>
           <h2 className="set-section__title">Roles y permisos</h2>
           <p className="set-section__sub">
-            {isCentralAdmin
+            {isCentralAdmin || isSuperadmin
               ? 'Gestiona los roles del sistema y sus permisos'
               : 'Solo el administrador central puede gestionar roles'}
           </p>
@@ -144,9 +158,13 @@ const RolesTab = ({ isCentralAdmin }) => {
             <div
               key={role.role_id}
               className={`set-card ${!role.is_active ? 'set-card--inactive' : ''}`}
-              onClick={() => setPermModal({ open: true, role })}
-              style={{ cursor: 'pointer' }}
-              title="Ver/editar permisos"
+              onClick={canOpenPermissions(role) ? () => setPermModal({ open: true, role }) : undefined}
+              style={{ cursor: canOpenPermissions(role) ? 'pointer' : 'default' }}
+              title={
+                role.is_system
+                  ? 'Rol del sistema — solo lectura'
+                  : (canEdit ? 'Ver/editar permisos' : 'Sin permiso para gestionar roles')
+              }
             >
               <span className={`set-card__dot ${role.is_active ? 'set-card__dot--on' : 'set-card__dot--off'}`} />
 
@@ -171,8 +189,8 @@ const RolesTab = ({ isCentralAdmin }) => {
                   </span>
                 </div>
 
-                {/* Acciones — solo si canEdit */}
-                {canEdit && (
+                {/* Acciones — solo admin con permiso real */}
+                {canEdit && !role.is_system && (
                   <div className="set-card__actions" onClick={e => e.stopPropagation()}>
                     <button
                       className="set-btn set-btn--ghost"
@@ -201,6 +219,21 @@ const RolesTab = ({ isCentralAdmin }) => {
                     </button>
                   </div>
                 )}
+
+                {/* FIX: `role.is_system` es un TINYINT (0/1) de MySQL, no un
+                    booleano — `{role.is_system && (<div/>)}` hacía que React
+                    renderizara literalmente el número 0 como texto visible
+                    en CADA card de rol no-protegido (0 && <jsx> se evalúa a
+                    0, no a false, y React SÍ pinta el 0). Usar un ternario
+                    evita el problema de raíz: solo se elige una rama, nunca
+                    se "filtra" el operando falsy hacia el render. */}
+                {role.is_system ? (
+                  <div className="set-card__actions" onClick={e => e.stopPropagation()}>
+                    <span className="set-badge set-badge--protected">
+                      <i className="bi bi-shield-lock" /> Protegido
+                    </span>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}

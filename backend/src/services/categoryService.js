@@ -1,6 +1,7 @@
 // src/services/categoryService.js
 const db = require('../config/db');
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require('../errors/AppError');
+const { isCentralAdminOrAbove, isCentralAdminOrBranchAdmin } = require('../helpers/roleHelpers');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -27,25 +28,27 @@ const validate = {
   },
 };
 
-// Solo admin central puede crear/editar/desactivar categorías globales
+// Solo admin central puede crear/editar/desactivar categorías globales.
+// Antes solo miraba branch_id === null; ahora usa el helper compartido.
 const assertAdmin = (requestingUser) => {
-  if (requestingUser.branch_id !== null)
+  if (!isCentralAdminOrAbove(requestingUser))
     throw new ForbiddenError('Solo el administrador central puede gestionar categorías');
 };
 
 // Para configurar QUÉ categorías se ven en el POS de una sucursal: el admin
-// central puede gestionar cualquier sucursal; un usuario de sucursal solo
-// puede gestionar la suya propia.
+// central puede gestionar cualquier sucursal; el admin de esa sucursal puede
+// gestionar la suya.
+// FIX: antes no verificaba el rol en absoluto — cualquier usuario autenticado
+// de esa sucursal (un cajero, por ejemplo) pasaba este chequeo con solo
+// coincidir el branch_id. Ahora exige que sea admin (central o de esa
+// sucursal específica).
 const assertCanManageBranch = (requestingUser, branchId) => {
-  const isCentralAdmin = requestingUser.branch_id === null;
-  if (isCentralAdmin) return;
-  if (Number(requestingUser.branch_id) !== Number(branchId))
-    throw new ForbiddenError('No puedes gestionar las categorías de otra sucursal');
+  if (!isCentralAdminOrBranchAdmin(requestingUser, branchId)) {
+    throw new ForbiddenError('No puedes gestionar las categorías de esta sucursal');
+  }
 };
 
 // ─── getAll ───────────────────────────────────────────────────────────────────
-// Todos los roles autenticados pueden leer.
-// Filtros: is_active, search (nombre). Paginación: page, limit.
 
 const getAll = async ({ filters = {} } = {}) => {
   const { is_active, search, page = 1, limit = 50 } = filters;
@@ -129,7 +132,6 @@ const create = async ({ data, requestingUser }) => {
   validate.name(name);
   validate.color(color);
 
-  // Nombre único global
   const [[existing]] = await db.query(
     'SELECT category_id FROM categories WHERE name = ?',
     [name.trim()]
@@ -198,7 +200,6 @@ const toggleStatus = async ({ categoryId, is_active, requestingUser }) => {
     [is_active ? 1 : 0, categoryId]
   );
 
-  // Al desactivar: contar productos activos que la usan y avisar
   let warning = null;
   if (!is_active && category.product_count > 0) {
     warning = `La categoría fue desactivada pero ${category.product_count} producto(s) activo(s) aún la tienen asignada.`;
@@ -209,13 +210,7 @@ const toggleStatus = async ({ categoryId, is_active, requestingUser }) => {
 };
 
 // ─── Visibilidad por sucursal (para POS) ───────────────────────────────────────
-// Modelo "opt-out": una fila en branch_hidden_categories significa que esa
-// categoría está OCULTA para esa sucursal. Ninguna fila = todo visible — así
-// una categoría nueva aparece en todos lados por defecto, sin necesitar
-// sembrar combinaciones al crear sucursales o categorías.
 
-// GET — para la UI de administración: todas las categorías activas + si
-// están visibles u ocultas para esta sucursal en particular.
 const getVisibilityForBranch = async (branchId) => {
   const [hiddenRows] = await db.query(
     'SELECT category_id FROM branch_hidden_categories WHERE branch_id = ?',
@@ -230,7 +225,6 @@ const getVisibilityForBranch = async (branchId) => {
   return categories.map(c => ({ ...c, visible: !hiddenIds.has(c.category_id) }));
 };
 
-// GET — para el POS: solo las categorías que debe mostrar esta sucursal.
 const getVisibleForBranch = async (branchId) => {
   const [rows] = await db.query(
     `SELECT c.category_id, c.name, c.color
@@ -246,9 +240,6 @@ const getVisibleForBranch = async (branchId) => {
   return rows;
 };
 
-// PUT — reemplaza el set completo de categorías ocultas de una sucursal en
-// una sola transacción. Mismo patrón "replace-all" que syncRolePermissions:
-// más seguro que agregar/quitar una por una, sin estados intermedios.
 const setHiddenForBranch = async ({ branchId, hiddenCategoryIds, requestingUser }) => {
   assertCanManageBranch(requestingUser, branchId);
 

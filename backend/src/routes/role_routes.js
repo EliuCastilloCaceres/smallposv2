@@ -12,18 +12,18 @@ const permissionsRouter = express.Router();
 permissionsRouter.use(verifyToken);
 permissionsRouter.get('/', roleCtrl.getAllPermissions);
 
-// ─── Roles — lectura ──────────────────────────────────────────────────────────
+// ─── Roles — lectura (todos los autenticados pueden leer para poblar selects) ─
 router.get('/',    roleCtrl.getAllRoles);
 router.get('/:id', roleCtrl.getRoleById);
 
-// ─── Roles — escritura (solo admin central, validado en service) ──────────────
-router.post('/',   requirePermission('users', 'create'), roleCtrl.createRole);
-router.put('/:id', requirePermission('users', 'update'), roleCtrl.updateRole);
+// ─── Roles — escritura (requiere permisos del módulo 'roles', no 'users') ────
+router.post('/',   requirePermission('roles', 'create'), roleCtrl.createRole);
+router.put('/:id', requirePermission('roles', 'update'), roleCtrl.updateRole);
 
 // ─── Status ───────────────────────────────────────────────────────────────────
-router.patch('/:id/status', requirePermission('users', 'update'), roleCtrl.toggleRoleStatus);
+router.patch('/:id/status', requirePermission('roles', 'update'), roleCtrl.toggleRoleStatus);
 
-// ─── Asignación de permisos ───────────────────────────────────────────────────
-router.put('/:id/permissions', requirePermission('users', 'update'), roleCtrl.syncRolePermissions);
+// ─── Asignación de permisos ─────────────────────────────────────────────────
+router.put('/:id/permissions', requirePermission('roles', 'update'), roleCtrl.syncRolePermissions);
 
 module.exports = { router, permissionsRouter };

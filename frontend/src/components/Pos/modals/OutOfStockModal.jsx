@@ -17,7 +17,7 @@ import api from '../../../services/api'
 
 const REASONS = ['Conteo físico', 'Compra a proveedor', 'Otro']
 
-const OutOfStockModal = ({ target, onClose }) => {
+const OutOfStockModal = ({ target, onClose, onStockAdded }) => {
   const { branchId, addItem } = usePos()
 
   const [quantity,   setQuantity]   = useState('')
@@ -46,6 +46,7 @@ const OutOfStockModal = ({ target, onClose }) => {
         reason:         finalReason,
       })
       addItem({ ...target, stock: qty })
+      onStockAdded?.()
       onClose()
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al registrar la entrada de stock')

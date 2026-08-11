@@ -7,7 +7,11 @@ import ConfirmDialog from '../../Common/ConfirmDialog'
 
 const CashTab = ({ isCentralAdmin, branchId }) => {
   const { hasPermission } = useUser()
-  const canEdit = hasPermission('settings', 'update')
+  // FIX: antes hasPermission('settings','update') — permiso que nunca
+  // existió en el seed. Ahora conectado al módulo granular cash_registers.*,
+  // separando crear de editar/activar-desactivar igual que en el backend.
+  const canCreate = hasPermission('cash_registers', 'create')
+  const canEdit   = hasPermission('cash_registers', 'update')
 
   const [branches,       setBranches]       = useState([])
   const [selectedBranch, setSelectedBranch] = useState(isCentralAdmin ? null : branchId)
@@ -94,7 +98,7 @@ const CashTab = ({ isCentralAdmin, branchId }) => {
             Administra las cajas disponibles para el punto de venta
           </p>
         </div>
-        {canEdit && (
+        {canCreate && (
           <button
             className="set-btn set-btn--primary"
             onClick={() => setModal({ open: true, register: null })}

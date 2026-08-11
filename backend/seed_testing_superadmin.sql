@@ -6,10 +6,11 @@
 -- ┌─────────────┬─────────────┬────────────┬──────────────────────┐
 -- │ username    │ password    │ rol        │ branch_id            │
 -- ├─────────────┼─────────────┼────────────┼──────────────────────┤
+-- │ superadmin  │ Super123!   │ superadmin │ NULL (central)       │
 -- │ admin       │ Admin123!   │ admin      │ NULL (central)       │
--- │ supervisor  │ Super123!  │ supervisor │ 1 (Sucursal central) │
--- │ cajero      │ Cajero123! │ cajero     │ 1 (Sucursal central) │
--- │ almacen     │ Almacen123!│ almacenista│ 1 (Sucursal central) │
+-- │ supervisor  │ Super123!   │ supervisor │ 1 (Sucursal central) │
+-- │ cajero      │ Cajero123!  │ cajero     │ 1 (Sucursal central) │
+-- │ almacen     │ Almacen123! │ almacenista│ 1 (Sucursal central) │
 -- └─────────────┴─────────────┴────────────┴──────────────────────┘
 -- =============================================================
 
@@ -26,58 +27,84 @@ VALUES
   (1, 'Sucursal Central', 'Av. Insurgentes Sur 1234, Col. Del Valle', 'Ciudad de México', 'Benito Juárez', '03100', '5555123456', 1);
 
 -- =============================================================
--- 1. ROLES
+-- 1. ROLES (superadmin = 1, admin = 2, supervisor = 3, cajero = 4, almacenista = 5)
 -- =============================================================
-INSERT IGNORE INTO `roles` (`role_id`, `name`, `description`) VALUES
-  (1, 'admin',       'Administrador central — acceso total a todas las sucursales'),
-  (2, 'supervisor',  'Supervisor de sucursal — reportes y configuración local'),
-  (3, 'cajero',      'Cajero — operaciones de POS y caja'),
-  (4, 'almacenista', 'Almacenista — gestión de inventario');
+INSERT IGNORE INTO `roles` (`role_id`, `name`, `description`, `is_system`) VALUES
+  (1, 'superadmin',  'Dueño del sistema. Todos los permisos. Único e inmutable.', 1),
+  (2, 'admin',       'Administrador central — acceso total a todas las sucursales', 1),
+  (3, 'supervisor',  'Supervisor de sucursal — reportes y configuración local', 0),
+  (4, 'cajero',      'Cajero — operaciones de POS y caja', 0),
+  (5, 'almacenista', 'Almacenista — gestión de inventario', 0);
 
 -- =============================================================
 -- 2. PERMISSIONS
 -- =============================================================
 INSERT IGNORE INTO `permissions` (`module`, `action`, `description`) VALUES
-  ('pos',        'use',     'Operar el punto de venta'),
-  ('orders',     'read',    'Ver historial de ventas'),
-  ('orders',     'cancel',  'Cancelar una venta'),
-  ('products',   'read',    'Ver catálogo'),
-  ('products',   'create',  'Crear productos'),
-  ('products',   'update',  'Editar productos'),
-  ('products',   'delete',  'Desactivar productos'),
-  ('inventory',  'read',    'Ver inventario'),
-  ('inventory',  'adjust',  'Hacer ajustes de inventario'),
-  ('inventory',  'transfer','Solicitar traspasos'),
-  ('customers',  'read',    'Ver clientes'),
-  ('customers',  'create',  'Crear clientes'),
-  ('customers',  'update',  'Editar clientes'),
-  ('credit',     'read',    'Ver créditos'),
-  ('credit',     'create',  'Otorgar crédito'),
-  ('credit',     'approve', 'Aprobar límite de crédito'),
-  ('layaway',    'read',    'Ver apartados'),
-  ('layaway',    'create',  'Crear apartados'),
-  ('providers',  'read',    'Ver proveedores'),
-  ('providers',  'create',  'Crear proveedores'),
-  ('providers',  'update',  'Editar proveedores'),
-  ('users',      'read',    'Ver usuarios'),
-  ('users',      'create',  'Crear usuarios'),
-  ('users',      'update',  'Editar usuarios'),
-  ('reports',    'basic',   'Reportes básicos de caja'),
-  ('reports',    'advanced','Reportes avanzados de ventas y margen'),
-  ('settings',   'read',    'Ver configuración'),
-  ('settings',   'update',  'Modificar configuración');
+  ('pos',              'use',      'Operar el punto de venta'),
+  ('orders',           'read',     'Ver historial de ventas'),
+  ('orders',           'cancel',   'Cancelar una venta'),
+  ('products',         'read',     'Ver catálogo'),
+  ('products',         'create',   'Crear productos'),
+  ('products',         'update',   'Editar productos'),
+  ('products',         'delete',   'Desactivar productos'),
+  ('inventory',        'read',     'Ver inventario'),
+  ('inventory',        'adjust',   'Hacer ajustes de inventario'),
+  ('inventory',        'transfer', 'Solicitar traspasos'),
+  ('customers',        'read',     'Ver clientes'),
+  ('customers',        'create',   'Crear clientes'),
+  ('customers',        'update',   'Editar clientes'),
+  ('credit',           'read',     'Ver créditos'),
+  ('credit',           'create',   'Otorgar crédito'),
+  ('credit',           'approve',  'Aprobar límite de crédito'),
+  ('layaway',          'read',     'Ver apartados'),
+  ('layaway',          'create',   'Crear apartados'),
+  ('providers',        'read',     'Ver proveedores'),
+  ('providers',        'create',   'Crear proveedores'),
+  ('providers',        'update',   'Editar proveedores'),
+  ('users',            'read',     'Ver usuarios'),
+  ('users',            'create',   'Crear usuarios'),
+  ('users',            'update',   'Editar usuarios'),
+  ('reports',          'basic',    'Reportes básicos de caja'),
+  ('reports',          'advanced', 'Reportes avanzados de ventas y margen'),
+  ('settings',         'read',     'Ver configuración'),
+  ('returns',          'read',     'Ver devoluciones'),
+  ('returns',          'create',   'Crear devoluciones'),
+  ('roles',            'create',   'Crear roles'),
+  ('roles',            'read',     'Ver roles'),
+  ('roles',            'update',   'Editar roles y permisos'),
+  ('roles',            'delete',   'Eliminar roles'),
+  ('branches',         'read',     'Ver sucursales'),
+  ('branches',         'create',   'Crear sucursales'),
+  ('branches',         'update',   'Editar sucursales'),
+  ('branches',         'delete',   'Eliminar sucursales'),
+  ('categories',       'read',     'Ver categorías'),
+  ('categories',       'create',   'Crear categorías'),
+  ('categories',       'update',   'Editar categorías'),
+  ('categories',       'delete',   'Eliminar categorías'),
+  ('payment_methods',  'read',     'Ver métodos de pago'),
+  ('payment_methods',  'create',   'Crear métodos de pago'),
+  ('payment_methods',  'update',   'Editar métodos de pago'),
+  ('payment_methods',  'delete',   'Eliminar métodos de pago'),
+  ('cash_registers',   'read',     'Ver cajas registradoras'),
+  ('cash_registers',   'create',   'Crear cajas registradoras'),
+  ('cash_registers',   'update',   'Editar cajas registradoras'),
+  ('cash_registers',   'delete',   'Eliminar cajas registradoras');
 
 -- =============================================================
 -- 3. ROLE_PERMISSIONS — permisos por rol
 -- =============================================================
 
--- ── admin (role_id = 1): acceso total ─────────────────────────
+-- ── superadmin (role_id = 1): acceso total ────────────────────
 INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`)
 SELECT 1, `permission_id` FROM `permissions`;
 
--- ── supervisor (role_id = 2) ──────────────────────────────────
+-- ── admin (role_id = 2): acceso total ─────────────────────────
 INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT 2, `permission_id` FROM `permissions`
+SELECT 2, `permission_id` FROM `permissions`;
+
+-- ── supervisor (role_id = 3) ──────────────────────────────────
+INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`)
+SELECT 3, `permission_id` FROM `permissions`
 WHERE CONCAT(`module`, '.', `action`) IN (
   'pos.use',
   'orders.read',
@@ -101,9 +128,9 @@ WHERE CONCAT(`module`, '.', `action`) IN (
   'settings.read'
 );
 
--- ── cajero (role_id = 3) ──────────────────────────────────────
+-- ── cajero (role_id = 4) ──────────────────────────────────────
 INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT 3, `permission_id` FROM `permissions`
+SELECT 4, `permission_id` FROM `permissions`
 WHERE CONCAT(`module`, '.', `action`) IN (
   'pos.use',
   'orders.read',
@@ -118,9 +145,9 @@ WHERE CONCAT(`module`, '.', `action`) IN (
   'reports.basic'
 );
 
--- ── almacenista (role_id = 4) ─────────────────────────────────
+-- ── almacenista (role_id = 5) ─────────────────────────────────
 INSERT IGNORE INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT 4, `permission_id` FROM `permissions`
+SELECT 5, `permission_id` FROM `permissions`
 WHERE CONCAT(`module`, '.', `action`) IN (
   'products.read',
   'products.create',
@@ -138,14 +165,16 @@ WHERE CONCAT(`module`, '.', `action`) IN (
 INSERT IGNORE INTO `users`
   (`user_id`, `first_name`, `last_name`, `username`, `password_hash`, `role_id`, `branch_id`, `position`, `is_active`)
 VALUES
+  -- Superadmin: branch_id NULL → acceso total
+  (1, 'Super',      'Admin',      'superadmin', '$2b$10$gE/ezqg4E2qulp.02rKKau53.ziWB5Vo7gZOwyjY6IDsb.86kkx3m', 1, NULL, 'Super Administrador', 1),
   -- Admin central: branch_id NULL → acceso a todas las sucursales
-  (1, 'Admin',      'Central',    'admin',      '$2b$10$gE/ezqg4E2qulp.02rKKau53.ziWB5Vo7gZOwyjY6IDsb.86kkx3m', 1, NULL, 'Administrador',  1),
+  (2, 'Admin',      'Central',    'admin',      '$2b$10$gE/ezqg4E2qulp.02rKKau53.ziWB5Vo7gZOwyjY6IDsb.86kkx3m', 2, NULL, 'Administrador',  1),
   -- Supervisor de sucursal 1
-  (2, 'Laura',      'Méndez',     'supervisor', '$2b$10$9xLuIA0AEsjZGcUeAQw6T.5fj5wZcMDB3/N.LUMsMTeFg8zlnMX46', 2, 1,    'Supervisora',    1),
+  (3, 'Laura',      'Méndez',     'supervisor', '$2b$10$9xLuIA0AEsjZGcUeAQw6T.5fj5wZcMDB3/N.LUMsMTeFg8zlnMX46', 3, 1,    'Supervisora',    1),
   -- Cajero de sucursal 1
-  (3, 'Carlos',     'Ruiz',       'cajero',     '$2b$10$NbczjKGQzGhajoHYw5PLAuNEccaB972kLQcsysSy7mC6gMJII4Ojq', 3, 1,    'Cajero',         1),
+  (4, 'Carlos',     'Ruiz',       'cajero',     '$2b$10$NbczjKGQzGhajoHYw5PLAuNEccaB972kLQcsysSy7mC6gMJII4Ojq', 4, 1,    'Cajero',         1),
   -- Almacenista de sucursal 1
-  (4, 'María',      'González',   'almacen',    '$2b$10$Eo5k5dty8aukax6cstJaQ.TdLfBA2sJpMHP.wfv/j3Z06/vY.zy3K', 4, 1,    'Almacenista',    1);
+  (5, 'María',      'González',   'almacen',    '$2b$10$Eo5k5dty8aukax6cstJaQ.TdLfBA2sJpMHP.wfv/j3Z06/vY.zy3K', 5, 1,    'Almacenista',    1);
 
 -- =============================================================
 -- 5. CASH REGISTERS — caja para poder abrir el POS

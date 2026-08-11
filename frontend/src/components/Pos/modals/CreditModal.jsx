@@ -41,7 +41,7 @@ const defaultDueDate = () => {
 
 const itemLabel = (i) => i.name
 
-const CreditModal = ({ onClose }) => {
+const CreditModal = ({ onClose, onSaleCompleted }) => {
   const {
     cart, subtotal, total, paymentMethods,
     activeRegisterId, activeRegister, branchId, completeSale,
@@ -140,6 +140,7 @@ const CreditModal = ({ onClose }) => {
       }
       const { data } = await api.post(`orders?branch_id=${branchId}`, payload)
       setResult(data.data)
+      onSaleCompleted?.() // el stock ya se descontó en el backend
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al procesar la venta a crédito')
     } finally {

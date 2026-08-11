@@ -30,7 +30,13 @@ const DetailRow = ({ icon, label, value }) => (
 )
 
 // ── Componente principal ──────────────────────────────────────────────────────
-const UserDetailModal = ({ userId, isSelf, onClose, onEdit, onChangePassword }) => {
+// FIX: se agrega el prop `canManage` (calculado en Users.jsx con la misma
+// jerarquía que el backend: canEditUser). Antes "Cambiar contraseña" y
+// "Editar" se mostraban SIEMPRE, sin importar si quien veía el detalle
+// tenía permiso real para esas acciones — el backend igual las hubiera
+// rechazado (canEditUser en userService), pero la UI dejaba que cualquiera
+// con acceso de lectura llegara hasta el formulario antes de enterarse.
+const UserDetailModal = ({ userId, isSelf, canManage = false, onClose, onEdit, onChangePassword }) => {
   const [user,      setUser]      = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error,     setError]     = useState(null)
@@ -171,22 +177,32 @@ const UserDetailModal = ({ userId, isSelf, onClose, onEdit, onChangePassword }) 
               </div>
 
               {/* ── Acciones ── */}
-              <div className="usr-detail__actions">
-                <button
-                  className="usr-btn usr-btn--ghost"
-                  onClick={() => { onClose(); onChangePassword(user) }}
-                >
-                  <i className="bi bi-key" />
-                  <span>Cambiar contraseña</span>
-                </button>
-                <button
-                  className="usr-btn usr-btn--primary"
-                  onClick={() => { onClose(); onEdit(user) }}
-                >
-                  <i className="bi bi-pencil" />
-                  <span>Editar</span>
-                </button>
-              </div>
+              {/* FIX: antes se mostraban siempre. Ahora gateadas por
+                  canManage — la misma jerarquía canEditUser que ya exige
+                  el backend, calculada por el padre (Users.jsx). Un
+                  usuario viendo su propio perfil (isSelf) siempre puede
+                  cambiar su contraseña y editar su perfil básico, lo cual
+                  ya viene contemplado en canEditUser (permite
+                  auto-edición) — se deja el || isSelf explícito aquí por
+                  claridad, aunque canManage ya lo cubriría en la práctica. */}
+              {(canManage || isSelf) && (
+                <div className="usr-detail__actions">
+                  <button
+                    className="usr-btn usr-btn--ghost"
+                    onClick={() => { onClose(); onChangePassword(user) }}
+                  >
+                    <i className="bi bi-key" />
+                    <span>Cambiar contraseña</span>
+                  </button>
+                  <button
+                    className="usr-btn usr-btn--primary"
+                    onClick={() => { onClose(); onEdit(user) }}
+                  >
+                    <i className="bi bi-pencil" />
+                    <span>Editar</span>
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

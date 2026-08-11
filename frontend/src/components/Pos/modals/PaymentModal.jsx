@@ -21,7 +21,7 @@ import { openReceiptWindow } from '../printReceipt'
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const QUICK_AMOUNTS = [20, 50, 100, 200, 500, 1000]
 
-const PaymentModal = ({ onClose }) => {
+const PaymentModal = ({ onClose, onSaleCompleted }) => {
   const {
     cart, subtotal, total, paymentMethods,
     activeRegisterId, activeRegister, branchId, completeSale,
@@ -120,6 +120,7 @@ const PaymentModal = ({ onClose }) => {
       }
       const { data } = await api.post(`orders?branch_id=${branchId}`, payload)
       setResult(data.data)
+      onSaleCompleted?.() // el stock ya se descontó en el backend — refrescar la grilla ahora, no hasta "Listo"
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al procesar la venta')
     } finally {

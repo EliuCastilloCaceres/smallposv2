@@ -29,7 +29,7 @@ const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency',
 // [NUEVO] Enter confirma el valor (igual que el blur) y devuelve el foco al
 // buscador vía `onEnterNext`, para no tener que tocar el mouse entre edición
 // y edición.
-const EditableNumber = ({ value, onCommit, emptyFallback = 1, maxValue, onEnterNext, className, onKeyDown, ...rest }) => {
+const EditableNumber = ({ value, onCommit, emptyFallback = 1, maxValue, onEnterNext, onClamped, className, onKeyDown, ...rest }) => {
   const [local, setLocal] = useState(String(value))
 
   useEffect(() => { setLocal(String(value)) }, [value])
@@ -40,9 +40,11 @@ const EditableNumber = ({ value, onCommit, emptyFallback = 1, maxValue, onEnterN
     // [NUEVO] Si hay un tope (stock disponible), lo que se tecleó por
     // encima se recorta directo al máximo — ej. tecleás 5 y solo hay 3,
     // queda en 3 sin depender de que el reducer lo corrija después.
-    if (maxValue != null && final > maxValue) final = maxValue
+    let wasClamped = false
+    if (maxValue != null && final > maxValue) { final = maxValue; wasClamped = true }
     if (final !== value) onCommit(final)
     setLocal(String(final))
+    if (wasClamped) onClamped?.()
   }
 
   const handleKeyDown = (e) => {
@@ -191,6 +193,32 @@ const SaleScreen = () => {
   const [discountOpen, setDiscountOpen] = useState(false)
   const [discountType, setDiscountType] = useState(cart.discount.type)
   const [discountAmt,  setDiscountAmt]  = useState(cart.discount.amount || '')
+
+  // ── Aviso transitorio cuando se intenta subir la cantidad de un item por
+  // encima de su stock disponible (botón + o tecleando un valor mayor) ──
+  const [qtyWarnKey, setQtyWarnKey] = useState(null)
+  const qtyWarnTimer = useRef(null)
+  const warnMaxStock = (key) => {
+    setQtyWarnKey(key)
+    clearTimeout(qtyWarnTimer.current)
+    qtyWarnTimer.current = setTimeout(() => setQtyWarnKey(null), 2000)
+  }
+
+  const handleDecreaseQty = (item) => {
+    // [FIX] Con stock 1 y cantidad 1, restar 1 daba 0, y el reducer lo
+    // subía a 0.001 (piso pensado para teclear decimales de productos por
+    // kg/l/m, no para el botón de restar) — nunca debe bajar de 1 así.
+    updateQty(item.product_id, item.variant_id, Math.max(1, item.quantity - 1))
+  }
+
+  const handleIncreaseQty = (item) => {
+    const key = item.variant_id ?? item.product_id
+    if (item.quantity >= item.stock) {
+      warnMaxStock(key)
+      return
+    }
+    updateQty(item.product_id, item.variant_id, item.quantity + 1)
+  }
 
   const fetchGrid = useCallback(async (currentPage = 1) => {
     if (!branchId) return
@@ -485,6 +513,7 @@ const SaleScreen = () => {
                         {!!p.is_variable && <span className="pos-product-card__variable"><i className="bi bi-layers" /></span>}
                       </div>
                       <span className="pos-product-card__name">{p.name}</span>
+                      {p.sku && <span className="pos-product-card__sku">{p.sku}</span>}
                       <div className="pos-product-card__bottom">
                         <strong>{money(p.sale_price)}</strong>
                         <span className={`pos-stock-dot ${noStock ? 'pos-stock-dot--empty' : p.total_stock <= 5 ? 'pos-stock-dot--low' : 'pos-stock-dot--ok'}`}>
@@ -607,7 +636,7 @@ const SaleScreen = () => {
                     <span className="pos-cart-item__spacer" />
 
                     <div className="pos-cart-item__qty">
-                      <button type="button" onClick={() => updateQty(item.product_id, item.variant_id, item.quantity - 1)}>
+                      <button type="button" onClick={() => handleDecreaseQty(item)}>
                         <i className="bi bi-dash" />
                       </button>
                       <EditableNumber
@@ -616,11 +645,15 @@ const SaleScreen = () => {
                         value={item.quantity}
                         maxValue={item.stock}
                         onCommit={(v) => updateQty(item.product_id, item.variant_id, v)}
+                        onClamped={() => warnMaxStock(item.variant_id ?? item.product_id)}
                         onEnterNext={focusSearch}
                       />
-                      <button type="button" onClick={() => updateQty(item.product_id, item.variant_id, item.quantity + 1)}>
+                      <button type="button" onClick={() => handleIncreaseQty(item)}>
                         <i className="bi bi-plus" />
                       </button>
+                      {qtyWarnKey === (item.variant_id ?? item.product_id) && (
+                        <span className="pos-cart-item__qty-warn">Stock máximo: {item.stock}</span>
+                      )}
                     </div>
 
                     <strong className="pos-cart-item__subtotal">{money(item.subtotal)}</strong>
@@ -743,13 +776,14 @@ const SaleScreen = () => {
         />
       )}
       {customerOpen && <CustomerModal onClose={() => setCustomerOpen(false)} />}
-      {paymentOpen && <PaymentModal onClose={() => setPaymentOpen(false)} />}
-      {layawayOpen && <LayawayModal onClose={() => setLayawayOpen(false)} />}
-      {creditOpen && <CreditModal onClose={() => setCreditOpen(false)} />}
+      {paymentOpen && <PaymentModal onClose={() => setPaymentOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
+      {layawayOpen && <LayawayModal onClose={() => setLayawayOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
+      {creditOpen && <CreditModal onClose={() => setCreditOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
       {outOfStockTarget && (
         <OutOfStockModal
           target={outOfStockTarget}
           onClose={() => { setOutOfStockTarget(null); focusSearch() }}
+          onStockAdded={() => fetchGrid(page)}
         />
       )}
 

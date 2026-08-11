@@ -779,8 +779,10 @@ CREATE TABLE `roles` (
   `name` varchar(50) NOT NULL,
   `description` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `is_system` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = rol del sistema (superadmin, admin). No editable ni desactivable.',
   PRIMARY KEY (`role_id`),
-  UNIQUE KEY `uq_role_name` (`name`)
+  UNIQUE KEY `uq_role_name` (`name`),
+  KEY `idx_roles_is_system` (`is_system`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -807,10 +809,12 @@ CREATE TABLE `users` (
   `phone_number` varchar(15) DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
+  `superadmin_slot` tinyint(1) GENERATED ALWAYS AS (IF(`role_id` = 1, 1, NULL)) STORED COMMENT 'Constraint única: garantiza un solo superadmin',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `uq_username` (`username`),
+  UNIQUE KEY `uq_users_single_superadmin` (`superadmin_slot`),
   KEY `fk_user_role` (`role_id`),
   KEY `fk_user_branch` (`branch_id`),
   CONSTRAINT `fk_user_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,

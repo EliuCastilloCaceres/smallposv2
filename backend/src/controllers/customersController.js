@@ -1,5 +1,6 @@
 // src/controllers/customersController.js
 const customerService = require('../services/customerService');
+const { hasPermission } = require('../middlewares/auth');
 
 // GET /customers
 const getAll = async (req, res, next) => {
@@ -30,16 +31,8 @@ const update = async (req, res, next) => {
   try {
     // Verificar si el usuario tiene permiso de crédito para editar credit_limit.
     // requirePermission ya validó customers.update — aquí solo chequeamos credit.create
-    // consultando directamente en BD con el role_id del token.
-    const db = require('../config/db');
-    const [[creditPerm]] = await db.query(
-      `SELECT 1 FROM role_permissions rp
-       JOIN permissions p ON rp.permission_id = p.permission_id
-       WHERE rp.role_id = ? AND p.module = 'credit' AND p.action = 'create'
-       LIMIT 1`,
-      [req.user.role_id]
-    );
-    const canEditCredit = !!creditPerm;
+    // usando el helper reusable de auth.js (antes era SQL embebido aquí mismo).
+    const canEditCredit = await hasPermission(req.user.role_id, 'credit', 'create');
 
     const customer = await customerService.updateCustomer(
       req.params.id,

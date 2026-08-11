@@ -11,9 +11,16 @@ const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// FIX FASE 2: Agregar role_name al payload del JWT
 const generateAccessToken = (user) =>
   jwt.sign(
-    { user_id: user.user_id, username: user.username, role_id: user.role_id, branch_id: user.branch_id },
+    {
+      user_id:   user.user_id,
+      username:  user.username,
+      role_id:   user.role_id,
+      role_name: user.role_name,      // ← NUEVO: necesario para bypass de superadmin
+      branch_id: user.branch_id,
+    },
     process.env.JWT_SECRET,
     { expiresIn: ACCESS_TOKEN_EXPIRY }
   );
@@ -82,17 +89,20 @@ const login = async ({ username, password, userAgent, ipAddress }) => {
 };
 
 // ─── refresh ──────────────────────────────────────────────────────────────────
-// FIX: usa db.getConnection() para garantizar atomicidad real de la transacción.
+// FIX FASE 2: La query de refresh NO traía role_name. Agregamos JOIN con roles.
 
 const refresh = async ({ refreshToken, userAgent, ipAddress }) => {
   if (!refreshToken) throw new UnauthorizedError('Refresh token no proporcionado');
 
   const tokenHash = hashToken(refreshToken);
 
+  // FIX: JOIN con roles para obtener role_name
   const [tokens] = await db.query(
-    `SELECT rt.*, u.user_id, u.username, u.role_id, u.branch_id, u.is_active
+    `SELECT rt.*, u.user_id, u.username, u.role_id, u.branch_id, u.is_active,
+            r.name AS role_name
      FROM refresh_tokens rt
      JOIN users u ON rt.user_id = u.user_id
+     JOIN roles r ON u.role_id = r.role_id
      WHERE rt.token_hash = ?`,
     [tokenHash]
   );
@@ -103,8 +113,6 @@ const refresh = async ({ refreshToken, userAgent, ipAddress }) => {
   const isExpired = new Date(stored.expires_at) <= new Date();
 
   if (stored.revoked === 1 || isExpired) {
-    // Solo revocar todas las sesiones si detectamos reutilización (revoked),
-    // no si simplemente expiró normalmente.
     if (stored.revoked === 1) {
       await db.query(
         `UPDATE refresh_tokens SET revoked = 1, revoked_at = NOW() WHERE user_id = ?`,

@@ -7,7 +7,12 @@ import ConfirmDialog from '../../Common/ConfirmDialog'
 
 const PaymentMethodsTab = ({ isCentralAdmin }) => {
   const { hasPermission } = useUser()
-  const canEdit = isCentralAdmin && hasPermission('settings', 'update')
+  // FIX: antes hasPermission('settings','update') — permiso que nunca
+  // existió en el seed. Ahora conectado a payment_methods.*, separando
+  // crear de editar/activar-desactivar (paymentMethodService.assertAdmin
+  // exige admin central para ambas acciones, por eso el && isCentralAdmin).
+  const canCreate = isCentralAdmin && hasPermission('payment_methods', 'create')
+  const canEdit   = isCentralAdmin && hasPermission('payment_methods', 'update')
 
   const [methods,       setMethods]       = useState([])
   const [isLoading,     setIsLoading]     = useState(true)
@@ -78,7 +83,7 @@ const PaymentMethodsTab = ({ isCentralAdmin }) => {
               : 'Solo el administrador central puede gestionar métodos de pago'}
           </p>
         </div>
-        {canEdit && (
+        {canCreate && (
           <button
             className="set-btn set-btn--primary"
             onClick={() => setModal({ open: true, method: null })}

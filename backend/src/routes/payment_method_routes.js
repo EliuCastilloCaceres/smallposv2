@@ -12,8 +12,9 @@ router.get('/',    pmCtrl.getAll);
 router.get('/:id', pmCtrl.getById);
 
 // ─── Escritura — solo admin central (validado también en el service) ──────────
-router.post('/',   requirePermission('settings', 'update'), pmCtrl.create);
-router.put('/:id', requirePermission('settings', 'update'), pmCtrl.update);
-router.patch('/:id/status', requirePermission('settings', 'update'), pmCtrl.toggleStatus);
+// FIX: antes usaba settings.update — ahora conectado a payment_methods.*.
+router.post('/',   requirePermission('payment_methods', 'create'), pmCtrl.create);
+router.put('/:id', requirePermission('payment_methods', 'update'), pmCtrl.update);
+router.patch('/:id/status', requirePermission('payment_methods', 'update'), pmCtrl.toggleStatus);
 
 module.exports = router;

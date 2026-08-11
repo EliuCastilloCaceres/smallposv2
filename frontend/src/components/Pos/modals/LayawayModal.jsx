@@ -30,7 +30,7 @@ const defaultDueDate = () => {
 
 const itemLabel = (i) => i.name
 
-const LayawayModal = ({ onClose }) => {
+const LayawayModal = ({ onClose, onSaleCompleted }) => {
   const { cart, subtotal, paymentMethods, branchId, completeSale } = usePos()
 
   const isGenericCustomer = !cart.customerId || cart.customerId === GENERIC_CUSTOMER_ID
@@ -79,6 +79,7 @@ const LayawayModal = ({ onClose }) => {
       }
       const { data } = await api.post(`layaways?branch_id=${branchId}`, payload)
       setResult(data.data)
+      onSaleCompleted?.() // el stock ya se reservó en el backend
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al crear el apartado')
     } finally {

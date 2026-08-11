@@ -1,6 +1,7 @@
 // src/services/branchService.js
 const db = require('../config/db');
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require('../errors/AppError');
+const { isCentralAdminOrAbove } = require('../helpers/roleHelpers');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,7 +29,6 @@ const RECEIPT_COLUMNS = `
   br.is_active  AS receipt_is_active
 `;
 
-// Adjunta el receipt (puede ser null) a cada sucursal
 const withReceipt = (row) => {
   const { receipt_id, store_name, receipt_address, rfc,
           receipt_phone, logo_image, footer_text, receipt_is_active, ...branch } = row;
@@ -63,15 +63,14 @@ const validate = {
   },
 };
 
-// Solo admin central puede gestionar sucursales
+// Antes solo miraba branch_id === null (asumía que "central" == "admin").
+// Ahora usa el helper compartido: exige rol admin/superadmin Y ser central.
 const assertAdmin = (requestingUser) => {
-  if (requestingUser.branch_id !== null)
+  if (!isCentralAdminOrAbove(requestingUser))
     throw new ForbiddenError('Solo el administrador central puede gestionar sucursales');
 };
 
 // ─── getAll ───────────────────────────────────────────────────────────────────
-// Admin central: ve todas las sucursales, con filtros opcionales.
-// Cualquier otro rol: solo ve su propia sucursal.
 
 const getAll = async ({ requestingUser, filters = {} }) => {
   const { is_active, search, page = 1, limit = 20 } = filters;
@@ -83,7 +82,6 @@ const getAll = async ({ requestingUser, filters = {} }) => {
   const conditions = [];
   const params     = [];
 
-  // No-admin (tiene branch_id): restringir a su propia sucursal.
   if (requestingUser.branch_id !== null) {
     conditions.push('b.branch_id = ?');
     params.push(requestingUser.branch_id);
@@ -131,7 +129,6 @@ const getAll = async ({ requestingUser, filters = {} }) => {
 // ─── getById ──────────────────────────────────────────────────────────────────
 
 const getById = async ({ branchId, requestingUser }) => {
-  // No-admin solo puede ver su propia sucursal
   if (
     requestingUser.branch_id !== null &&
     parseInt(branchId) !== requestingUser.branch_id
@@ -153,22 +150,16 @@ const getById = async ({ branchId, requestingUser }) => {
 };
 
 // ─── create ───────────────────────────────────────────────────────────────────
-// Acepta opcionalmente `receipt` en el body para crear los datos del recibo
-// en la misma operación.
 
 const create = async ({ data, requestingUser }) => {
   assertAdmin(requestingUser);
 
-  const {
-    name, address, state, city, zip_code, phone_number,
-    receipt, // objeto opcional: { store_name, address, rfc, phone, logo_image, footer_text }
-  } = data;
+  const { name, address, state, city, zip_code, phone_number, receipt } = data;
 
   validate.name(name);
   validate.phone(phone_number);
   validate.zipCode(zip_code);
 
-  // Nombre único de sucursal
   const [[existing]] = await db.query(
     'SELECT branch_id FROM branches WHERE name = ?',
     [name.trim()]
@@ -202,14 +193,12 @@ const create = async ({ data, requestingUser }) => {
 const update = async ({ branchId, data, requestingUser }) => {
   assertAdmin(requestingUser);
 
-  // Verificar que existe
   await getById({ branchId, requestingUser: { branch_id: null } });
 
   const { name, address, state, city, zip_code, phone_number } = data;
 
   if (name !== undefined) {
     validate.name(name);
-    // Verificar nombre único excluyendo la propia sucursal
     const [[conflict]] = await db.query(
       'SELECT branch_id FROM branches WHERE name = ? AND branch_id != ?',
       [name.trim(), branchId]
@@ -256,7 +245,6 @@ const toggleStatus = async ({ branchId, is_active, requestingUser }) => {
     [is_active ? 1 : 0, branchId]
   );
 
-  // Al desactivar: avisar si hay usuarios activos asignados (sin bloquear)
   let warning = null;
   if (!is_active) {
     const [[{ activeUsers }]] = await db.query(
@@ -273,8 +261,6 @@ const toggleStatus = async ({ branchId, is_active, requestingUser }) => {
 };
 
 // ─── upsertReceipt ────────────────────────────────────────────────────────────
-// PUT /branches/:id/receipt
-// Crea el recibo si no existe, lo actualiza si ya existe (INSERT ... ON DUPLICATE KEY).
 
 const _upsertReceipt = async ({ branchId, data }) => {
   const { store_name, address, rfc, phone, logo_image, footer_text } = data;

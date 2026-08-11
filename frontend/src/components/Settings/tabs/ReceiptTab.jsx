@@ -8,8 +8,14 @@ const EMPTY_FORM = {
 }
 
 const ReceiptTab = ({ isCentralAdmin, branchId }) => {
-  const { hasPermission } = useUser()
-  const canEdit = hasPermission('settings', 'update')
+  const { user: currentUser, hasPermission } = useUser()
+
+  // FIX: antes hasPermission('settings','update') — permiso que nunca
+  // existió en el seed. La ruta PUT /branches/:id/receipt ahora exige
+  // branches.update (ver branch_routes.js), así que la UI debe checar lo
+  // mismo para ser congruente con lo que el backend realmente permite.
+  const isSuperadmin = currentUser?.role_name === 'superadmin'
+  const canEdit = hasPermission('branches', 'update')
 
   const [branches,       setBranches]       = useState([])
   const [selectedBranch, setSelectedBranch] = useState(isCentralAdmin ? null : branchId)

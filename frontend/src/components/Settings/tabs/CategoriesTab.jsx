@@ -7,7 +7,12 @@ import ConfirmDialog from '../../Common/ConfirmDialog'
 
 const CategoriesTab = ({ isCentralAdmin }) => {
   const { hasPermission } = useUser()
-  const canEdit = isCentralAdmin && hasPermission('products', 'update')
+  // FIX: antes usaba products.update — permiso prestado de otro módulo.
+  // Ahora conectado a categories.*, y separado create/update igual que el
+  // resto de tabs (categoryService.assertAdmin exige admin central para
+  // ambas acciones, por eso el && isCentralAdmin en las dos).
+  const canCreate = isCentralAdmin && hasPermission('categories', 'create')
+  const canEdit   = isCentralAdmin && hasPermission('categories', 'update')
 
   const [categories,    setCategories]    = useState([])
   const [isLoading,     setIsLoading]     = useState(true)
@@ -91,7 +96,7 @@ const CategoriesTab = ({ isCentralAdmin }) => {
             Globales — disponibles para todas las sucursales
           </p>
         </div>
-        {canEdit && (
+        {canCreate && (
           <button
             className="set-btn set-btn--primary"
             onClick={() => setModal({ open: true, category: null })}

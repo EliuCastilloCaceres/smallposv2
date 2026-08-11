@@ -8,7 +8,17 @@ import ConfirmDialog from '../../Common/ConfirmDialog'
 
 const BranchesTab = ({ isCentralAdmin }) => {
   const { user, hasPermission } = useUser()
-  const canEdit = hasPermission('settings', 'update')
+
+  // FIX: antes un solo `canEdit` (hasPermission('settings','update')) gateaba
+  // TRES acciones que en el backend requieren permisos distintos:
+  //  · "Categorías POS" → categoryService.setHiddenForBranch → categories.update
+  //  · "Editar" / "Activar-Desactivar" sucursal → branchService.update/toggleStatus → branches.update
+  //  · "Nueva sucursal" → branchService.create → branches.create
+  // Además 'settings.update' nunca existió como permiso en el seed — este
+  // botón/flag nunca funcionó para nadie salvo el bypass de superadmin.
+  const canCreateBranches   = hasPermission('branches', 'create')
+  const canManageBranches   = hasPermission('branches', 'update')
+  const canManageCategories = hasPermission('categories', 'update')
 
   const [branches,   setBranches]   = useState([])
   const [isLoading,  setIsLoading]  = useState(true)
@@ -88,7 +98,7 @@ const BranchesTab = ({ isCentralAdmin }) => {
               : 'Información de tu sucursal'}
           </p>
         </div>
-        {isCentralAdmin && canEdit && (
+        {isCentralAdmin && canCreateBranches && (
           <button
             className="set-btn set-btn--primary"
             onClick={() => setModal({ open: true, branch: null })}
@@ -152,17 +162,25 @@ const BranchesTab = ({ isCentralAdmin }) => {
                 </div>
 
                 {/* Acciones */}
-                {(canEdit && (isCentralAdmin || user?.branch_id === branch.branch_id)) && (
+                {((canManageCategories || canManageBranches) && (isCentralAdmin || user?.branch_id === branch.branch_id)) && (
                   <div className="set-card__actions">
-                    <button
-                      className="set-btn set-btn--ghost"
-                      onClick={() => setCatModal({ open: true, branch })}
-                    >
-                      <i className="bi bi-bookmark-star" />
-                      <span>Categorías POS</span>
-                    </button>
+                    {/* Categorías POS — requiere categories.update, disponible
+                        tanto para admin central como para el admin de ESA
+                        sucursal (assertCanManageBranch en el backend). */}
+                    {canManageCategories && (
+                      <button
+                        className="set-btn set-btn--ghost"
+                        onClick={() => setCatModal({ open: true, branch })}
+                      >
+                        <i className="bi bi-bookmark-star" />
+                        <span>Categorías POS</span>
+                      </button>
+                    )}
 
-                    {isCentralAdmin && (
+                    {/* Editar / Activar-Desactivar sucursal — requiere
+                        branches.update, y el service exige admin CENTRAL
+                        (no admin de sucursal), por eso el && isCentralAdmin. */}
+                    {isCentralAdmin && canManageBranches && (
                       <>
                         <button
                           className="set-btn set-btn--ghost"

@@ -57,8 +57,52 @@ const Avatar = ({ user }) => {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 const Users = () => {
-  const { user: me, isAdmin, hasPermission } = useUser()
+  // FIX: se añade isCentralAdmin del contexto. Antes `isAdmin` (role_name
+  // === 'admin', SIN importar branch_id) se usaba para decidir si mostrar
+  // el selector "Todas las sucursales" y cargar el catálogo completo de
+  // sucursales — eso incluía por error a un admin DE SUCURSAL (no central),
+  // que según la regla de negocio solo opera con su propia sucursal. El
+  // backend igual ignora cualquier branch_id que un no-central mande
+  // (userService.getAll fuerza su propio branch_id), así que no era un
+  // hueco de seguridad, pero sí una UI incongruente con la regla.
+  const { user: me, isAdmin, isCentralAdmin, hasPermission } = useUser()
   const canEdit = hasPermission('users', 'create') || hasPermission('users', 'update')
+
+  const isSuperadmin = me?.role_name === 'superadmin'
+
+  // FIX: canActOnUser antes solo cubría el caso superadmin y para todo lo
+  // demás devolvía el permiso RBAC plano (canEdit), sin replicar la
+  // jerarquía real (admin central solo gestionable por otro admin
+  // central/superadmin; admin de sucursal y demás roles por superadmin/
+  // admin central/admin de su misma sucursal). Esto no era explotable
+  // porque el backend (roleHelpers.canEditUser/canDeleteOrDeactivateUser)
+  // sigue siendo quien autoriza de verdad — pero es la misma dispersión
+  // de lógica de jerarquía que ya eliminamos del backend, ahora
+  // reapareciendo en el frontend. Se replica aquí la misma estructura,
+  // y se separa "editar" de "desactivar/borrar" igual que en el backend.
+  const isCentralAdminUser = (u) => u.role_name === 'admin' && u.branch_id === null
+  const isBranchAdminOf    = (u, branchId) =>
+    u.role_name === 'admin' && u.branch_id !== null && Number(u.branch_id) === Number(branchId)
+
+  const canEditThisUser = (target) => {
+    if (!canEdit) return false
+    if (target.role_name === 'superadmin') return me?.user_id === target.user_id
+    if (isCentralAdminUser(target)) return isSuperadmin || isCentralAdminUser(me)
+    return isSuperadmin || isCentralAdminUser(me) || isBranchAdminOf(me, target.branch_id)
+  }
+
+  const canDeactivateThisUser = (target) => {
+    if (!canEdit) return false
+    if (target.role_name === 'superadmin') return false
+    if (isCentralAdminUser(target)) {
+      if (me?.user_id === target.user_id) return false
+      return isSuperadmin || isCentralAdminUser(me)
+    }
+    return isSuperadmin || isCentralAdminUser(me) || isBranchAdminOf(me, target.branch_id)
+  }
+
+  // Si puede hacer CUALQUIERA de las dos, se muestra el bloque de acciones
+  const canActOnUser = (user) => canEditThisUser(user) || canDeactivateThisUser(user)
 
   // ── Estado ──
   const [users,        setUsers]        = useState([])
@@ -67,7 +111,7 @@ const Users = () => {
   const [error,        setError]        = useState(null)
 
   // Catálogos
-  const [roles,        setRoles]        = useState([])   // ← desde la BD
+  const [roles,        setRoles]        = useState([])
   const [branches,     setBranches]     = useState([])
 
   // Filtros
@@ -92,18 +136,19 @@ const Users = () => {
   const branchRef   = useRef('')
 
   // ── Cargar roles y sucursales al montar ──
+  // FIX: antes usaba `isAdmin || isSuperadmin` — ahora `isCentralAdmin`
+  // (que ya cubre superadmin, cuyo branch_id también es null), para no
+  // cargar el catálogo completo de sucursales a un admin de sucursal.
   useEffect(() => {
-    // Roles — siempre, para el filtro y el modal de crear/editar
     api.get('roles?is_active=true')
       .then(({ data }) => setRoles(data.data))
       .catch(() => {})
-    // Sucursales — solo admin
-    if (isAdmin) {
+    if (isCentralAdmin) {
       api.get('branches?is_active=true')
         .then(({ data }) => setBranches(data.data))
         .catch(() => {})
     }
-  }, [isAdmin])
+  }, [isCentralAdmin])
 
   // ── Fetch usuarios ──
   const fetchUsers = useCallback(async (currentPage = 1) => {
@@ -219,7 +264,6 @@ const Users = () => {
           )}
         </div>
 
-        {/* Filtro rol — dinámico desde la BD */}
         <select
           className="usr-select"
           value={filterRole}
@@ -241,7 +285,7 @@ const Users = () => {
           <option value="false">Inactivos</option>
         </select>
 
-        {isAdmin && branches.length > 0 && (
+        {isCentralAdmin && branches.length > 0 && (
           <select
             className="usr-select"
             value={filterBranch}
@@ -285,7 +329,7 @@ const Users = () => {
                   <th>Sucursal</th>
                   <th>Cargo</th>
                   <th>Estado</th>
-                  {canEdit && <th></th>}
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -319,37 +363,48 @@ const Users = () => {
                         {user.is_active ? 'Activo' : 'Inactivo'}
                       </span>
                     </td>
-                    {canEdit && (
-                      <td>
+                    <td>
+                      {canActOnUser(user) && (
                         <div className="usr-actions">
-                          <button
-                            className="usr-action-btn"
-                            title="Editar"
-                            onClick={() => setUserModal({ open: true, user })}
-                          >
-                            <i className="bi bi-pencil" />
-                          </button>
-                          <button
-                            className="usr-action-btn"
-                            title="Cambiar contraseña"
-                            onClick={() => setChangePwModal(user)}
-                          >
-                            <i className="bi bi-key" />
-                          </button>
-                          <button
-                            className={`usr-action-btn ${user.is_active ? 'usr-action-btn--danger' : ''}`}
-                            title={user.is_active ? 'Desactivar' : 'Activar'}
-                            onClick={() => handleToggleStatus(user)}
-                            disabled={toggling === user.user_id || isSelf(user)}
-                          >
-                            {toggling === user.user_id
-                              ? <span className="usr-spinner" />
-                              : <i className={`bi ${user.is_active ? 'bi-person-slash' : 'bi-person-check'}`} />
-                            }
-                          </button>
+                          {canEditThisUser(user) && (
+                            <>
+                              <button
+                                className="usr-action-btn"
+                                title="Editar"
+                                onClick={() => setUserModal({ open: true, user })}
+                              >
+                                <i className="bi bi-pencil" />
+                              </button>
+                              <button
+                                className="usr-action-btn"
+                                title="Cambiar contraseña"
+                                onClick={() => setChangePwModal(user)}
+                              >
+                                <i className="bi bi-key" />
+                              </button>
+                            </>
+                          )}
+                          {canDeactivateThisUser(user) && (
+                            <button
+                              className={`usr-action-btn ${user.is_active ? 'usr-action-btn--danger' : ''}`}
+                              title={user.is_active ? 'Desactivar' : 'Activar'}
+                              onClick={() => handleToggleStatus(user)}
+                              disabled={toggling === user.user_id || isSelf(user)}
+                            >
+                              {toggling === user.user_id
+                                ? <span className="usr-spinner" />
+                                : <i className={`bi ${user.is_active ? 'bi-person-slash' : 'bi-person-check'}`} />
+                              }
+                            </button>
+                          )}
                         </div>
-                      </td>
-                    )}
+                      )}
+                      {!isSuperadmin && user.role_name === 'superadmin' && (
+                        <span className="usr-badge-central" style={{ fontSize: 11, padding: '2px 8px' }}>
+                          <i className="bi bi-shield-lock" /> Protegido
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -396,31 +451,44 @@ const Users = () => {
                   )}
                 </div>
 
-                {canEdit && (
+                {canActOnUser(user) && (
                   <div className="usr-card__actions">
-                    <button
-                      className="usr-btn usr-btn--ghost"
-                      onClick={() => setUserModal({ open: true, user })}
-                    >
-                      <i className="bi bi-pencil" /><span>Editar</span>
-                    </button>
-                    <button
-                      className="usr-btn usr-btn--ghost"
-                      onClick={() => setChangePwModal(user)}
-                    >
-                      <i className="bi bi-key" /><span>Contraseña</span>
-                    </button>
-                    <button
-                      className={`usr-btn ${user.is_active ? 'usr-btn--danger-ghost' : 'usr-btn--ghost'}`}
-                      onClick={() => handleToggleStatus(user)}
-                      disabled={toggling === user.user_id || isSelf(user)}
-                    >
-                      {toggling === user.user_id
-                        ? <span className="usr-spinner" />
-                        : <i className={`bi ${user.is_active ? 'bi-person-slash' : 'bi-person-check'}`} />
-                      }
-                      <span>{user.is_active ? 'Desactivar' : 'Activar'}</span>
-                    </button>
+                    {canEditThisUser(user) && (
+                      <>
+                        <button
+                          className="usr-btn usr-btn--ghost"
+                          onClick={() => setUserModal({ open: true, user })}
+                        >
+                          <i className="bi bi-pencil" /><span>Editar</span>
+                        </button>
+                        <button
+                          className="usr-btn usr-btn--ghost"
+                          onClick={() => setChangePwModal(user)}
+                        >
+                          <i className="bi bi-key" /><span>Contraseña</span>
+                        </button>
+                      </>
+                    )}
+                    {canDeactivateThisUser(user) && (
+                      <button
+                        className={`usr-btn ${user.is_active ? 'usr-btn--danger-ghost' : 'usr-btn--ghost'}`}
+                        onClick={() => handleToggleStatus(user)}
+                        disabled={toggling === user.user_id || isSelf(user)}
+                      >
+                        {toggling === user.user_id
+                          ? <span className="usr-spinner" />
+                          : <i className={`bi ${user.is_active ? 'bi-person-slash' : 'bi-person-check'}`} />
+                        }
+                        <span>{user.is_active ? 'Desactivar' : 'Activar'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!isSuperadmin && user.role_name === 'superadmin' && (
+                  <div className="usr-card__actions">
+                    <span className="usr-badge-central" style={{ fontSize: 11, padding: '4px 10px' }}>
+                      <i className="bi bi-shield-lock" /> Protegido
+                    </span>
                   </div>
                 )}
               </div>
@@ -456,23 +524,30 @@ const Users = () => {
       {userModal.open && (
         <UserModal
           user={userModal.user}
-          roles={roles}          /* ← roles desde la BD, no hardcodeados */
+          roles={roles}
           branches={branches}
-          isAdmin={isAdmin}
           onSaved={handleSaved}
           onClose={() => setUserModal({ open: false, user: null })}
         />
       )}
 
-      {detailUserId && (
-        <UserDetailModal
-          userId={detailUserId}
-          isSelf={me?.user_id === detailUserId}
-          onClose={() => setDetailUserId(null)}
-          onEdit={(user) => setUserModal({ open: true, user })}
-          onChangePassword={(user) => setChangePwModal(user)}
-        />
-      )}
+      {detailUserId && (() => {
+        const targetUser = users.find(u => u.user_id === detailUserId)
+        // Fallback conservador si el usuario no está en la página actual
+        // (p. ej. se abrió desde otra vista): sin datos para evaluar la
+        // jerarquía, no se muestran acciones — más seguro que asumir que sí.
+        const canManage = targetUser ? canEditThisUser(targetUser) : false
+        return (
+          <UserDetailModal
+            userId={detailUserId}
+            isSelf={me?.user_id === detailUserId}
+            canManage={canManage}
+            onClose={() => setDetailUserId(null)}
+            onEdit={(user) => setUserModal({ open: true, user })}
+            onChangePassword={(user) => setChangePwModal(user)}
+          />
+        )
+      })()}
 
       {changePwModal && (
         <ChangePasswordModal

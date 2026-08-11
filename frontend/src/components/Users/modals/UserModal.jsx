@@ -1,5 +1,6 @@
 // src/components/Users/modals/UserModal.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useUser } from '../../../Context/UserContext'
 import api from '../../../services/api'
 
 const EMPTY = {
@@ -18,8 +19,15 @@ const EMPTY = {
   zip_code:      '',
 }
 
-const UserModal = ({ user, roles, branches, isAdmin, onSaved, onClose }) => {
+// FIX FASE 5: Ya no recibe isAdmin — usa useUser() para saber quién crea
+const UserModal = ({ user, roles, branches, onSaved, onClose }) => {
   const isEdit = !!user
+  const { user: currentUser } = useUser()
+
+  // FIX: Determinar permisos del creador basado en rol + sucursal
+  const isSuperadmin   = currentUser?.role_name === 'superadmin'
+  const isCentralAdmin = currentUser?.role_name === 'admin' && currentUser?.branch_id === null
+  const canAssignBranch = isSuperadmin || isCentralAdmin
 
   const [form,     setForm]     = useState(EMPTY)
   const [showPass, setShowPass] = useState(false)
@@ -58,6 +66,28 @@ const UserModal = ({ user, roles, branches, isAdmin, onSaved, onClose }) => {
     setError(null)
   }
 
+  // FIX: En edición, no se puede cambiar el rol de superadmin/admin
+  const isEditingProtectedUser = isEdit && ['superadmin', 'admin'].includes(user?.role_name)
+
+  // FIX: Filtrar roles que el creador puede asignar
+  const availableRoles = useMemo(() => {
+    const assignable = roles.filter(r => {
+      if (r.name === 'superadmin') return false // nadie puede asignar superadmin
+      if (r.name === 'admin') return isSuperadmin || isCentralAdmin
+      return true
+    })
+
+    if (!isEdit) return assignable
+
+    // En edición, incluir el rol actual del usuario editado (aunque no sea asignable)
+    // para que el select no quede vacío
+    const currentRole = roles.find(r => r.role_id === user?.role_id)
+    if (currentRole && !assignable.find(r => r.role_id === currentRole.role_id)) {
+      return [...assignable, currentRole].sort((a, b) => a.role_id - b.role_id)
+    }
+    return assignable
+  }, [roles, isSuperadmin, isCentralAdmin, isEdit, user])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsSaving(true)
@@ -69,7 +99,10 @@ const UserModal = ({ user, roles, branches, isAdmin, onSaved, onClose }) => {
         last_name:     form.last_name.trim()     || null,
         username:      form.username.trim(),
         role_id:       Number(form.role_id),
-        branch_id:     form.branch_id !== '' ? Number(form.branch_id) : null,
+        // FIX: No-central no puede elegir sucursal — se fuerza la suya
+        branch_id:     canAssignBranch
+          ? (form.branch_id !== '' ? Number(form.branch_id) : null)
+          : currentUser?.branch_id,
         position:      form.position.trim()      || null,
         phone_number:  form.phone_number.trim()  || null,
         profile_image: form.profile_image.trim() || null,
@@ -264,16 +297,22 @@ const UserModal = ({ user, roles, branches, isAdmin, onSaved, onClose }) => {
                   value={form.role_id}
                   onChange={handleChange}
                   required
+                  disabled={isEditingProtectedUser}
                 >
                   <option value="">Seleccionar rol...</option>
-                  {roles.map(r => (
+                  {availableRoles.map(r => (
                     <option key={r.role_id} value={r.role_id}>{r.name}</option>
                   ))}
                 </select>
+                {isEditingProtectedUser && (
+                  <small className="usr-field__hint" style={{ color: '#f59e0b', display: 'block', marginTop: 4 }}>
+                    <i className="bi bi-lock" /> El rol de este usuario no puede modificarse
+                  </small>
+                )}
               </div>
 
-              {/* Sucursal — solo admin puede asignar */}
-              {isAdmin && (
+              {/* FIX: Sucursal — solo central puede asignar libremente */}
+              {canAssignBranch ? (
                 <div className="usr-field">
                   <label className="usr-field__label" htmlFor="um-branch">Sucursal</label>
                   <select
@@ -287,6 +326,17 @@ const UserModal = ({ user, roles, branches, isAdmin, onSaved, onClose }) => {
                       <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
                     ))}
                   </select>
+                </div>
+              ) : (
+                <div className="usr-field">
+                  <label className="usr-field__label">Sucursal</label>
+                  <input
+                    type="text"
+                    className="usr-field__input"
+                    disabled
+                    value={branches.find(b => b.branch_id === currentUser?.branch_id)?.name || 'Tu sucursal'}
+                  />
+                  <input type="hidden" name="branch_id" value={currentUser?.branch_id ?? ''} />
                 </div>
               )}
             </div>

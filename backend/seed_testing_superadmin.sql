@@ -6,7 +6,7 @@
 -- ┌─────────────┬─────────────┬────────────┬──────────────────────┐
 -- │ username    │ password    │ rol        │ branch_id            │
 -- ├─────────────┼─────────────┼────────────┼──────────────────────┤
--- │ superadmin  │ Super123!   │ superadmin │ NULL (central)       │
+-- │ superadmin  │ Admin123!!   │ superadmin │ NULL (central)       │
 -- │ admin       │ Admin123!   │ admin      │ NULL (central)       │
 -- │ supervisor  │ Super123!   │ supervisor │ 1 (Sucursal central) │
 -- │ cajero      │ Cajero123!  │ cajero     │ 1 (Sucursal central) │
@@ -41,6 +41,7 @@ INSERT IGNORE INTO `roles` (`role_id`, `name`, `description`, `is_system`) VALUE
 -- =============================================================
 INSERT IGNORE INTO `permissions` (`module`, `action`, `description`) VALUES
   ('pos',              'use',      'Operar el punto de venta'),
+  ('dashboard',        'read',      'Ver informacion del dashboard'),
   ('orders',           'read',     'Ver historial de ventas'),
   ('orders',           'cancel',   'Cancelar una venta'),
   ('products',         'read',     'Ver catálogo'),

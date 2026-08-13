@@ -23,7 +23,7 @@ function App() {
 
   const navItems = [
     { to: '/pos',                icon: 'bi-pc-display-horizontal', label: 'POS',          perm: ['pos',       'use']   },
-    { to: '/dashboard',          icon: 'bi-graph-up-arrow',        label: 'Dashboard',    perm: ['reports',   'basic'] },
+    { to: '/dashboard',          icon: 'bi-graph-up-arrow',        label: 'Dashboard',    perm: ['dashboard', 'read']  },
     { to: '/orders',             icon: 'bi-clipboard2-data',       label: 'Ventas',       perm: ['orders',    'read']  },
     { to: '/products',           icon: 'bi-boxes',                 label: 'Productos',    perm: ['products',  'read']  },
     { to: '/inventory',          icon: 'bi-box-seam',              label: 'Inventario',   perm: ['inventory',  'read']  },

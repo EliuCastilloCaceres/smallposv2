@@ -74,6 +74,18 @@ const upsertReceipt = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// GET /branches/list
+// Listado mínimo para selectores de otros módulos (ej. el filtro de
+// sucursal en Créditos) — sin el permiso branches:read ni la restricción a
+// la sucursal propia de getAll, porque no es una pantalla de
+// administración: solo expone branch_id + name de sucursales activas.
+const getActiveList = async (req, res, next) => {
+  try {
+    const branches = await branchService.getActiveList();
+    res.json({ status: 'success', data: branches });
+  } catch (err) { next(err); }
+};
+
 // GET /branches/me
 // Cualquier usuario autenticado puede consultar SU PROPIA sucursal (incluye
 // receipt) — a diferencia de GET /branches/:id, que exige el permiso
@@ -92,4 +104,4 @@ const getMyBranch = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getAll, getById, getMyBranch, create, update, toggleStatus, upsertReceipt };
+module.exports = { getAll, getById, getMyBranch, getActiveList, create, update, toggleStatus, upsertReceipt };

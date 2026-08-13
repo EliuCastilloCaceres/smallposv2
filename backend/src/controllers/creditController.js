@@ -1,10 +1,15 @@
 // src/controllers/creditController.js
 const creditService = require('../services/creditService');
-const {resolveBranchId} = require('../helpers/helper');
+const { resolveBranchId, resolveUnrestrictedBranchId } = require('../helpers/helper');
 
 const getByBranch = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req)
+    // FIX: listado sin restricción de sucursal propia — cualquier usuario
+    // con permiso credit:read puede ver créditos de cualquier sucursal (o
+    // "todas"), no solo la suya. addPayment más abajo SÍ se queda con el
+    // resolver estricto: el abono necesita saber en qué sucursal se
+    // recibió el efectivo físicamente, eso no cambia.
+    const branchId = resolveUnrestrictedBranchId(req)
     const { status, search, page, limit } = req.query;
     const result = await creditService.getActiveCreditsByBranch({ branchId, status, search, page, limit });
     res.json({ status: 'success', ...result });

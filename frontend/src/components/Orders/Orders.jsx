@@ -1,9 +1,7 @@
 // src/components/Sales/Sales.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../Context/UserContext'
-import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
-import BranchGate from '../Common/BranchGate'
 import OrderDetailModal from './modals/OrderDetailModal'
 import './orders.css'
 
@@ -47,14 +45,16 @@ const SaleTypeBadge = ({ isCredit }) => (
   </span>
 )
 
-// ── Componente interno — ya con selectedBranch garantizado por BranchGate ──
-const SalesInner = () => {
-  const { hasPermission } = useUser()
-  const { selectedBranch, isLoading: branchLoading } = useBranch()
+// ── Componente ──
+const Orders = () => {
+  const { isCentralAdmin, hasPermission } = useUser()
   const canCancel = hasPermission('orders', 'cancel')
 
   const [orders,     setOrders]     = useState([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
+  // FIX: totales por método de pago del rango/sucursal filtrados —
+  // vienen del mismo fetch, no una llamada aparte
+  const [totals,     setTotals]     = useState({ by_method: [], grand_total: 0 })
   const [isLoading,  setIsLoading]  = useState(true)
   const [error,      setError]      = useState(null)
 
@@ -65,34 +65,48 @@ const SalesInner = () => {
   const [search,    setSearch]    = useState('')
   const [page,      setPage]      = useState(1)
 
+  // FIX: filtro de sucursal — solo aplica a admin central; un usuario con
+  // sucursal asignada nunca manda branch_id, el backend la resuelve sola
+  // a partir de su usuario y ve solo lo suyo
+  const [branches,         setBranches]         = useState([])
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+  const isConsolidated = isCentralAdmin && !selectedBranchId
+
   const [detailId, setDetailId] = useState(null)
 
   const searchTimer = useRef(null)
   const searchRef   = useRef('')
 
+  useEffect(() => {
+    if (!isCentralAdmin) return
+    api.get('branches?is_active=true')
+      .then(({ data }) => setBranches(data.data))
+      .catch(() => {})
+  }, [isCentralAdmin])
+
   // ── Fetch ──
   const fetchOrders = useCallback(async (currentPage = 1) => {
-    if (!selectedBranch) return
     setIsLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
         page: currentPage, limit: PAGE_SIZE,
         startDate, endDate,
-        branch_id: selectedBranch.branch_id,
       })
+      if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
       if (status)            params.set('status', status)
       if (searchRef.current) params.set('search', searchRef.current)
 
       const { data } = await api.get(`orders?${params}`)
       setOrders(data.data)
       setPagination(data.pagination)
+      setTotals(data.totals ?? { by_method: [], grand_total: 0 })
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al cargar las ventas')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedBranch, startDate, endDate, status])
+  }, [startDate, endDate, status, isCentralAdmin, selectedBranchId])
 
   useEffect(() => { fetchOrders(page) }, [page, fetchOrders])
 
@@ -116,32 +130,24 @@ const SalesInner = () => {
     setStatus(e.target.value)
     setPage(1)
   }
-  // startDate/endDate/status cambian la identidad de fetchOrders (están en
-  // sus deps) — si además page ya estaba en 1, el useEffect de [page,
-  // fetchOrders] no se re-dispara solo por eso (page no cambió), así que
-  // forzamos el refetch aquí.
+  // startDate/endDate/status/selectedBranchId cambian la identidad de
+  // fetchOrders (están en sus deps) — si además page ya estaba en 1, el
+  // useEffect de [page, fetchOrders] no se re-dispara solo por eso (page
+  // no cambió), así que forzamos el refetch aquí.
   useEffect(() => {
     if (page === 1) fetchOrders(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, status])
+  }, [startDate, endDate, status, selectedBranchId])
+
+  const handleBranchChange = (e) => {
+    setSelectedBranchId(e.target.value)
+    setPage(1)
+  }
 
   const handleCancelled = (orderId) => {
     setOrders(prev => prev.map(o =>
       o.order_id === orderId ? { ...o, status: 'cancelled' } : o
     ))
-  }
-
-  // Caso no-admin: BranchGate pasa directo sin esperar a que /branches/me
-  // resuelva — sin este guard se vería un "0 ventas" fantasma por un
-  // instante antes de que selectedBranch esté listo.
-  if (branchLoading || !selectedBranch) {
-    return (
-      <div className="sls-root">
-        <div className="sls-skeleton">
-          {[...Array(5)].map((_, i) => <div key={i} className="sls-skeleton__row" />)}
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -183,6 +189,16 @@ const SalesInner = () => {
           onChange={handleDateChange(setEndDate)}
         />
 
+        {/* FIX: filtro de sucursal — solo visible para admin central */}
+        {isCentralAdmin && (
+          <select className="sls-select" value={selectedBranchId} onChange={handleBranchChange}>
+            <option value="">Todas las sucursales</option>
+            {branches.map(b => (
+              <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+            ))}
+          </select>
+        )}
+
         <select className="sls-select" value={status} onChange={handleStatusChange}>
           <option value="">Todas</option>
           <option value="completed">Completadas</option>
@@ -220,6 +236,7 @@ const SalesInner = () => {
                   <th>Fecha</th>
                   <th>Cliente</th>
                   <th>Cajero</th>
+                  {isConsolidated && <th>Sucursal</th>}
                   <th>Caja</th>
                   <th>Tipo</th>
                   <th className="num">Total</th>
@@ -239,6 +256,7 @@ const SalesInner = () => {
                       <td className="sls-td-muted">{fmtDateTime(o.created_at)}</td>
                       <td>{o.customer_firstname} {o.customer_lastname}</td>
                       <td className="sls-td-muted">{o.user_firstname} {o.user_lastname}</td>
+                      {isConsolidated && <td className="sls-td-muted">{o.branch_name}</td>}
                       <td className="sls-td-muted">{o.cash_register_name}</td>
                       <td><SaleTypeBadge isCredit={!!o.is_credit} /></td>
                       <td className="num">{money(o.total)}</td>
@@ -276,6 +294,9 @@ const SalesInner = () => {
                   <div className="sls-card__meta">
                     <span className="sls-muted"><i className="bi bi-clock" />{fmtDateTime(o.created_at)}</span>
                     <span className="sls-muted"><i className="bi bi-person-badge" />{o.user_firstname} {o.user_lastname}</span>
+                    {isConsolidated && (
+                      <span className="sls-muted"><i className="bi bi-shop" />{o.branch_name}</span>
+                    )}
                     <SaleTypeBadge isCredit={!!o.is_credit} />
                   </div>
                   <div className="sls-card__total">
@@ -285,6 +306,29 @@ const SalesInner = () => {
                 </button>
               )
             })}
+          </div>
+
+          {/* FIX: totales por método de pago del rango/sucursal filtrados.
+              Un solo bloque compartido entre vista tabla y vista tarjetas
+              (en vez de duplicar markup por breakpoint) — siempre sobre
+              ventas completadas, se recalcula solo al cambiar filtros de
+              fecha/sucursal/búsqueda (no al paginar, ya que agrega todo
+              el rango, no solo la página actual) */}
+          <div className="sls-totals">
+            <div className="sls-totals__methods">
+              {totals.by_method.length === 0 ? (
+                <span className="sls-muted">Sin ventas completadas en este rango</span>
+              ) : totals.by_method.map(m => (
+                <div key={m.payment_method_id} className="sls-totals__row">
+                  <span>{m.name}</span>
+                  <span className="sls-totals__amt">{money(m.total)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="sls-totals__grand">
+              <span>Total general</span>
+              <strong>{money(totals.grand_total)}</strong>
+            </div>
           </div>
 
           {/* ── Paginación ── */}
@@ -318,16 +362,5 @@ const SalesInner = () => {
     </div>
   )
 }
-
-// ── Wrapper — igual patrón que Products/CashRegisters: BranchGate decide si
-// hace falta el picker (admin sin sucursal) o pasa directo ──
-const Orders = () => (
-  <BranchGate
-    title="Selecciona una sucursal"
-    description="Elige la sucursal para consultar sus ventas."
-  >
-    <SalesInner />
-  </BranchGate>
-)
 
 export default Orders

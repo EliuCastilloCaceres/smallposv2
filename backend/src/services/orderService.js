@@ -4,7 +4,7 @@
 //      pasando el orderId real a deductSaleStock. Se elimina el UPDATE posterior
 //      que vinculaba movimientos por user_id (frágil ante concurrencia).
 
-const db           = require('../config/db');
+const db = require('../config/db');
 const stockService = require('./stockService');
 const creditService = require('./creditService');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
@@ -54,7 +54,7 @@ const createOrder = async ({
     await conn.beginTransaction();
 
     // 0. Validar métodos de pago y que la suma cuadre con el total
-    const methods     = await validatePayments(conn, payments);
+    const methods = await validatePayments(conn, payments);
     const methodsById = new Map(methods.map(m => [m.payment_method_id, m]));
 
     const paymentsSum = payments.reduce((sum, p) => sum + Number(p.amount), 0);
@@ -90,7 +90,7 @@ const createOrder = async ({
           subtotal, discount, total, notes, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
       [branchId, cashRegisterId, customerId, userId,
-       subtotal, discount, total, notes ?? null]
+        subtotal, discount, total, notes ?? null]
     );
     const orderId = orderResult.insertId;
 
@@ -156,10 +156,10 @@ const createOrder = async ({
         branchId, userId,
         downPayments: downPayments.map(p => ({
           payment_method_id: p.payment_method_id,
-          amount:             p.amount,
-          cash_received:      p.cash_received,
-          cash_change:        p.cash_change,
-          reference:          p.reference,
+          amount: p.amount,
+          cash_received: p.cash_received,
+          cash_change: p.cash_change,
+          reference: p.reference,
         })),
       });
     }
@@ -205,9 +205,11 @@ const cancelOrder = async ({ orderId, userId, branchId }) => {
     // orders:cancel podía cancelar una orden de OTRA sucursal si adivinaba
     // el orderId. branchId llega ya resuelto por resolveBranchId (fija
     // para no-admin, elegida por el admin vía BranchGate).
-    if (branchId !== undefined && order.branch_id !== branchId) {
+    // Si branchId existe (no es null ni undefined) y es diferente al de la orden, bloquea el acceso
+    if (branchId !== null && branchId !== undefined && orders[0].branch_id !== branchId) {
       throw new ForbiddenError('Esta orden pertenece a otra sucursal');
     }
+
     if (order.status === 'cancelled') throw new ValidationError('La orden ya está cancelada');
 
     const [details] = await conn.query(
@@ -216,9 +218,9 @@ const cancelOrder = async ({ orderId, userId, branchId }) => {
     );
 
     await stockService.restoreSaleStock(conn, {
-      branchId:      order.branch_id,
-      items:         details,
-      referenceId:   orderId,
+      branchId: order.branch_id,
+      items: details,
+      referenceId: orderId,
       referenceType: 'order',
       userId,
     });
@@ -280,25 +282,53 @@ const cancelOrder = async ({ orderId, userId, branchId }) => {
 // ─── Queries de lectura ───────────────────────────────────────────────────────
 
 const getOrderById = async (orderId, branchId) => {
+  // FIX: se agrega el LEFT JOIN a branch_receipts para que la orden traiga
+  // su propia config de recibo — igual patrón que branchService.withReceipt.
+  // Antes el frontend sacaba esto de BranchContext (selectedBranch.receipt),
+  // que podía estar vacío en vista consolidada, o peor: apuntar a OTRA
+  // sucursal si el admin la había seleccionado antes en otra pantalla
+  // (ej. el POS), imprimiendo el ticket con el logo/RFC equivocado.
   const [orders] = await db.query(
     `SELECT o.*,
             c.first_name as customer_firstname, c.last_name as customer_lastname,
             u.first_name as user_firstname,     u.last_name as user_lastname,
-            b.name as branch_name,              cr.name as cash_register_name
+            b.name as branch_name,              cr.name as cash_register_name,
+            br.receipt_id, br.store_name, br.address AS receipt_address, br.rfc,
+            br.phone AS receipt_phone, br.logo_image, br.footer_text,
+            br.is_active AS receipt_is_active
      FROM orders o
      JOIN customers c      ON o.customer_id      = c.customer_id
      JOIN users u          ON o.user_id           = u.user_id
      JOIN branches b       ON o.branch_id         = b.branch_id
      JOIN cash_registers cr ON o.cash_register_id = cr.cash_register_id
+     LEFT JOIN branch_receipts br ON br.branch_id = o.branch_id
      WHERE o.order_id = ?`,
     [orderId]
   );
   if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
   // [FIX] Sin esto, cualquier usuario con permiso orders:read podía ver el
   // detalle de una orden de OTRA sucursal adivinando el orderId.
-  if (branchId !== undefined && orders[0].branch_id !== branchId) {
+  // Si branchId existe (no es null ni undefined) y es diferente al de la orden, bloquea el acceso
+  if (branchId !== null && branchId !== undefined && orders[0].branch_id !== branchId) {
     throw new ForbiddenError('Esta orden pertenece a otra sucursal');
   }
+
+
+  const {
+    receipt_id, store_name, receipt_address, rfc,
+    receipt_phone, logo_image, footer_text, receipt_is_active,
+    ...orderRow
+  } = orders[0];
+
+  const order = {
+    ...orderRow,
+    receipt: receipt_id
+      ? {
+        receipt_id, store_name, address: receipt_address, rfc,
+        phone: receipt_phone, logo_image, footer_text, is_active: receipt_is_active
+      }
+      : null,
+  };
 
   const [details] = await db.query(
     `SELECT od.*, p.name as product_name, p.sku,
@@ -338,20 +368,28 @@ const getOrderById = async (orderId, branchId) => {
     credit.last_payment = lastPayment[0] ?? null;
   }
 
-  return { order: orders[0], details, payments, credit };
+  return { order, details, payments, credit };
 };
 
-const getOrdersByBranchAndDateRange = async ({
-  branchId, startDate, endDate, status = null, search, page = 1, limit = 20,
-}) => {
-  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
-  const safePage  = Math.max(parseInt(page) || 1, 1);
-  const offset    = (safePage - 1) * safeLimit;
+// ─── Filtros compartidos ─────────────────────────────────────────────────────
+// FIX: extraído para reusar entre el listado y el cálculo de totales, que
+// ahora necesitan builds de WHERE ligeramente distintos (los totales
+// siempre son sobre ventas completadas, sin importar el filtro de estado
+// de la tabla — ver comentario en getOrdersByBranchAndDateRange).
+const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, forceCompleted = false }) => {
+  let where = 'WHERE o.created_at BETWEEN ? AND ?';
+  const params = [startDate, `${endDate} 23:59:59`];
 
-  let where = 'WHERE o.branch_id = ? AND o.created_at BETWEEN ? AND ?';
-  const params = [branchId, startDate, `${endDate} 23:59:59`];
+  // FIX: branchId ahora es opcional — null/undefined = todas las
+  // sucursales (vista consolidada para el admin central)
+  if (branchId) {
+    where += ' AND o.branch_id = ?';
+    params.push(branchId);
+  }
 
-  if (status) {
+  if (forceCompleted) {
+    where += " AND o.status = 'completed'";
+  } else if (status) {
     where += ' AND o.status = ?';
     params.push(status);
   }
@@ -363,6 +401,18 @@ const getOrdersByBranchAndDateRange = async ({
     params.push(isNaN(asId) ? 0 : asId, like, like);
   }
 
+  return { where, params };
+};
+
+const getOrdersByBranchAndDateRange = async ({
+  branchId, startDate, endDate, status = null, search, page = 1, limit = 20,
+}) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage = Math.max(parseInt(page) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const { where, params } = buildOrdersFilter({ branchId, startDate, endDate, status, search });
+
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
      FROM orders o
@@ -371,12 +421,16 @@ const getOrdersByBranchAndDateRange = async ({
     params
   );
 
+  // FIX: en vista consolidada (branchId nulo) se agrega el nombre de la
+  // sucursal — sin esto, en esa vista es imposible saber de qué sucursal
+  // es cada orden
   const [rows] = await db.query(
     `SELECT o.order_id, o.subtotal, o.discount, o.total,
             o.status, o.created_at,
             c.first_name as customer_firstname, c.last_name as customer_lastname,
             u.first_name as user_firstname,     u.last_name as user_lastname,
-            cr.name as cash_register_name,
+            cr.name as cash_register_name
+            ${branchId ? '' : ', b.name as branch_name'},
             EXISTS (
               SELECT 1 FROM order_payments op
               JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
@@ -386,20 +440,47 @@ const getOrdersByBranchAndDateRange = async ({
      JOIN customers c       ON o.customer_id      = c.customer_id
      JOIN users u           ON o.user_id           = u.user_id
      JOIN cash_registers cr ON o.cash_register_id  = cr.cash_register_id
+     ${branchId ? '' : 'JOIN branches b ON o.branch_id = b.branch_id'}
      ${where}
      ORDER BY o.created_at DESC
      LIMIT ? OFFSET ?`,
     [...params, safeLimit, offset]
   );
 
+  // FIX: totales por método de pago para el rango/sucursal/búsqueda
+  // filtrados. A propósito IGNORA el dropdown de estado — el filtro de
+  // estado es para revisar/auditar (incluidas canceladas), pero una
+  // "Cancelada" ya no representa dinero cobrado, así que contarla en el
+  // total inflaría la cifra. Los totales siempre son sobre completadas.
+  const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
+    branchId, startDate, endDate, search, forceCompleted: true,
+  });
+
+  const [totalsRows] = await db.query(
+    `SELECT pm.payment_method_id, pm.name, pm.code,
+            COALESCE(SUM(op.amount), 0) AS total
+     FROM order_payments op
+     JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
+     JOIN orders o ON op.order_id = o.order_id
+     JOIN customers c ON o.customer_id = c.customer_id
+     ${totalsWhere}
+     GROUP BY pm.payment_method_id
+     ORDER BY total DESC`,
+    totalsParams
+  );
+
+  const byMethod = totalsRows.map(r => ({ ...r, total: Number(r.total) }));
+  const grandTotal = +byMethod.reduce((sum, r) => sum + r.total, 0).toFixed(2);
+
   return {
     data: rows,
     pagination: {
       total,
-      page:       safePage,
-      limit:      safeLimit,
+      page: safePage,
+      limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit),
     },
+    totals: { by_method: byMethod, grand_total: grandTotal },
   };
 };
 

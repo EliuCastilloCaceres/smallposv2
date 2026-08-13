@@ -135,13 +135,22 @@ const getOverdueCredits = async () => {
   return rows;
 };
 
-const getActiveCreditsByBranch = async ({ branchId, status, search, page = 1, limit = 20 }) => {
+const getActiveCreditsByBranch = async ({ branchId = null, status, search, page = 1, limit = 20 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage  = Math.max(parseInt(page) || 1, 1);
   const offset    = (safePage - 1) * safeLimit;
 
-  const conditions = ['o.branch_id = ?'];
-  const params = [branchId];
+  // FIX: branchId ahora es opcional — null/undefined = todas las
+  // sucursales. Los abonos ya podían registrarse cruzado entre
+  // sucursales (ver nota al inicio del archivo); esto solo alinea el
+  // LISTADO con esa misma flexibilidad.
+  const conditions = [];
+  const params = [];
+
+  if (branchId) {
+    conditions.push('o.branch_id = ?');
+    params.push(branchId);
+  }
 
   // Sin status explícito, mantiene el comportamiento original: solo
   // activos/vencidos (para eso era esta función). Con status, filtra por
@@ -171,13 +180,18 @@ const getActiveCreditsByBranch = async ({ branchId, status, search, page = 1, li
     params
   );
 
+  // FIX: en vista consolidada (branchId nulo) se agrega el nombre de la
+  // sucursal donde se originó cada crédito — sin esto, en esa vista es
+  // imposible saber de cuál es cada uno
   const [rows] = await db.query(
     `SELECT cs.credit_sale_id, cs.total_amount, cs.amount_paid,
             cs.balance, cs.due_date, cs.status, cs.created_at,
             c.first_name, c.last_name, c.phone_number
+            ${branchId ? '' : ', b.name as branch_name'}
      FROM credit_sales cs
      JOIN orders   o ON cs.order_id   = o.order_id
      JOIN customers c ON cs.customer_id = c.customer_id
+     ${branchId ? '' : 'JOIN branches b ON o.branch_id = b.branch_id'}
      ${where}
      ORDER BY cs.due_date ASC
      LIMIT ? OFFSET ?`,

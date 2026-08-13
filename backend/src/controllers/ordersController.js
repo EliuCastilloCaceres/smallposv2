@@ -3,11 +3,14 @@
 // Nada de lógica de negocio ni queries directas aquí.
 
 const orderService = require('../services/orderService');
-const {resolveBranchId} = require('../helpers/helper');
+const { resolveBranchId, resolveOptionalBranchId } = require('../helpers/helper');
 
 const getOrderById = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req);
+    // FIX: opcional — en vista consolidada el admin central no manda
+    // branch_id al abrir el detalle de una venta; orderService.getOrderById
+    // ya trata branchId undefined/null como "sin restricción de sucursal"
+    const branchId = resolveOptionalBranchId(req);
     const data = await orderService.getOrderById(parseInt(req.params.orderId), branchId);
     res.json({ status: 'success', data });
   } catch (err) {
@@ -19,7 +22,9 @@ const getOrdersByDateRange = async (req, res, next) => {
   try {
     const { startDate, endDate, status, search, page, limit } = req.query;
 
-    const branchId = resolveBranchId(req)
+    // FIX: opcional — "todas las sucursales" es un filtro válido para el
+    // admin central, no un error de validación
+    const branchId = resolveOptionalBranchId(req)
 
     const result = await orderService.getOrdersByBranchAndDateRange({
       branchId,

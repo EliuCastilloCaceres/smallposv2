@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../Context/UserContext'
 import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
-import BranchGate from '../Common/BranchGate'
 import CreditDetailModal from './modals/CreditDetailModal'
 import AdjustLimitModal from './modals/AdjustLimitModal'
 import './credits.css'
@@ -20,9 +19,16 @@ const STATUS_META = {
   cancelled: { label: 'Cancelado', cls: 'crd-status--neutral' },
 }
 
-const CreditsInner = () => {
+const Credits = () => {
   const { hasPermission } = useUser()
-  const { selectedBranch, isLoading: branchLoading } = useBranch()
+  // FIX: selectedBranch ya NO se usa para filtrar el listado (eso ahora es
+  // el filtro nuevo, ver selectedBranchId más abajo) — se conserva solo
+  // para lo que sigue siendo un concepto distinto: la sucursal donde el
+  // usuario opera físicamente, necesaria para saber en qué caja aplicar
+  // el efectivo de un abono (útil sobre todo para usuarios con sucursal
+  // asignada; para un admin central puede venir null, y CreditDetailModal
+  // ya lo maneja con su propio selector de sucursal para ese caso)
+  const { selectedBranch } = useBranch()
   const canApprove = hasPermission('credit', 'approve')
 
   const [credits,    setCredits]    = useState([])
@@ -33,6 +39,13 @@ const CreditsInner = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [page,          setPage]          = useState(1)
 
+  // FIX: filtro de sucursal — a diferencia de Ventas, aquí es visible para
+  // TODOS los usuarios (no solo admin central): cualquiera con permiso
+  // puede ver y abonar créditos de una sucursal distinta a la suya.
+  const [branches,         setBranches]         = useState([])
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+  const isConsolidated = !selectedBranchId
+
   const [detailId,    setDetailId]    = useState(null)
   const [adjustOpen,  setAdjustOpen]  = useState(false)
   const [isMarking,   setIsMarking]   = useState(false)
@@ -40,15 +53,24 @@ const CreditsInner = () => {
   const searchTimer = useRef(null)
   const searchRef   = useRef('')
 
+  useEffect(() => {
+    // FIX: /branches/list en vez de /branches — este último exige el
+    // permiso branches:read (administración) y además restringe el
+    // listado a la sucursal propia para usuarios no-admin, justo lo
+    // opuesto de lo que necesita este filtro
+    api.get('branches/list')
+      .then(({ data }) => setBranches(data.data))
+      .catch(() => {})
+  }, [])
+
   const fetchCredits = useCallback(async (currentPage = 1) => {
-    if (!selectedBranch) return
     setIsLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
         page: currentPage, limit: PAGE_SIZE,
-        branch_id: selectedBranch.branch_id,
       })
+      if (selectedBranchId)   params.set('branch_id', selectedBranchId)
       if (statusFilter)       params.set('status', statusFilter)
       if (searchRef.current)  params.set('search', searchRef.current)
 
@@ -60,7 +82,7 @@ const CreditsInner = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedBranch, statusFilter])
+  }, [statusFilter, selectedBranchId])
 
   useEffect(() => { fetchCredits(page) }, [page, fetchCredits])
 
@@ -78,33 +100,28 @@ const CreditsInner = () => {
     setStatusFilter(e.target.value)
     setPage(1)
   }
-  // statusFilter cambia la identidad de fetchCredits — si page ya estaba en
-  // 1, el useEffect de [page, fetchCredits] no se re-dispara solo por eso.
+  const handleBranchChange = (e) => {
+    setSelectedBranchId(e.target.value)
+    setPage(1)
+  }
+  // statusFilter/selectedBranchId cambian la identidad de fetchCredits —
+  // si page ya estaba en 1, el useEffect de [page, fetchCredits] no se
+  // re-dispara solo por eso.
   useEffect(() => {
     if (page === 1) fetchCredits(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
+  }, [statusFilter, selectedBranchId])
 
   const handleMarkOverdue = async () => {
     setIsMarking(true)
     try {
-      await api.patch('credit/overdue/mark')
+      await api.patch('credits/overdue/mark')
       await fetchCredits(page)
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al marcar créditos vencidos')
     } finally {
       setIsMarking(false)
     }
-  }
-
-  if (branchLoading || !selectedBranch) {
-    return (
-      <div className="crd-root">
-        <div className="crd-skeleton">
-          {[...Array(5)].map((_, i) => <div key={i} className="crd-skeleton__row" />)}
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -144,6 +161,15 @@ const CreditsInner = () => {
           <option value="paid">Pagados</option>
           <option value="cancelled">Cancelados</option>
         </select>
+
+        {/* FIX: visible para todos, no solo admin central — cualquiera con
+            permiso puede ver créditos de otra sucursal */}
+        <select className="crd-select" value={selectedBranchId} onChange={handleBranchChange}>
+          <option value="">Todas las sucursales</option>
+          {branches.map(b => (
+            <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -171,6 +197,7 @@ const CreditsInner = () => {
                   <th>#</th>
                   <th>Cliente</th>
                   <th>Creado</th>
+                  {isConsolidated && <th>Sucursal</th>}
                   <th className="num">Total</th>
                   <th className="num">Pagado</th>
                   <th className="num">Saldo</th>
@@ -186,6 +213,7 @@ const CreditsInner = () => {
                       <td className="crd-folio">#{c.credit_sale_id}</td>
                       <td>{c.first_name} {c.last_name}</td>
                       <td className="crd-td-muted">{fmtDate(c.created_at)}</td>
+                      {isConsolidated && <td className="crd-td-muted">{c.branch_name}</td>}
                       <td className="num">{money(c.total_amount)}</td>
                       <td className="num crd-td-muted">{money(c.amount_paid)}</td>
                       <td className="num crd-folio">{money(c.balance)}</td>
@@ -216,6 +244,9 @@ const CreditsInner = () => {
                   <div className="crd-card__meta">
                     <span className="crd-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDate(c.created_at)}</span>
                     <span className="crd-td-muted"><i className="bi bi-calendar-event" />Vence {fmtDate(c.due_date)}</span>
+                    {isConsolidated && (
+                      <span className="crd-td-muted"><i className="bi bi-shop" />{c.branch_name}</span>
+                    )}
                   </div>
                   <div className="crd-card__total">
                     <span className="crd-td-muted">Saldo pendiente</span>
@@ -259,11 +290,5 @@ const CreditsInner = () => {
     </div>
   )
 }
-
-const Credits = () => (
-  <BranchGate title="Selecciona una sucursal" description="Elige la sucursal para consultar sus créditos.">
-    <CreditsInner />
-  </BranchGate>
-)
 
 export default Credits

@@ -1,10 +1,16 @@
 // src/controllers/cashRegistersController.js
 const cashRegService = require('../services/cashRegisterService');
-const { resolveBranchId } = require('../helpers/helper');
+const { resolveBranchId, resolveOptionalBranchId } = require('../helpers/helper');
 
+// FIX: antes usaba resolveBranchId (estricto) — el admin central sin
+// branch_id en la query recibía un 400. Es un endpoint de LECTURA, así que
+// "sin sucursal" es un estado válido: resolveOptionalBranchId devuelve la
+// del usuario si tiene una asignada (igual que antes), o null si no tiene
+// (admin central) y no mandó branch_id — y getAllRegisters(null) trae las
+// cajas de TODAS las sucursales en ese caso.
 const getAll = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req);
+    const branchId = resolveOptionalBranchId(req);
     res.json({ status: 'success', data: await cashRegService.getAllRegisters(branchId) });
   } catch (err) { next(err); }
 };

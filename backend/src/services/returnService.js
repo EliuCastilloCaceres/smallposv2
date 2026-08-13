@@ -119,9 +119,9 @@ const getReturnableItems = async (orderId, branchId) => {
   const [orders] = await db.query(`SELECT * FROM orders WHERE order_id = ?`, [orderId]);
   if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
   const order = orders[0];
-  if (branchId !== undefined && order.branch_id !== branchId) {
-    throw new ForbiddenError('Esta orden pertenece a otra sucursal');
-  }
+  if (branchId !== null && branchId !== undefined && orders.branch_id !== branchId) {
+      throw new ForbiddenError('Esta orden pertenece a otra sucursal');
+    }
   if (order.status === 'cancelled') {
     throw new ValidationError('No se puede devolver una venta cancelada');
   }
@@ -184,7 +184,7 @@ const createReturn = async ({
     const [orders] = await conn.query(`SELECT * FROM orders WHERE order_id = ? FOR UPDATE`, [orderId]);
     if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
     const order = orders[0];
-    if (branchId !== undefined && order.branch_id !== branchId) {
+    if (branchId !== null && branchId !== undefined && order.branch_id !== branchId) {
       throw new ForbiddenError('Esta orden pertenece a otra sucursal');
     }
     if (order.status === 'cancelled') {

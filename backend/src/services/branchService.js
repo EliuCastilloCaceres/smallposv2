@@ -70,6 +70,22 @@ const assertAdmin = (requestingUser) => {
     throw new ForbiddenError('Solo el administrador central puede gestionar sucursales');
 };
 
+// ─── getActiveList ────────────────────────────────────────────────────────────
+// Listado mínimo (branch_id + name) de sucursales activas, SIN el filtro por
+// sucursal propia que aplica getAll ni el permiso branches:read que exige esa
+// ruta — getAll es para la pantalla de ADMINISTRACIÓN de sucursales; esto es
+// solo para poblar selectores/filtros de otros módulos (ej. el filtro de
+// sucursal en Créditos, donde cualquier usuario con permiso credit:* puede
+// necesitar elegir una sucursal que no es la suya). Sin datos sensibles:
+// nada de receipt, dirección, teléfono — mismo nivel de exposición que
+// GET /branches/me.
+const getActiveList = async () => {
+  const [rows] = await db.query(
+    `SELECT branch_id, name FROM branches WHERE is_active = 1 ORDER BY name ASC`
+  );
+  return rows;
+};
+
 // ─── getAll ───────────────────────────────────────────────────────────────────
 
 const getAll = async ({ requestingUser, filters = {} }) => {
@@ -301,4 +317,4 @@ const upsertReceipt = async ({ branchId, data, requestingUser }) => {
   return getById({ branchId, requestingUser: { branch_id: null } });
 };
 
-module.exports = { getAll, getById, create, update, toggleStatus, upsertReceipt };
+module.exports = { getAll, getActiveList, getById, create, update, toggleStatus, upsertReceipt };

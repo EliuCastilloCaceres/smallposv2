@@ -8,7 +8,15 @@ const { NotFoundError, ValidationError, ConflictError } = require('../errors/App
 
 // [FIX] Ahora trae también la última sesión cerrada para mostrar
 //        saldo final, usuario y fechas en la grilla de RegisterGate.
-const getAllRegisters = async (branchId) => {
+// [FIX] branchId ahora es opcional — null = todas las sucursales (admin
+// central sin sucursal asignada, ej. selector de caja en CreditDetailModal).
+// Un usuario con sucursal asignada siempre llega aquí con su branch_id
+// (lo resuelve el controller), así que para él el comportamiento es
+// idéntico al de antes.
+const getAllRegisters = async (branchId = null) => {
+  const where  = branchId !== null ? 'WHERE cr.branch_id = ? AND cr.is_active = 1' : 'WHERE cr.is_active = 1';
+  const params = branchId !== null ? [branchId] : [];
+
   const [rows] = await db.query(
     `SELECT
        cr.cash_register_id,
@@ -48,9 +56,9 @@ const getAllRegisters = async (branchId) => {
      LEFT JOIN cash_register_sessions ls ON ls.session_id = latest.max_session_id
      LEFT JOIN users lu ON ls.user_id = lu.user_id
 
-     WHERE cr.branch_id = ? AND cr.is_active = 1
-     ORDER BY cr.name ASC`,
-    [branchId]
+     ${where}
+     ORDER BY b.name ASC, cr.name ASC`,
+    params
   );
   return rows;
 };

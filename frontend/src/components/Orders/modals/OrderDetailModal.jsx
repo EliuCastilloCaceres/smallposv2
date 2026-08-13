@@ -1,6 +1,5 @@
 // src/components/Sales/modals/OrderDetailModal.jsx
 import { useState, useEffect } from 'react'
-import { useBranch } from '../../../Context/BranchContext'
 import api from '../../../services/api'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 import { openReceiptWindow } from '../../Pos/printReceipt'
@@ -22,8 +21,8 @@ const CREDIT_STATUS_META = {
 }
 
 const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
-  const { selectedBranch } = useBranch()
-
+  // FIX: ya no depende de BranchContext para nada — receipt y branchName
+  // ahora vienen de la orden misma (ver handleReprint)
   const [data,      setData]      = useState(null) // { order, details, payments }
   const [isLoading, setIsLoading] = useState(true)
   const [error,     setError]     = useState(null)
@@ -33,23 +32,34 @@ const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
   const [cancelError,   setCancelError]   = useState(null)
 
   useEffect(() => {
-    if (!selectedBranch) return
+    // FIX: ya no depende de selectedBranch — con el filtro de sucursal
+    // nuevo en Orders.jsx (vista "Todas las sucursales" para admin
+    // central), selectedBranch puede no estar poblado y este guard dejaba
+    // el modal en "Cargando venta..." para siempre. El backend ya resuelve
+    // la sucursal correcta por su cuenta (resolveOptionalBranchId) sin
+    // necesitar que se la mandemos.
     setIsLoading(true)
     setError(null)
-    api.get(`orders/${orderId}?branch_id=${selectedBranch.branch_id}`)
+    api.get(`orders/${orderId}`)
       .then(({ data }) => setData(data.data))
       .catch(err => setError(err.response?.data?.message ?? 'No se pudo cargar la venta'))
       .finally(() => setIsLoading(false))
-  }, [orderId, selectedBranch])
+  }, [orderId])
 
   const handleReprint = () => {
     if (!data) return
     const { order, details, payments } = data
+    // FIX: receipt y branchName vienen de la orden misma (el backend los
+    // agrega vía JOIN a branch_receipts en getOrderById) — ya no de
+    // BranchContext, que podía estar vacío en vista consolidada o, peor,
+    // apuntar a OTRA sucursal si el admin la había seleccionado antes en
+    // otra pantalla (ej. el POS), imprimiendo el ticket con el logo/RFC
+    // equivocado
     openReceiptWindow({
       orderId:      order.order_id,
       date:         order.created_at,
-      receipt:      selectedBranch?.receipt ?? null,
-      branchName:   selectedBranch?.name ?? order.branch_name,
+      receipt:      order.receipt ?? null,
+      branchName:   order.branch_name,
       registerName: order.cash_register_name,
       cashierName:  `${order.user_firstname ?? ''} ${order.user_lastname ?? ''}`.trim(),
       items: details.map(d => ({
@@ -76,7 +86,12 @@ const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
     setIsCancelling(true)
     setCancelError(null)
     try {
-      await api.patch(`orders/${orderId}/cancel?branch_id=${selectedBranch.branch_id}`)
+      // FIX: se usa la sucursal de LA ORDEN (ya cargada en data.order,
+      // orderService.getOrderById devuelve o.* completo), no selectedBranch
+      // — evita el crash cuando selectedBranch es null (vista consolidada)
+      // y además es la sucursal correcta garantizada, sin importar qué
+      // diga el filtro global en ese momento
+      await api.patch(`orders/${orderId}/cancel?branch_id=${data.order.branch_id}`)
       setData(prev => ({ ...prev, order: { ...prev.order, status: 'cancelled' } }))
       onCancelled?.(orderId)
       setConfirmCancel(false)

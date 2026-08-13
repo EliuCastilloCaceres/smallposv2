@@ -8,11 +8,18 @@ const { verifyToken, requirePermission } = require('../middlewares/auth');
 router.use(verifyToken);
 
 // ── Lectura ───────────────────────────────────────────────────────────────────
-// "/me" va ANTES de "/:id" — si no, Express interpretaría "me" como un id.
+// "/me" y "/list" van ANTES de "/:id" — si no, Express interpretaría "me" o
+// "list" como un id.
 // Sin requirePermission: cualquier autenticado puede ver los datos (incluido
 // el receipt) de SU PROPIA sucursal, para imprimir tickets en el POS — no es
 // una acción de administración.
 router.get('/me', branchCtrl.getMyBranch);
+
+// FIX: mismo criterio que /me — solo expone branch_id + name de sucursales
+// activas, sin permiso branches:read, para que cualquier módulo (ej. el
+// filtro de sucursal en Créditos) pueda poblar un selector sin necesitar
+// permiso de ADMINISTRAR sucursales.
+router.get('/list', branchCtrl.getActiveList);
 
 // FIX: antes usaba settings.read/settings.update — permisos huérfanos del
 // catálogo (branches.*) que nunca se consultaban en ninguna ruta. Ahora

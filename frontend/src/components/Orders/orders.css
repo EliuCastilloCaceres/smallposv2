@@ -115,6 +115,48 @@
 }
 .sls-card__total strong { font-size: 15px; color: var(--sls-text); }
 
+/* ── Totales por método de pago ─────────────────────────────── */
+.sls-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--sls-surface);
+  border: 1px solid var(--sls-border);
+  border-radius: var(--sls-radius);
+}
+.sls-totals__methods {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sls-totals__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--sls-muted);
+}
+.sls-totals__amt {
+  font-variant-numeric: tabular-nums;
+  color: var(--sls-text);
+  font-weight: 500;
+}
+.sls-totals__grand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  border-top: 1px dashed var(--sls-border);
+  font-size: 14px;
+  color: var(--sls-text);
+}
+.sls-totals__grand strong {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  color: var(--sls-accent);
+}
+
 /* ── Buttons ─────────────────────────────────────────────── */
 .sls-btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;

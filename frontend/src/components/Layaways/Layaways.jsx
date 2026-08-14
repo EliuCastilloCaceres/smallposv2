@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../Context/UserContext'
 import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
-import BranchGate from '../Common/BranchGate'
 import LayawayDetailModal from './modals/LayawayDetailModal'
 import './layaways.css'
 
@@ -18,9 +17,13 @@ const STATUS_META = {
   cancelled: { label: 'Cancelado',  cls: 'lwy-status--off' },
 }
 
-const LayawaysInner = () => {
+const Layaways = () => {
   const { hasPermission } = useUser()
-  const { selectedBranch, isLoading: branchLoading } = useBranch()
+  // FIX: selectedBranch ya NO filtra el listado (eso ahora es el filtro
+  // nuevo, ver selectedBranchId) — se conserva solo para la sucursal
+  // "operativa" del usuario, que sigue necesitando LayawayDetailModal
+  // para la caja del abono en efectivo
+  const { selectedBranch } = useBranch()
   const canManage = hasPermission('layaway', 'create')
 
   const [layaways,   setLayaways]   = useState([])
@@ -31,22 +34,34 @@ const LayawaysInner = () => {
   const [statusFilter,  setStatusFilter]  = useState('active')
   const [page,           setPage]           = useState(1)
 
+  // FIX: filtro de sucursal — visible para TODOS los usuarios (no solo
+  // admin central), igual que en Créditos: cualquiera con permiso puede
+  // ver y abonar apartados de una sucursal distinta a la suya.
+  const [branches,         setBranches]         = useState([])
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+  const isConsolidated = !selectedBranchId
+
   const [detailId, setDetailId] = useState(null)
 
   const searchTimer = useRef(null)
   const searchRef   = useRef('')
 
+  useEffect(() => {
+    api.get('branches/list')
+      .then(({ data }) => setBranches(data.data))
+      .catch(() => {})
+  }, [])
+
   const fetchLayaways = useCallback(async (currentPage = 1) => {
-    if (!selectedBranch) return
     setIsLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
         page: currentPage, limit: PAGE_SIZE,
-        branch_id: selectedBranch.branch_id,
       })
-      if (statusFilter)      params.set('status', statusFilter)
-      if (searchRef.current) params.set('search', searchRef.current)
+      if (selectedBranchId)   params.set('branch_id', selectedBranchId)
+      if (statusFilter)       params.set('status', statusFilter)
+      if (searchRef.current)  params.set('search', searchRef.current)
 
       const { data } = await api.get(`layaways?${params}`)
       setLayaways(data.data)
@@ -56,7 +71,7 @@ const LayawaysInner = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedBranch, statusFilter])
+  }, [statusFilter, selectedBranchId])
 
   useEffect(() => { fetchLayaways(page) }, [page, fetchLayaways])
 
@@ -74,20 +89,14 @@ const LayawaysInner = () => {
     setStatusFilter(e.target.value)
     setPage(1)
   }
+  const handleBranchChange = (e) => {
+    setSelectedBranchId(e.target.value)
+    setPage(1)
+  }
   useEffect(() => {
     if (page === 1) fetchLayaways(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter])
-
-  if (branchLoading || !selectedBranch) {
-    return (
-      <div className="lwy-root">
-        <div className="lwy-skeleton">
-          {[...Array(5)].map((_, i) => <div key={i} className="lwy-skeleton__row" />)}
-        </div>
-      </div>
-    )
-  }
+  }, [statusFilter, selectedBranchId])
 
   return (
     <div className="lwy-root">
@@ -114,6 +123,14 @@ const LayawaysInner = () => {
           <option value="active">Activos</option>
           <option value="completed">Completados</option>
           <option value="cancelled">Cancelados</option>
+        </select>
+
+        {/* FIX: visible para todos, no solo admin central */}
+        <select className="lwy-select" value={selectedBranchId} onChange={handleBranchChange}>
+          <option value="">Todas las sucursales</option>
+          {branches.map(b => (
+            <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+          ))}
         </select>
       </div>
 
@@ -142,6 +159,7 @@ const LayawaysInner = () => {
                   <th>#</th>
                   <th>Cliente</th>
                   <th>Creado</th>
+                  {isConsolidated && <th>Sucursal</th>}
                   <th className="num">Total</th>
                   <th className="num">Pagado</th>
                   <th className="num">Saldo</th>
@@ -157,6 +175,7 @@ const LayawaysInner = () => {
                       <td className="lwy-folio">#{l.layaway_id}</td>
                       <td>{l.first_name} {l.last_name}</td>
                       <td className="lwy-td-muted">{fmtDate(l.created_at)}</td>
+                      {isConsolidated && <td className="lwy-td-muted">{l.branch_name}</td>}
                       <td className="num">{money(l.total_amount)}</td>
                       <td className="num lwy-td-muted">{money(l.amount_paid)}</td>
                       <td className="num lwy-folio">{money(l.balance)}</td>
@@ -187,6 +206,9 @@ const LayawaysInner = () => {
                   <div className="lwy-card__meta">
                     <span className="lwy-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDate(l.created_at)}</span>
                     <span className="lwy-td-muted"><i className="bi bi-calendar-event" />Entrega {fmtDate(l.due_date)}</span>
+                    {isConsolidated && (
+                      <span className="lwy-td-muted"><i className="bi bi-shop" />{l.branch_name}</span>
+                    )}
                   </div>
                   <div className="lwy-card__total">
                     <span className="lwy-td-muted">Saldo pendiente</span>
@@ -227,11 +249,5 @@ const LayawaysInner = () => {
     </div>
   )
 }
-
-const Layaways = () => (
-  <BranchGate title="Selecciona una sucursal" description="Elige la sucursal para consultar sus apartados.">
-    <LayawaysInner />
-  </BranchGate>
-)
 
 export default Layaways

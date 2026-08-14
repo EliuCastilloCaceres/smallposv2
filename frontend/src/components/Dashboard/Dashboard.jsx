@@ -903,7 +903,7 @@ const Dashboard = () => {
         />
         <StatCard
           icon="bi-cash-stack"
-          label="Ingreso bruto"
+          label="Total Vendido"
           value={isLoading ? '—' : fmt(kpis.income)}
           comparisonValue={isLoading ? null : comparison.income}
           comparisonLabel={isLoading ? null : comparisonLabel}

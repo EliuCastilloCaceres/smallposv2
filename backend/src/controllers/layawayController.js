@@ -1,10 +1,15 @@
 // src/controllers/layawayController.js
 const layawayService = require('../services/layawayService');
-const {resolveBranchId} = require('../helpers/helper');
+const { resolveBranchId, resolveUnrestrictedBranchId } = require('../helpers/helper');
 
 const getByBranch = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req);
+    // FIX: listado sin restricción de sucursal propia — cualquier usuario
+    // con permiso layaway:read puede ver apartados de cualquier sucursal
+    // (o "todas"), no solo la suya. addPayment se queda con el resolver
+    // estricto: el abono necesita saber en qué sucursal se recibió el
+    // efectivo físicamente, eso no cambia.
+    const branchId = resolveUnrestrictedBranchId(req);
     const { status, search, page, limit } = req.query;
     const result = await layawayService.getLayawaysByBranch({ branchId, status, search, page, limit });
     res.json({ status: 'success', ...result });

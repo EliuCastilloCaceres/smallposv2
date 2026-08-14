@@ -108,14 +108,22 @@ const getLayawayById = async (layawayId) => {
   return { layaway: rows[0], details, payments: paymentsWithDetails };
 };
 
-const getLayawaysByBranch = async ({ branchId, status = null, search, page = 1, limit = 20 }) => {
+const getLayawaysByBranch = async ({ branchId = null, status = null, search, page = 1, limit = 20 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage  = Math.max(parseInt(page) || 1, 1);
   const offset    = (safePage - 1) * safeLimit;
 
-  const conditions = ['l.branch_id = ?'];
-  const params = [branchId];
+  // FIX: branchId ahora es opcional — null/undefined = todas las
+  // sucursales. Los abonos ya podían registrarse cruzado entre
+  // sucursales (ver nota al inicio del archivo); esto alinea el LISTADO
+  // con esa misma flexibilidad.
+  const conditions = [];
+  const params = [];
 
+  if (branchId) {
+    conditions.push('l.branch_id = ?');
+    params.push(branchId);
+  }
   if (status) {
     conditions.push('l.status = ?');
     params.push(status);
@@ -127,7 +135,7 @@ const getLayawaysByBranch = async ({ branchId, status = null, search, page = 1, 
     params.push(isNaN(asId) ? 0 : asId, like, like, like);
   }
 
-  const where = `WHERE ${conditions.join(' AND ')}`;
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
@@ -137,12 +145,16 @@ const getLayawaysByBranch = async ({ branchId, status = null, search, page = 1, 
     params
   );
 
+  // FIX: en vista consolidada (branchId nulo) se agrega el nombre de la
+  // sucursal donde se originó cada apartado
   const [rows] = await db.query(
     `SELECT l.layaway_id, l.total_amount, l.amount_paid, l.balance,
             l.due_date, l.status, l.created_at,
             c.first_name, c.last_name, c.phone_number
+            ${branchId ? '' : ', b.name as branch_name'}
      FROM layaways l
      JOIN customers c ON l.customer_id = c.customer_id
+     ${branchId ? '' : 'JOIN branches b ON l.branch_id = b.branch_id'}
      ${where}
      ORDER BY l.layaway_id DESC
      LIMIT ? OFFSET ?`,

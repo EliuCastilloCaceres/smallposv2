@@ -404,6 +404,39 @@ const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, force
   return { where, params };
 };
 
+// FIX: totales por método de pago para el rango/sucursal/búsqueda
+// filtrados. A propósito IGNORA el dropdown de estado — el filtro de
+// estado es para revisar/auditar (incluidas canceladas), pero una
+// "Cancelada" ya no representa dinero cobrado, así que contarla en el
+// total inflaría la cifra. Los totales siempre son sobre completadas.
+// Extraído como helper porque tanto el listado de ventas como la nueva
+// pestaña de productos vendidos necesitan el mismo desglose para el
+// mismo rango/sucursal (los totales de caja no cambian según qué
+// producto o categoría se esté mirando en la tabla).
+const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search }) => {
+  const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
+    branchId, startDate, endDate, search, forceCompleted: true,
+  });
+
+  const [totalsRows] = await db.query(
+    `SELECT pm.payment_method_id, pm.name, pm.code,
+            COALESCE(SUM(op.amount), 0) AS total
+     FROM order_payments op
+     JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
+     JOIN orders o ON op.order_id = o.order_id
+     JOIN customers c ON o.customer_id = c.customer_id
+     ${totalsWhere}
+     GROUP BY pm.payment_method_id
+     ORDER BY total DESC`,
+    totalsParams
+  );
+
+  const byMethod = totalsRows.map(r => ({ ...r, total: Number(r.total) }));
+  const grandTotal = +byMethod.reduce((sum, r) => sum + r.total, 0).toFixed(2);
+
+  return { by_method: byMethod, grand_total: grandTotal };
+};
+
 const getOrdersByBranchAndDateRange = async ({
   branchId, startDate, endDate, status = null, search, page = 1, limit = 20,
 }) => {
@@ -447,30 +480,7 @@ const getOrdersByBranchAndDateRange = async ({
     [...params, safeLimit, offset]
   );
 
-  // FIX: totales por método de pago para el rango/sucursal/búsqueda
-  // filtrados. A propósito IGNORA el dropdown de estado — el filtro de
-  // estado es para revisar/auditar (incluidas canceladas), pero una
-  // "Cancelada" ya no representa dinero cobrado, así que contarla en el
-  // total inflaría la cifra. Los totales siempre son sobre completadas.
-  const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
-    branchId, startDate, endDate, search, forceCompleted: true,
-  });
-
-  const [totalsRows] = await db.query(
-    `SELECT pm.payment_method_id, pm.name, pm.code,
-            COALESCE(SUM(op.amount), 0) AS total
-     FROM order_payments op
-     JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
-     JOIN orders o ON op.order_id = o.order_id
-     JOIN customers c ON o.customer_id = c.customer_id
-     ${totalsWhere}
-     GROUP BY pm.payment_method_id
-     ORDER BY total DESC`,
-    totalsParams
-  );
-
-  const byMethod = totalsRows.map(r => ({ ...r, total: Number(r.total) }));
-  const grandTotal = +byMethod.reduce((sum, r) => sum + r.total, 0).toFixed(2);
+  const totals = await getPaymentMethodTotals({ branchId, startDate, endDate, search });
 
   return {
     data: rows,
@@ -480,8 +490,117 @@ const getOrdersByBranchAndDateRange = async ({
       limit: safeLimit,
       totalPages: Math.ceil(total / safeLimit),
     },
-    totals: { by_method: byMethod, grand_total: grandTotal },
+    totals,
   };
 };
 
-module.exports = { createOrder, cancelOrder, getOrderById, getOrdersByBranchAndDateRange };
+// ─── Productos vendidos (agregado) ─────────────────────────────────────────
+// A diferencia del listado de ventas (que filtra ÓRDENES), esto agrega por
+// PRODUCTO: cuánto se vendió de cada uno en el rango. Un producto de
+// "Alimentos" filtrado aquí muestra su propia cantidad/total vendidos, no
+// la orden completa que lo contiene (eso es lo que el filtro de categoría
+// en el listado de ventas hacía mal).
+
+const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, providerId, search }) => {
+  let where = "WHERE o.status = 'completed' AND o.created_at BETWEEN ? AND ?";
+  const params = [startDate, `${endDate} 23:59:59`];
+
+  if (branchId) {
+    where += ' AND o.branch_id = ?';
+    params.push(branchId);
+  }
+  if (categoryId) {
+    where += ' AND p.category_id = ?';
+    params.push(categoryId);
+  }
+  if (providerId) {
+    where += ' AND p.provider_id = ?';
+    params.push(providerId);
+  }
+  if (search) {
+    where += ' AND (p.name LIKE ? OR p.sku LIKE ?)';
+    const like = `%${search}%`;
+    params.push(like, like);
+  }
+
+  return { where, params };
+};
+
+const getSoldProducts = async ({
+  branchId, startDate, endDate, categoryId = null, providerId = null, search,
+  page = 1, limit = 20,
+}) => {
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage = Math.max(parseInt(page) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const { where, params } = buildSoldProductsFilter({ branchId, startDate, endDate, categoryId, providerId, search });
+
+  // Conteo de productos DISTINTOS que califican (para paginar la tabla
+  // agrupada) — no es lo mismo que sumar renglones de order_details.
+  const [[{ total }]] = await db.query(
+    `SELECT COUNT(*) AS total FROM (
+       SELECT p.product_id
+       FROM order_details od
+       JOIN orders o    ON o.order_id     = od.order_id
+       JOIN products p  ON p.product_id   = od.product_id
+       ${where}
+       GROUP BY p.product_id
+     ) t`,
+    params
+  );
+
+  // total_sold = subtotal (unit_price * quantity) neto del descuento del
+  // renglón — no es el total de la orden, es lo que ese producto aportó.
+  const [rows] = await db.query(
+    `SELECT p.product_id, p.name, p.sku, p.uom,
+            c.category_id, c.name AS category_name, c.color AS category_color,
+            pr.provider_id, pr.name AS provider_name,
+            SUM(od.quantity) AS quantity_sold,
+            SUM(od.subtotal - od.discount) AS total_sold
+     FROM order_details od
+     JOIN orders o          ON o.order_id     = od.order_id
+     JOIN products p        ON p.product_id   = od.product_id
+     LEFT JOIN categories c ON c.category_id  = p.category_id
+     LEFT JOIN providers pr ON pr.provider_id = p.provider_id
+     ${where}
+     GROUP BY p.product_id
+     ORDER BY quantity_sold DESC
+     LIMIT ? OFFSET ?`,
+    [...params, safeLimit, offset]
+  );
+
+  const data = rows.map(r => ({
+    ...r,
+    quantity_sold: Number(r.quantity_sold),
+    total_sold: Number(r.total_sold),
+  }));
+
+  // Total de artículos vendidos y monto total — sobre TODO lo que
+  // califica con los filtros (categoría/proveedor/búsqueda incluidos),
+  // no solo la página actual. A diferencia de los totales por método de
+  // pago (que se quitaron de esta pestaña), esto SÍ tiene sentido
+  // descompuesto: es la suma de lo que aportó cada producto filtrado,
+  // no un corte de caja.
+  const [[{ total_items, total_amount }]] = await db.query(
+    `SELECT COALESCE(SUM(od.quantity), 0) AS total_items,
+            COALESCE(SUM(od.subtotal - od.discount), 0) AS total_amount
+     FROM order_details od
+     JOIN orders o   ON o.order_id   = od.order_id
+     JOIN products p ON p.product_id = od.product_id
+     ${where}`,
+    params
+  );
+
+  return {
+    data,
+    pagination: {
+      total,
+      page: safePage,
+      limit: safeLimit,
+      totalPages: Math.ceil(total / safeLimit),
+    },
+    totals: { total_items: Number(total_items), total_amount: Number(total_amount) },
+  };
+};
+module.exports = { createOrder, cancelOrder, getOrderById, getOrdersByBranchAndDateRange, getSoldProducts };

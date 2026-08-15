@@ -38,6 +38,29 @@ const getOrdersByDateRange = async (req, res, next) => {
   }
 };
 
+// GET /orders/sold-products
+// Agregado de productos vendidos (no órdenes) — para la pestaña
+// "Productos vendidos" del módulo de Ventas.
+const getSoldProducts = async (req, res, next) => {
+  try {
+    const { startDate, endDate, search, category_id, provider_id, page, limit } = req.query;
+
+    const branchId    = resolveOptionalBranchId(req);
+    const categoryId  = category_id  ? parseInt(category_id)  : null;
+    const providerId  = provider_id  ? parseInt(provider_id)  : null;
+
+    const result = await orderService.getSoldProducts({
+      branchId,
+      startDate: startDate ?? '1970-01-01',
+      endDate:   endDate   ?? new Date().toISOString().split('T')[0],
+      categoryId, providerId, search, page, limit,
+    });
+    res.json({ status: 'success', ...result });
+  } catch (err) {
+    next(err);
+  }
+};
+
 const createOrder = async (req, res, next) => {
   try {
     const {
@@ -82,4 +105,4 @@ const cancelOrder = async (req, res, next) => {
   }
 };
 
-module.exports = { getOrderById, getOrdersByDateRange, createOrder, cancelOrder };
+module.exports = { getOrderById, getOrdersByDateRange, getSoldProducts, createOrder, cancelOrder };

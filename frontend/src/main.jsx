@@ -8,6 +8,7 @@ import {BranchContextProvider} from './context/BranchContext.jsx'
 import App from './components/App.jsx'
 
 import Login              from './components/Login/Login.jsx'
+import Home               from './components/Home/Home.jsx'
 import Dashboard          from './components/Dashboard/Dashboard.jsx'
 import Users              from './components/Users/Users'
 import Settings           from './components/Settings/Settings.jsx'
@@ -31,6 +32,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <BrowserRouter>
         <Routes>
           <Route path='/' element={<App />}>
+            <Route index                                  element={<Home />} />
             <Route path='pos'                             element={<Pos/>}/>
             <Route path='dashboard'                       element={<Dashboard />} />
             <Route path='orders'                       element={<Orders />} />

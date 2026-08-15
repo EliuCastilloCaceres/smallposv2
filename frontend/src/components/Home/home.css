@@ -1,0 +1,65 @@
+/* src/components/Home/home.css */
+
+.home-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  min-height: calc(100dvh - 160px);
+  padding: 24px;
+}
+
+.home-greeting__time {
+  font-size: 56px;
+  font-weight: 700;
+  color: var(--app-sidebar-bg, #0f172a);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+  line-height: 1;
+}
+
+.home-greeting__date {
+  font-size: 14px;
+  color: #64748b;
+  text-transform: capitalize;
+  margin-bottom: 18px;
+}
+
+.home-greeting__title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--app-sidebar-bg, #0f172a);
+  margin: 0;
+}
+
+.home-greeting__branch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.home-greeting__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+  padding: 0 28px;
+  height: 52px;
+  border: none;
+  border-radius: var(--app-radius, 10px);
+  background: var(--app-accent, #4f8ef7);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter .15s, transform .15s;
+}
+.home-greeting__btn i { font-size: 19px; }
+.home-greeting__btn:hover { filter: brightness(.94); }
+.home-greeting__btn:active { transform: scale(.98); }

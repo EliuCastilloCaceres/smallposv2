@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../Context/UserContext'
 import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
-import BranchGate from '../Common/BranchGate'
 import ReturnDetailModal from './modals/ReturnDetailModal'
 import CreateReturnModal from './modals/CreateReturnModal'
 import './returns.css'
@@ -32,9 +31,16 @@ const STATUS_META = {
   rejected:  { label: 'Rechazada',  cls: 'rtn-status--off' },
 }
 
-const ReturnsInner = () => {
+const Returns = () => {
   const { hasPermission } = useUser()
-  const { selectedBranch, isLoading: branchLoading } = useBranch()
+  // FIX: selectedBranch ya NO se usa para filtrar el listado (eso ahora es
+  // el filtro nuevo, ver selectedBranchId más abajo) — se conserva solo
+  // para lo que sigue siendo un concepto distinto: la sucursal donde el
+  // usuario opera físicamente, necesaria para saber en qué caja aplicar
+  // el efectivo de un reembolso (mismo patrón que Credits.jsx). Puede venir
+  // null para admin central; CreateReturnModal lo maneja con su propio
+  // selector de sucursal para ese caso.
+  const { selectedBranch } = useBranch()
   const canCreate = hasPermission('returns', 'create')
 
   const [returns,    setReturns]    = useState([])
@@ -48,24 +54,36 @@ const ReturnsInner = () => {
   const [search,    setSearch]    = useState('')
   const [page,      setPage]      = useState(1)
 
+  // FIX: filtro de sucursal — visible para todos los usuarios (no solo
+  // admin central), igual que en Credits: cualquiera con permiso puede
+  // consultar devoluciones de una sucursal distinta a la suya.
+  const [branches,         setBranches]         = useState([])
+  const [selectedBranchId, setSelectedBranchId] = useState('')
+  const isConsolidated = !selectedBranchId
+
   const [detailId,    setDetailId]    = useState(null)
   const [createOpen,  setCreateOpen]  = useState(false)
 
   const searchTimer = useRef(null)
   const searchRef   = useRef('')
 
+  useEffect(() => {
+    api.get('branches/list')
+      .then(({ data }) => setBranches(data.data))
+      .catch(() => {})
+  }, [])
+
   const fetchReturns = useCallback(async (currentPage = 1) => {
-    if (!selectedBranch) return
     setIsLoading(true)
     setError(null)
     try {
       const params = new URLSearchParams({
         page: currentPage, limit: PAGE_SIZE,
         startDate, endDate,
-        branch_id: selectedBranch.branch_id,
       })
-      if (status)             params.set('status', status)
-      if (searchRef.current)  params.set('search', searchRef.current)
+      if (selectedBranchId)   params.set('branch_id', selectedBranchId)
+      if (status)              params.set('status', status)
+      if (searchRef.current)   params.set('search', searchRef.current)
 
       const { data } = await api.get(`returns?${params}`)
       setReturns(data.data)
@@ -75,7 +93,7 @@ const ReturnsInner = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedBranch, startDate, endDate, status])
+  }, [startDate, endDate, status, selectedBranchId])
 
   useEffect(() => { fetchReturns(page) }, [page, fetchReturns])
 
@@ -97,25 +115,19 @@ const ReturnsInner = () => {
     setStatus(e.target.value)
     setPage(1)
   }
+  const handleBranchChange = (e) => {
+    setSelectedBranchId(e.target.value)
+    setPage(1)
+  }
   useEffect(() => {
     if (page === 1) fetchReturns(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, status])
+  }, [startDate, endDate, status, selectedBranchId])
 
   const handleCreated = () => {
     setCreateOpen(false)
     setPage(1)
     fetchReturns(1)
-  }
-
-  if (branchLoading || !selectedBranch) {
-    return (
-      <div className="rtn-root">
-        <div className="rtn-skeleton">
-          {[...Array(5)].map((_, i) => <div key={i} className="rtn-skeleton__row" />)}
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -166,6 +178,15 @@ const ReturnsInner = () => {
           <option value="pending">Pendientes</option>
           <option value="rejected">Rechazadas</option>
         </select>
+
+        {/* FIX: visible para todos, no solo admin central — cualquiera con
+            permiso puede consultar devoluciones de otra sucursal */}
+        <select className="rtn-select" value={selectedBranchId} onChange={handleBranchChange}>
+          <option value="">Todas las sucursales</option>
+          {branches.map(b => (
+            <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+          ))}
+        </select>
       </div>
 
       {error && (
@@ -194,6 +215,7 @@ const ReturnsInner = () => {
                   <th>Fecha</th>
                   <th>Cliente</th>
                   <th>Venta</th>
+                  {isConsolidated && <th>Sucursal</th>}
                   <th>Cajero</th>
                   <th>Reembolso</th>
                   <th className="num">Monto</th>
@@ -209,6 +231,7 @@ const ReturnsInner = () => {
                       <td className="rtn-td-muted">{fmtDateTime(r.created_at)}</td>
                       <td>{r.first_name} {r.last_name}</td>
                       <td className="rtn-td-muted">#{r.order_id}</td>
+                      {isConsolidated && <td className="rtn-td-muted">{r.branch_name}</td>}
                       <td className="rtn-td-muted">{r.user_firstname} {r.user_lastname}</td>
                       <td className="rtn-td-muted">{REFUND_METHOD_LABEL[r.refund_method] ?? (r.refund_method ?? '—')}</td>
                       <td className="num">{money(r.amount_refunded)}</td>
@@ -238,6 +261,9 @@ const ReturnsInner = () => {
                   <div className="rtn-card__meta">
                     <span className="rtn-td-muted"><i className="bi bi-calendar-plus" />{fmtDateTime(r.created_at)}</span>
                     <span className="rtn-td-muted"><i className="bi bi-receipt" />Venta #{r.order_id}</span>
+                    {isConsolidated && (
+                      <span className="rtn-td-muted"><i className="bi bi-shop" />{r.branch_name}</span>
+                    )}
                   </div>
                   <div className="rtn-card__total">
                     <span className="rtn-td-muted">{REFUND_METHOD_LABEL[r.refund_method] ?? (r.refund_method ?? 'Sin reembolso')}</span>
@@ -274,6 +300,8 @@ const ReturnsInner = () => {
       )}
       {createOpen && (
         <CreateReturnModal
+          branch={selectedBranch}
+          branches={branches}
           onClose={() => setCreateOpen(false)}
           onCreated={handleCreated}
         />
@@ -281,11 +309,5 @@ const ReturnsInner = () => {
     </div>
   )
 }
-
-const Returns = () => (
-  <BranchGate title="Selecciona una sucursal" description="Elige la sucursal para consultar sus devoluciones.">
-    <ReturnsInner />
-  </BranchGate>
-)
 
 export default Returns

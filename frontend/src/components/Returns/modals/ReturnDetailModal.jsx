@@ -1,6 +1,5 @@
 // src/components/Returns/modals/ReturnDetailModal.jsx
 import { useState, useEffect } from 'react'
-import { useBranch } from '../../../Context/BranchContext'
 import api from '../../../services/api'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -18,21 +17,18 @@ const STATUS_META = {
 const REFUND_METHOD_LABEL = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia' }
 
 const ReturnDetailModal = ({ returnId, onClose }) => {
-  const { selectedBranch } = useBranch()
-
   const [data,      setData]      = useState(null) // { return, details }
   const [isLoading, setIsLoading] = useState(true)
   const [error,     setError]     = useState(null)
 
   useEffect(() => {
-    if (!selectedBranch) return
     setIsLoading(true)
     setError(null)
-    api.get(`returns/${returnId}?branch_id=${selectedBranch.branch_id}`)
+    api.get(`returns/${returnId}`)
       .then(({ data }) => setData(data.data))
       .catch(err => setError(err.response?.data?.message ?? 'No se pudo cargar la devolución'))
       .finally(() => setIsLoading(false))
-  }, [returnId, selectedBranch])
+  }, [returnId])
 
   const ret = data?.return
   const st  = ret ? (STATUS_META[ret.status] ?? { label: ret.status, cls: '' }) : null

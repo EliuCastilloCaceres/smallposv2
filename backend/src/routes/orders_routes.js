@@ -8,6 +8,7 @@ const { verifyToken, requirePermission } = require('../middlewares/auth');
 router.use(verifyToken);
 
 router.get('/',                           requirePermission('orders', 'read'),   ordersCtrl.getOrdersByDateRange);
+router.get('/sold-products',              requirePermission('orders', 'read'),   ordersCtrl.getSoldProducts);
 router.get('/:orderId',                   requirePermission('orders', 'read'),   ordersCtrl.getOrderById);
 router.post('/',                          requirePermission('pos',    'use'),     ordersCtrl.createOrder);
 router.patch('/:orderId/cancel',          requirePermission('orders', 'cancel'), ordersCtrl.cancelOrder);

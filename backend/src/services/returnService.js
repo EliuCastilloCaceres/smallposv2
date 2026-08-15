@@ -28,8 +28,16 @@ const getReturnsByBranch = async ({
   const safePage  = Math.max(parseInt(page) || 1, 1);
   const offset    = (safePage - 1) * safeLimit;
 
-  const conditions = ['r.branch_id = ?'];
-  const params = [branchId];
+  const conditions = [];
+  const params = [];
+
+  // branchId es null en vista consolidada (sin filtro) — a diferencia de
+  // getReturnById, aquí no hace falta distinguir null de undefined porque
+  // el controller siempre resuelve con resolveUnrestrictedBranchId.
+  if (branchId) {
+    conditions.push('r.branch_id = ?');
+    params.push(branchId);
+  }
 
   if (startDate && endDate) {
     conditions.push('r.created_at BETWEEN ? AND ?');
@@ -46,7 +54,7 @@ const getReturnsByBranch = async ({
     params.push(isNaN(asId) ? 0 : asId, isNaN(asId) ? 0 : asId, like, like);
   }
 
-  const where = `WHERE ${conditions.join(' AND ')}`;
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
@@ -57,13 +65,15 @@ const getReturnsByBranch = async ({
   );
 
   const [rows] = await db.query(
-    `SELECT r.return_id, r.order_id, r.amount_refunded, r.refund_method,
+    `SELECT r.return_id, r.order_id, r.branch_id, r.amount_refunded, r.refund_method,
             r.status, r.reason, r.created_at,
+            b.name as branch_name,
             c.first_name, c.last_name,
             u.first_name as user_firstname, u.last_name as user_lastname
      FROM returns r
      JOIN customers c ON r.customer_id = c.customer_id
      JOIN users u     ON r.user_id     = u.user_id
+     JOIN branches b  ON r.branch_id   = b.branch_id
      ${where}
      ORDER BY r.created_at DESC
      LIMIT ? OFFSET ?`,
@@ -95,7 +105,9 @@ const getReturnById = async (returnId, branchId) => {
     [returnId]
   );
   if (rows.length === 0) throw new NotFoundError('Devolución no encontrada');
-  if (branchId !== undefined && rows[0].branch_id !== branchId) {
+  // branchId llega null en vista consolidada (sin filtro) — al igual que
+  // undefined, significa "sin restricción de sucursal" acá.
+  if (branchId !== undefined && branchId !== null && rows[0].branch_id !== branchId) {
     throw new ForbiddenError('Esta devolución pertenece a otra sucursal');
   }
 
@@ -119,7 +131,7 @@ const getReturnableItems = async (orderId, branchId) => {
   const [orders] = await db.query(`SELECT * FROM orders WHERE order_id = ?`, [orderId]);
   if (orders.length === 0) throw new NotFoundError('Orden no encontrada');
   const order = orders[0];
-  if (branchId !== null && branchId !== undefined && orders.branch_id !== branchId) {
+  if (branchId !== null && branchId !== undefined && order.branch_id !== branchId) {
       throw new ForbiddenError('Esta orden pertenece a otra sucursal');
     }
   if (order.status === 'cancelled') {

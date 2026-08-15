@@ -8,17 +8,24 @@
 // caja, no entra, así que solo se pide el monto a descontar.
 
 import { useState, useEffect } from 'react'
-import { useUser }   from '../../../Context/UserContext'
-import { useBranch } from '../../../Context/BranchContext'
+import { useUser } from '../../../Context/UserContext'
 import api from '../../../services/api'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const itemLabel = (d) => d.variant_label ? `${d.product_name} - ${d.variant_label}` : d.product_name
 const keyOf = (d) => `${d.product_id}-${d.variant_id ?? 0}`
 
-const CreateReturnModal = ({ onClose, onCreated }) => {
-  const { user }           = useUser()
-  const { selectedBranch } = useBranch()
+// `branch` es la sucursal física del usuario (BranchContext) — puede venir
+// null para admin central, ya que Returns.jsx ya no fuerza su selección
+// con BranchGate. En ese caso el modal pide elegir una sucursal aquí mismo
+// (necesaria para saber en qué caja aplica el efectivo del reembolso),
+// usando `branches` (mismo listado que ya carga el filtro de Returns.jsx).
+const CreateReturnModal = ({ branch, branches = [], onClose, onCreated }) => {
+  const { user } = useUser()
+
+  const [manualBranchId, setManualBranchId] = useState('')
+  const effectiveBranchId = branch?.branch_id ?? (manualBranchId ? Number(manualBranchId) : null)
+  const selectedBranch = effectiveBranchId ? { branch_id: effectiveBranchId } : null
 
   // ── Paso 1: buscar orden ──
   const [orderIdInput, setOrderIdInput] = useState('')
@@ -44,10 +51,10 @@ const CreateReturnModal = ({ onClose, onCreated }) => {
   const [result,   setResult]   = useState(null) // { returnId, amountRefunded }
 
   useEffect(() => {
-    if (!selectedBranch) return
+    if (!effectiveBranchId) return
     api.get('payment-methods?is_active=true').then(({ data }) => setMethods(data.data)).catch(() => {})
-    api.get(`cash-registers?branch_id=${selectedBranch.branch_id}`).then(({ data }) => setRegisters(data.data)).catch(() => {})
-  }, [selectedBranch])
+    api.get(`cash-registers?branch_id=${effectiveBranchId}`).then(({ data }) => setRegisters(data.data)).catch(() => {})
+  }, [effectiveBranchId])
 
   const selectableItems = items.filter(i => i.returnable_quantity > 0)
   const allSelected = selectableItems.length > 0 && selectableItems.every(i => selected[keyOf(i)]?.checked)
@@ -169,6 +176,18 @@ const CreateReturnModal = ({ onClose, onCreated }) => {
         <div className="rtn-modal__body">
           {!result ? (
             <>
+              {!branch && (
+                <div className="rtn-field">
+                  <label className="rtn-field__label">Sucursal</label>
+                  <select className="rtn-field__input" value={manualBranchId} onChange={e => setManualBranchId(e.target.value)}>
+                    <option value="">Selecciona la sucursal donde se procesa la devolución...</option>
+                    {branches.map(b => (
+                      <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Paso 1: folio de venta */}
               <div className="rtn-lookup">
                 <div className="rtn-field">
@@ -176,10 +195,11 @@ const CreateReturnModal = ({ onClose, onCreated }) => {
                   <input
                     type="number" className="rtn-field__input"
                     value={orderIdInput} onChange={e => setOrderIdInput(e.target.value)}
-                    placeholder="Ej. 128" onKeyDown={e => e.key === 'Enter' && handleLookup()}
+                    placeholder="Ej. 128" onKeyDown={e => e.key === 'Enter' && selectedBranch && handleLookup()}
+                    disabled={!selectedBranch}
                   />
                 </div>
-                <button type="button" className="rtn-btn rtn-btn--primary" style={{ alignSelf: 'flex-end' }} onClick={handleLookup} disabled={lookupLoading}>
+                <button type="button" className="rtn-btn rtn-btn--primary" style={{ alignSelf: 'flex-end' }} onClick={handleLookup} disabled={lookupLoading || !selectedBranch}>
                   {lookupLoading ? <span className="rtn-spinner" /> : <><i className="bi bi-search" /> Buscar</>}
                 </button>
               </div>

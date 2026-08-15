@@ -24,6 +24,40 @@
 .sls-header__title { font-size: 22px; font-weight: 700; color: var(--sls-text); letter-spacing: -0.3px; margin: 0; }
 .sls-header__sub { display: block; font-size: 13px; color: var(--sls-muted); margin-top: 3px; }
 
+/* ── Tabs ────────────────────────────────────────────────── */
+.sls-tabs {
+  display: flex; gap: 4px; padding: 4px; background: var(--sls-bg);
+  border-radius: var(--sls-radius); overflow-x: auto; scrollbar-width: none;
+}
+.sls-tabs::-webkit-scrollbar { display: none; }
+.sls-tab {
+  all: unset; display: flex; align-items: center; gap: 6px; cursor: pointer;
+  padding: 9px 16px; border-radius: var(--sls-radius-sm); font-size: 13px;
+  font-weight: 600; color: var(--sls-muted); white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.sls-tab i { font-size: 15px; }
+.sls-tab:hover { color: var(--sls-text); }
+.sls-tab--active { background: var(--sls-surface); color: var(--sls-accent); box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+.sls-tab-content { display: flex; flex-direction: column; }
+.sls-panel { display: flex; flex-direction: column; gap: 16px; }
+.sls-panel__count { font-size: 13px; color: var(--sls-muted); }
+
+/* ── Badges (categoría / UOM) ───────────────────────────────
+   Mismo patrón visual que products.css (.prd-cat-badge /
+   .prd-uom-badge), duplicado aquí con prefijo sls- para no crear
+   una dependencia cruzada entre módulos de CSS. */
+.sls-cat-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+}
+.sls-uom-badge {
+  display: inline-flex; align-items: center; padding: 2px 8px;
+  border-radius: 20px; font-size: 11px; font-weight: 600;
+  background: var(--sls-accent-bg); color: var(--sls-accent);
+  text-transform: uppercase;
+}
+
 /* ── Filtros ─────────────────────────────────────────────── */
 .sls-filters { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .sls-filters::-webkit-scrollbar { display: none; }

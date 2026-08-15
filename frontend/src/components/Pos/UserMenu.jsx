@@ -27,7 +27,7 @@ const UserMenu = ({ onOpenMovements, onOpenClose }) => {
     setOpen(false)
     // El carrito activo y los suspendidos ya se persisten en localStorage
     // (ver PosContext) — no se pierde nada al navegar fuera del POS.
-    navigate('/dashboard')
+    navigate('/')
   }
 
   return (

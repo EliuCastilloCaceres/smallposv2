@@ -78,7 +78,10 @@ function App() {
                 <i className="bi bi-person-circle" />
                 <div className="app-sidebar__user-info">
                   <span className="app-sidebar__username">{user.username}</span>
-                  <span className="app-sidebar__role">{user.role_name}</span>
+                  <span className="app-sidebar__role">
+                    {/* FIX: se agrega la sucursal junto al rol, cuando el usuario tenga una */}
+                    {user.role_name}{user.branch_name ? ` · ${user.branch_name}` : ''}
+                  </span>
                 </div>
                 <button
                   className="app-sidebar__logout"
@@ -169,7 +172,10 @@ function App() {
                     <i className="bi bi-person-circle" />
                     <div className="app-sidebar__user-info">
                       <span className="app-sidebar__username">{user.username}</span>
-                      <span className="app-sidebar__role">{user.role_name}</span>
+                      <span className="app-sidebar__role">
+                        {/* FIX: se agrega la sucursal junto al rol, cuando el usuario tenga una */}
+                        {user.role_name}{user.branch_name ? ` · ${user.branch_name}` : ''}
+                      </span>
                     </div>
                     <button
                       className="app-sidebar__logout"

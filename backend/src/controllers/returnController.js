@@ -1,10 +1,19 @@
 // src/controllers/returnController.js
 const returnService = require('../services/returnService');
-const { resolveBranchId } = require('../helpers/helper');
+const { resolveBranchId, resolveUnrestrictedBranchId } = require('../helpers/helper');
 
+// getByBranch / getById: lectura tipo "créditos" — cualquier usuario con
+// el permiso puede ver devoluciones de CUALQUIER sucursal (o todas,
+// consolidado), sin importar la suya. El permiso (returns:read) es el
+// único gate; resolveUnrestrictedBranchId nunca lee req.user.branch_id.
+//
+// getReturnableItems / create: siguen forzadas a resolveBranchId — crear
+// una devolución mueve stock y, si el reembolso es en efectivo, un
+// cash_movement de una caja concreta, así que necesitan la sucursal física
+// donde el usuario está operando (misma lógica que abonos de crédito).
 const getByBranch = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req);
+    const branchId = resolveUnrestrictedBranchId(req);
     const { status, search, startDate, endDate, page, limit } = req.query;
     const result = await returnService.getReturnsByBranch({
       branchId, status, search, startDate, endDate, page, limit,
@@ -15,7 +24,7 @@ const getByBranch = async (req, res, next) => {
 
 const getById = async (req, res, next) => {
   try {
-    const branchId = resolveBranchId(req);
+    const branchId = resolveUnrestrictedBranchId(req);
     const data = await returnService.getReturnById(parseInt(req.params.returnId), branchId);
     res.json({ status: 'success', data });
   } catch (err) { next(err); }

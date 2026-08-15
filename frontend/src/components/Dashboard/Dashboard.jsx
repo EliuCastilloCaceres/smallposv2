@@ -6,6 +6,7 @@ import api           from '../../services/api'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
 import { es }        from 'date-fns/locale'
 import './dashboard.css'
+import { Navigate } from 'react-router-dom'
 
 // ═══════════════════════════════════════════════════════════════
 //  Helpers
@@ -840,12 +841,7 @@ const Dashboard = () => {
   // ── Acceso ──
   if (!hasPermission('dashboard', 'read')) {
     return (
-      <div className="dash-root">
-        <div className="dash-forbidden">
-          <i className="bi bi-lock" />
-          <p>Sin acceso al dashboard</p>
-        </div>
-      </div>
+      <Navigate to="/" replace />
     )
   }
 

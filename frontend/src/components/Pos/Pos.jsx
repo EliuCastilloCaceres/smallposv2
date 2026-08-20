@@ -133,8 +133,21 @@ const PosInner = () => {
         </>
       )}
 
-      {closeModalOpen && <CloseRegisterModal onClose={() => setCloseModalOpen(false)} />}
-      {movementsModalOpen && <CashMovementsModal onClose={() => setMovementsModalOpen(false)} />}
+      {/* [NUEVO] Estos dos modales viven en PosInner, no en SaleScreen, así que
+          no tienen la ref del buscador a mano — se usa el mismo selector de
+          clase que el guard de .pos-overlay para devolver el foco al cerrar. */}
+      {closeModalOpen && (
+        <CloseRegisterModal onClose={() => {
+          setCloseModalOpen(false)
+          setTimeout(() => document.querySelector('.pos-search__input')?.focus(), 0)
+        }} />
+      )}
+      {movementsModalOpen && (
+        <CashMovementsModal onClose={() => {
+          setMovementsModalOpen(false)
+          setTimeout(() => document.querySelector('.pos-search__input')?.focus(), 0)
+        }} />
+      )}
     </div>
   )
 }
@@ -173,6 +186,37 @@ const SaleScreen = () => {
   // (importante cuando el add viene de cerrar un modal, ej. VariantPicker u
   // OutOfStockModal).
   const focusSearch = () => setTimeout(() => searchInputRef.current?.focus(), 0)
+
+  // [NUEVO] Recuperación de foco del buscador. En vez de un listener global
+  // de "click" (que obliga a andar excluyendo manualmente cada botón/tarjeta
+  // que no debe robar el foco), escuchamos el propio `blur` del input y
+  // miramos `e.relatedTarget` — el elemento que va a recibir el foco. Si es
+  // un campo de texto real, lo dejamos en paz (ahí el usuario quiere
+  // escribir). Si es un botón "muerto en foco" (chip de categoría, tarjeta
+  // de producto, paginación, tab de carrito, etc.), recuperamos el buscador.
+  //
+  // [IMPORTANTE] Antes de recuperar, revisamos si hay algún modal abierto
+  // (`.pos-overlay` en el DOM). Varios modales (CloseRegisterModal,
+  // CreditModal, LayawayModal, VariantPickerModal, CashMovementsModal antes
+  // de abrir el form, PaymentModal antes del panel de efectivo) no tienen
+  // ningún input con autoFocus al abrirse — sin este chequeo, el buscador se
+  // robaría el foco por debajo del modal y un escaneo mientras el modal está
+  // abierto terminaría escribiendo en el buscador oculto en vez de en el
+  // modal. Por eso este chequeo va DENTRO del setTimeout (no en el momento
+  // del blur): recién ahí React ya terminó de montar el modal en el DOM.
+  const isFocusWorthy = (el) => {
+    if (!el) return false
+    return !!el.matches?.('input, textarea, select, [contenteditable="true"]')
+  }
+
+  const handleSearchBlur = (e) => {
+    if (isFocusWorthy(e.relatedTarget)) return
+    if (!document.hasFocus()) return // alt-tab / devtools: no pelear por el foco
+    setTimeout(() => {
+      if (document.querySelector('.pos-overlay')) return // hay un modal abierto — que maneje su propio foco
+      searchInputRef.current?.focus()
+    }, 0)
+  }
 
   // ── Variant picker ──
   const [variantTarget, setVariantTarget] = useState(null) // producto variable elegido
@@ -428,6 +472,7 @@ const SaleScreen = () => {
             value={search}
             onChange={e => handleSearchChange(e.target.value)}
             onKeyDown={handleSearchKeyDown}
+            onBlur={handleSearchBlur}
             autoFocus
           />
           {isSearching && <span className="pos-spinner pos-spinner--dark pos-search__spinner" />}
@@ -772,13 +817,13 @@ const SaleScreen = () => {
         <VariantPickerModal
           product={variantTarget}
           onPick={(v) => { handleAddVariant(variantTarget, v); setVariantTarget(null); focusSearch() }}
-          onClose={() => setVariantTarget(null)}
+          onClose={() => { setVariantTarget(null); focusSearch() }}
         />
       )}
-      {customerOpen && <CustomerModal onClose={() => setCustomerOpen(false)} />}
-      {paymentOpen && <PaymentModal onClose={() => setPaymentOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
-      {layawayOpen && <LayawayModal onClose={() => setLayawayOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
-      {creditOpen && <CreditModal onClose={() => setCreditOpen(false)} onSaleCompleted={() => fetchGrid(page)} />}
+      {customerOpen && <CustomerModal onClose={() => { setCustomerOpen(false); focusSearch() }} />}
+      {paymentOpen && <PaymentModal onClose={() => { setPaymentOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
+      {layawayOpen && <LayawayModal onClose={() => { setLayawayOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
+      {creditOpen && <CreditModal onClose={() => { setCreditOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
       {outOfStockTarget && (
         <OutOfStockModal
           target={outOfStockTarget}
@@ -793,8 +838,8 @@ const SaleScreen = () => {
           message="¿Quitar todos los productos del carrito actual? Esta acción no se puede deshacer."
           confirmLabel="Vaciar"
           variant="danger"
-          onClose={() => setConfirmClear(false)}
-          onConfirm={() => { clearCart(); setConfirmClear(false) }}
+          onClose={() => { setConfirmClear(false); focusSearch() }}
+          onConfirm={() => { clearCart(); setConfirmClear(false); focusSearch() }}
         />
       )}
 
@@ -804,8 +849,8 @@ const SaleScreen = () => {
           message={`¿Descartar "${suspendedCarts[confirmDiscardIdx]?.label}"? Se perderán sus productos.`}
           confirmLabel="Descartar"
           variant="danger"
-          onClose={() => setConfirmDiscardIdx(null)}
-          onConfirm={() => { discardSuspended(confirmDiscardIdx); setConfirmDiscardIdx(null) }}
+          onClose={() => { setConfirmDiscardIdx(null); focusSearch() }}
+          onConfirm={() => { discardSuspended(confirmDiscardIdx); setConfirmDiscardIdx(null); focusSearch() }}
         />
       )}
     </>

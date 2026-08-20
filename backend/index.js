@@ -46,7 +46,7 @@ app.use(cors({
 
 // Archivos estáticos
 app.use('/api/product/images', express.static(path.join(__dirname, 'public/images/products')));
-app.use('/api/receipt/images', express.static(path.join(__dirname, 'public/images/receipt')));
+app.use('/api/receipt/images', express.static(path.join(__dirname, 'public/images/receipts')));
 
 // ─── Rutas ────────────────────────────────────────────────────────────────────
 

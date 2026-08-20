@@ -13,6 +13,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { useBranch } from './BranchContext'
+import { useUser } from './UserContext'
 import api from '../services/api'
 
 // ─── Estado inicial de un carrito ─────────────────────────────────────────────
@@ -158,6 +159,7 @@ const PosContext = createContext()
 export const PosContextProvider = ({ children }) => {
   const { selectedBranch } = useBranch()
   const branchId = selectedBranch?.branch_id ?? null
+  const { user } = useUser()
 
   // [NUEVO] Hidratar carrito activo + suspendidos desde localStorage al montar
   // (mismo branchId). Si no hay nada guardado, arranca vacío como antes.
@@ -216,13 +218,22 @@ export const PosContextProvider = ({ children }) => {
       setRegisters(list)
 
       // Reanudar sesión si el registro sigue abierto con el mismo session_id
-      // que quedó guardado localmente (evita adueñarse de la caja de alguien más).
+      // que quedó guardado localmente Y esa sesión fue abierta por el
+      // usuario que está logueado ahora mismo.
+      // [FIX] El chequeo de session_id por sí solo NO bastaba: si un
+      // usuario A abre caja y sale sin hacer corte ni logout limpio, y
+      // luego un usuario B inicia sesión en el mismo navegador, el
+      // localStorage seguía teniendo ese registerId/sessionId y este
+      // código lo adoptaba para B sin validar que fuera suyo — B terminaba
+      // directo en la pantalla de venta de la caja de A. Ahora se exige
+      // además que `opened_by_user_id` coincida con el usuario actual.
       const stored = readStoredSession(branchId)
       if (stored) {
         const match = list.find(r =>
           r.cash_register_id === stored.registerId &&
           r.is_open &&
-          r.session_id === stored.sessionId
+          r.session_id === stored.sessionId &&
+          r.opened_by_user_id === user?.user_id
         )
         if (match) {
           setActiveRegisterId(match.cash_register_id)
@@ -240,7 +251,7 @@ export const PosContextProvider = ({ children }) => {
     } finally {
       setRegistersLoading(false)
     }
-  }, [branchId])
+  }, [branchId, user?.user_id])
 
   useEffect(() => {
     // Al cambiar de sucursal: recargar cajas y, si no es la primera carga,

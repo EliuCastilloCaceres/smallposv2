@@ -3,6 +3,7 @@ const express      = require('express');
 const router       = express.Router();
 const productCtrl  = require('../controllers/productController');
 const { verifyToken, requirePermission } = require('../middlewares/auth');
+const { uploadProductImage, verifyRealFileType } = require('../middlewares/uploadImage');
 
 // Todas las rutas requieren token válido
 router.use(verifyToken);
@@ -25,8 +26,21 @@ router.patch('/:id/variants/:variantId/deactivate',
 );
 
 // ── Escritura ─────────────────────────────────────────────────────────────────
-router.post('/',   requirePermission('products', 'create'), productCtrl.create);
-router.put('/:id', requirePermission('products', 'update'), productCtrl.update);
+// uploadProductImage.single('image'): el campo del form-data debe llamarse "image".
+// verifyRealFileType(): confirma que el contenido real del archivo sea una imagen
+// válida (magic bytes), no solo su extensión/mimetype declarados.
+router.post('/',
+  requirePermission('products', 'create'),
+  uploadProductImage.single('image'),
+  verifyRealFileType(),
+  productCtrl.create
+);
+router.put('/:id',
+  requirePermission('products', 'update'),
+  uploadProductImage.single('image'),
+  verifyRealFileType(),
+  productCtrl.update
+);
 
 // ── Estado ────────────────────────────────────────────────────────────────────
 router.patch('/:id/status', requirePermission('products', 'update'), productCtrl.toggleStatus);

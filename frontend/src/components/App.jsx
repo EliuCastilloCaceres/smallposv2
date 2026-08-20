@@ -2,12 +2,18 @@
 import { useState } from 'react'
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useUser } from '../Context/UserContext'
+import { useBranch } from '../context/BranchContext'
 import './app.css'
 
 function App() {
-  const { user, isLoading, logout, hasPermission } = useUser()
+  const { user, isLoading, logout, hasPermission, isCentralAdmin } = useUser()
+  const {selectedBranch} = useBranch()
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
+
+  const userBranchName = isCentralAdmin 
+  ? "Sin Sucursal" 
+  : (selectedBranch?.name || "Sin Sucursal"); // Respaldo por si no ha cargado
 
   if (isLoading) {
     return (
@@ -80,7 +86,7 @@ function App() {
                   <span className="app-sidebar__username">{user.username}</span>
                   <span className="app-sidebar__role">
                     {/* FIX: se agrega la sucursal junto al rol, cuando el usuario tenga una */}
-                    {user.role_name}{user.branch_name ? ` · ${user.branch_name}` : ''}
+                    {user.role_name}{` · ${userBranchName}`}
                   </span>
                 </div>
                 <button

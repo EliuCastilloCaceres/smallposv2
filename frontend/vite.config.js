@@ -29,6 +29,9 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       }
+      // Nota: las imágenes se sirven bajo /api/product/images y /api/receipt/images
+      // (ver express.static en index.js), así que ya quedan cubiertas por este
+      // mismo proxy de /api — no hace falta una regla aparte para /images.
     }
   }
 })

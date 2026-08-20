@@ -1,6 +1,27 @@
 // src/controllers/productController.js
-const productService = require('../services/productService');
-const Papa           = require('papaparse');
+const path            = require('path');
+const productService  = require('../services/productService');
+const Papa             = require('papaparse');
+const { removeFile }   = require('../middlewares/uploadImage');
+const { ValidationError } = require('../errors/AppError');
+
+// Carpeta pública donde uploadImage.js guarda las imágenes de producto.
+// Debe coincidir con el destino configurado en uploadProductImage.
+const PRODUCTS_IMAGE_DIR = path.join(__dirname, '../../public/images/products');
+
+// req.body llega con strings cuando el request es multipart/form-data
+// (subida de archivo), a diferencia de JSON donde ya vienen tipados.
+const parseBoolField = (value) => value === 'true' || value === true;
+
+const parseVariantsField = (value) => {
+  if (value === undefined || value === null || value === '') return [];
+  if (Array.isArray(value)) return value; // ya viene como array (request JSON puro, sin archivo)
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new ValidationError('El campo "variants" debe ser un JSON válido');
+  }
+};
 
 // GET /products
 const getAll = async (req, res, next) => {
@@ -19,13 +40,19 @@ const getById = async (req, res, next) => {
 };
 
 // POST /products
+// multipart/form-data: campo "image" (archivo, opcional) + resto de campos como texto.
 const create = async (req, res, next) => {
   try {
+    // req.file lo agrega uploadProductImage.single('image') si vino un archivo válido
+    const image = req.file
+      ? `/api/product/images/${req.file.filename}`
+      : (req.body.image ?? null); // fallback: por si algún flujo sigue mandando una URL como texto
+
     const product = await productService.createProduct({
       userId:        req.user.user_id,
       providerId:    req.body.provider_id,
       categoryId:    req.body.category_id     ?? null,
-      isVariable:    Boolean(req.body.is_variable),
+      isVariable:    parseBoolField(req.body.is_variable),
       sku:           req.body.sku,
       name:          req.body.name,
       description:   req.body.description,
@@ -33,16 +60,44 @@ const create = async (req, res, next) => {
       purchasePrice: req.body.purchase_price,
       salePrice:     req.body.sale_price,
       uom:           req.body.uom,
-      image:         req.body.image,
-      variants:      req.body.variants        ?? [],
+      image,
+      variants:      parseVariantsField(req.body.variants),
     });
     res.status(201).json({ status: 'success', data: product });
-  } catch (err) { next(err); }
+  } catch (err) {
+    // Si multer ya guardó el archivo pero createProduct falló (ej. SKU duplicado,
+    // validación), no dejamos el archivo huérfano en disco.
+    if (req.file) removeFile(req.file.path);
+    next(err);
+  }
 };
 
 // PUT /products/:id
 const update = async (req, res, next) => {
+  // Ruta del archivo viejo en disco, si hay que borrarlo al final.
+  // Se resuelve ANTES del try principal porque necesitamos su valor también
+  // en caso de éxito, no solo en el catch.
+  let oldImageDiskPath = null;
+
   try {
+    // Solo nos importa la imagen anterior si de verdad se está reemplazando
+    if (req.file) {
+      const current = await productService.getProductById(req.params.id);
+      if (current.image) {
+        // current.image se guarda como URL pública, ej: /api/product/images/xxx.jpg
+      // (coincide con el mount de express.static en index.js: /api/product/images -> public/images/products)
+        const filename = path.basename(current.image);
+        oldImageDiskPath = path.join(PRODUCTS_IMAGE_DIR, filename);
+      }
+    }
+
+    const isVariableRaw = req.body.is_variable;
+    const isVariable = isVariableRaw !== undefined ? parseBoolField(isVariableRaw) : undefined;
+
+    const newImage = req.file
+      ? `/api/product/images/${req.file.filename}`
+      : undefined; // undefined = "no tocar la imagen actual" (ver productService.updateProduct)
+
     const product = await productService.updateProduct({
       productId: req.params.id,
       updates: {
@@ -55,14 +110,25 @@ const update = async (req, res, next) => {
         uom:           req.body.uom,
         providerId:    req.body.provider_id,
         categoryId:    req.body.category_id,
-        isVariable:    req.body.is_variable,
+        isVariable,
       },
-      newImage:  req.body.image,
-      variants:  req.body.variants ?? [],
+      newImage,
+      variants: parseVariantsField(req.body.variants),
       userId: req.user.user_id,
     });
+
+    // Recién AHORA que el update fue exitoso borramos la imagen anterior.
+    // Si borráramos antes y el update fallara, quedaríamos sin la imagen vieja
+    // Y sin la nueva guardada en la base de datos.
+    if (oldImageDiskPath) removeFile(oldImageDiskPath);
+
     res.json({ status: 'success', data: product });
-  } catch (err) { next(err); }
+  } catch (err) {
+    // El update falló: limpiamos el archivo NUEVO que multer ya guardó,
+    // pero dejamos intacta la imagen vieja (sigue siendo la válida).
+    if (req.file) removeFile(req.file.path);
+    next(err);
+  }
 };
 
 // PATCH /products/:id/status

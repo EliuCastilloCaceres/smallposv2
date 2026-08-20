@@ -1,6 +1,10 @@
 # ============================================
 # GLOBAL
 # ============================================
+
+#archivos publicos
+public/
+
 # Dependencias
 node_modules/
 npm-debug.log*

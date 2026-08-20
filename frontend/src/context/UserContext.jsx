@@ -18,7 +18,7 @@ export const UserContextProvider = ({ children }) => {
   // Valor derivado — no función. Uso: const { isAdmin } = useUser()
   // Se basa en role_name para que sea consistente con el backend (authService)
   // y no dependa de branch_id, que podría tener otros significados en el futuro.
-  const isAdmin = user?.role_name === 'admin'
+  const isAdmin = user?.role_name === 'admin' || user?.role_name === 'superadmin'
 
   // [NUEVO] Distinto de isAdmin: esto es "¿tiene alcance sobre TODAS las
   // sucursales?" — basado en branch_id === null, igual que el backend
@@ -34,15 +34,30 @@ export const UserContextProvider = ({ children }) => {
   // ─── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(async ({ username, password }) => {
     const { data } = await api.post('auth/login', { username, password })
+    console.log('User Data: ', data)
     sessionStorage.setItem('accessToken', data.accessToken)
     setUser(data.user)
     return data.user
   }, [])
 
   // ─── Logout ────────────────────────────────────────────────────────────────
+  // [FIX] Limpia también el estado de POS guardado en localStorage
+  // (pos_register_session / pos_cart_session). Antes solo se borraba al
+  // hacer corte de caja (closeRegister), así que si un usuario salía sin
+  // cerrar caja y hacía logout, esos datos quedaban vivos en el navegador
+  // y el siguiente usuario que iniciara sesión ahí (mismo dispositivo)
+  // terminaba "heredando" la sesión de caja del usuario anterior.
+  const clearPosLocalState = () => {
+    try {
+      localStorage.removeItem('pos_register_session')
+      localStorage.removeItem('pos_cart_session')
+    } catch (_) { /* noop */ }
+  }
+
   const logout = useCallback(async () => {
     try { await api.post('auth/logout') } catch (_) { /* ignorar */ }
     sessionStorage.removeItem('accessToken')
+    clearPosLocalState()
     setUser(null)
   }, [])
 
@@ -89,6 +104,7 @@ export const UserContextProvider = ({ children }) => {
   useEffect(() => {
     const handleForceLogout = () => {
       sessionStorage.removeItem('accessToken')
+      clearPosLocalState()
       setUser(null)
     }
     window.addEventListener('auth:logout', handleForceLogout)

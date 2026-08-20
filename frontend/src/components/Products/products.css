@@ -366,6 +366,30 @@
 .prd-variant-remove:disabled { opacity: .3; cursor: not-allowed; }
 .prd-variants__add { margin-top: 4px; align-self: flex-start; }
 
+/* ── Selector de imagen (dropzone-style) ─────────────────── */
+.prd-file-picker {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--prd-border);
+  border-radius: var(--prd-radius-sm);
+  background: var(--prd-bg);
+  color: var(--prd-text);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.prd-file-picker:hover { border-color: var(--prd-accent); background: var(--prd-accent-bg); }
+.prd-file-picker i { font-size: 20px; color: var(--prd-accent); flex-shrink: 0; }
+.prd-file-picker__hint { display: block; font-size: 12px; font-weight: 400; color: var(--prd-muted); margin-top: 2px; }
+/* El input real queda invisible pero ocupa todo el área clickeable, para
+   mantener accesibilidad de teclado/lector de pantalla sin mostrar el
+   botón feo por defecto del navegador. */
+.prd-file-picker input[type="file"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer;
+}
+
 /* ── Imagen preview ──────────────────────────────────────── */
 .prd-img-preview {
   display: flex; align-items: center; gap: 12px; padding: 10px;
@@ -373,6 +397,7 @@
   border-radius: var(--prd-radius-sm); margin-top: 4px;
 }
 .prd-img-preview img { width: 56px; height: 56px; object-fit: cover; border-radius: var(--prd-radius-sm); border: 1px solid var(--prd-border); }
+.prd-img-preview__info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; flex-wrap: wrap; }
 
 /* ── Detail ──────────────────────────────────────────────── */
 .prd-detail__hero {

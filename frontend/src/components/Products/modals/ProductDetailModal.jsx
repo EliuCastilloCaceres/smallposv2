@@ -1,6 +1,7 @@
 // src/components/Products/modals/ProductDetailModal.jsx
 import { useState, useEffect } from 'react'
 import api from '../../../services/api'
+import { getImageUrl } from '../../../utils/imageUrl'
 import { StockBadge } from '../Products'
 
 const fmtMXN = (v) =>
@@ -77,7 +78,7 @@ const ProductDetailModal = ({ productId, canEdit, branchId, onClose, onEdit }) =
               <div className="prd-detail__hero">
                 <div className="prd-detail__hero-img">
                   {product.image
-                    ? <img src={product.image} alt={product.name}
+                    ? <img src={getImageUrl(product.image)} alt={product.name}
                         onError={e => e.target.style.display = 'none'} />
                     : <i className="bi bi-box-seam" />
                   }

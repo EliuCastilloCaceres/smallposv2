@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../Context/UserContext'
 import api from '../../services/api'
+import { getImageUrl } from '../../utils/imageUrl'
 import ProductModal      from './modals/ProductModal'
 import ProductDetailModal from './modals/ProductDetailModal'
 import BulkUploadModal   from './modals/BulkUploadModal'
@@ -276,7 +277,7 @@ const Products = () => {
                       <div className="prd-product-cell">
                         <div className="prd-thumb">
                           {p.image
-                            ? <img src={p.image} alt={p.name} onError={e => e.target.style.display='none'} />
+                            ? <img src={getImageUrl(p.image)} alt={p.name} onError={e => e.target.style.display='none'} />
                             : <i className="bi bi-box-seam" />
                           }
                         </div>
@@ -356,7 +357,7 @@ const Products = () => {
                   <div className="prd-product-cell">
                     <div className="prd-thumb">
                       {p.image
-                        ? <img src={p.image} alt={p.name} onError={e => e.target.style.display='none'} />
+                        ? <img src={getImageUrl(p.image)} alt={p.name} onError={e => e.target.style.display='none'} />
                         : <i className="bi bi-box-seam" />
                       }
                     </div>

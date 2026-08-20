@@ -883,7 +883,7 @@ const Dashboard = () => {
       <section className="dash-stats">
         <StatCard
           icon="bi-cart-check"
-          label="Total de órdenes"
+          label="Total de tickets"
           value={isLoading ? '—' : (kpis.orders_total ?? 0).toLocaleString('es-MX')}
           comparisonValue={isLoading ? null : comparison.orders_total}
           comparisonLabel={isLoading ? null : comparisonLabel}

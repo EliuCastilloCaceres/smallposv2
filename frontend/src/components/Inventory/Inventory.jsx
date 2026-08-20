@@ -1,6 +1,6 @@
 // src/components/Inventory/Inventory.jsx
 import { useState } from 'react'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import StockTab      from './tabs/StockTab'
 import MovementsTab  from './tabs/MovementsTab'
 import TransfersTab  from './tabs/TransfersTab'

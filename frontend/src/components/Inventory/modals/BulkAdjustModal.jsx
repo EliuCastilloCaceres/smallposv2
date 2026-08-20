@@ -32,6 +32,30 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
   const [isSearching, setIsSearching] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const searchTimer = useRef(null)
+  const searchInputRef = useRef(null)
+
+  // [NUEVO] Mismo patrón de foco que en el POS (ver Pos.jsx): el buscador
+  // debe recuperar el foco después de cualquier acción sobre el carrito
+  // (agregar, quitar, +/-) para que el flujo de escaneo continuo no se corte.
+  const focusSearch = () => setTimeout(() => searchInputRef.current?.focus(), 0)
+
+  // Elementos que sí necesitan quedarse con el foco (el campo de cantidad,
+  // el select de motivo, etc.) — si el foco se va a uno de estos, no hay
+  // que robárselo.
+  const isFocusWorthy = (el) => !!el?.matches?.('input, textarea, select, [contenteditable="true"]')
+
+  // [NUEVO] Recuperación de foco vía blur + relatedTarget, igual que en el
+  // POS: si el foco se va a un botón "muerto en foco" (+/-, quitar), lo
+  // recuperamos; si se va a un campo de texto real, lo dejamos en paz. A
+  // diferencia del POS, este modal no tiene otros modales anidados adentro,
+  // así que no hace falta el guard de ".pos-overlay".
+  const handleSearchBlur = (e) => {
+    setTimeout(() => setShowDropdown(false), 150) // comportamiento original: cierra el dropdown
+
+    if (isFocusWorthy(e.relatedTarget)) return // el usuario quiere escribir en otro campo (ej. cantidad)
+    if (!document.hasFocus()) return // alt-tab / devtools: no pelear por el foco
+    focusSearch()
+  }
 
   // Aplana productos "crudos" del backend a opciones seleccionables:
   // cada variante es su propia opción, igual que en el StockTab — así el
@@ -160,6 +184,7 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
     setQuery('')
     setSearchResults([])
     setShowDropdown(false)
+    focusSearch()
   }
 
   const removeFromCart = (key) => setCartItems(prev => prev.filter(c => c.key !== key))
@@ -324,6 +349,7 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
                 <div className="inv-search">
                   <i className="bi bi-search inv-search__icon" />
                   <input
+                    ref={searchInputRef}
                     type="text"
                     className="inv-search__input"
                     placeholder="Buscar por nombre o SKU..."
@@ -331,11 +357,12 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
                     onChange={e => handleQueryChange(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
                     onFocus={() => { if (searchResults.length > 0) setShowDropdown(true) }}
-                    onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                    onBlur={handleSearchBlur}
                     disabled={!selectedBranch?.branch_id}
+                    autoFocus
                   />
                   {query && (
-                    <button className="inv-search__clear" onClick={() => handleQueryChange('')}>
+                    <button className="inv-search__clear" onClick={() => { handleQueryChange(''); focusSearch() }}>
                       <i className="bi bi-x" />
                     </button>
                   )}
@@ -432,7 +459,7 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <button type="button" className="inv-action-btn"
-                            onClick={() => updateDelta(item.key, item.delta - 1)}>
+                            onClick={() => { updateDelta(item.key, item.delta - 1); focusSearch() }}>
                             <i className="bi bi-dash" />
                           </button>
                           <input
@@ -447,9 +474,16 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
                               // Si el campo queda vacío, puedes pasar 0 o mantener string temporalmente
                               updateDelta(item.key, val === '' ? 0 : parseFloat(val));
                             }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                e.currentTarget.blur()
+                                focusSearch()
+                              }
+                            }}
                           />
                           <button type="button" className="inv-action-btn"
-                            onClick={() => updateDelta(item.key, item.delta + 1)}>
+                            onClick={() => { updateDelta(item.key, item.delta + 1); focusSearch() }}>
                             <i className="bi bi-plus" />
                           </button>
                         </div>
@@ -463,7 +497,7 @@ const BulkAdjustModal = ({ onDone, onClose }) => {
                         </div>
 
                         <button type="button" className="inv-action-btn inv-action-btn--danger"
-                          onClick={() => removeFromCart(item.key)} title="Quitar del carrito">
+                          onClick={() => { removeFromCart(item.key); focusSearch() }} title="Quitar del carrito">
                           <i className="bi bi-trash" />
                         </button>
                       </div>

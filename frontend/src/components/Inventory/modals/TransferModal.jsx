@@ -1,6 +1,6 @@
 // src/components/Inventory/modals/TransferModal.jsx
 import { useState, useEffect, useRef } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { useBranch } from '../../../context/BranchContext'
 import { StockBadge } from '../tabs/StockTab'

@@ -87,7 +87,7 @@ export const openReceiptWindow = (sale) => {
         @page { size: 80mm auto; margin: 0; }
         body {
           margin: 0; padding: 6px 10px 16px;
-          font-family: 'Courier New', Courier, monospace;
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
           font-size: 12px; color: #000; width: 80mm;
         }
         .center { text-align: center; }

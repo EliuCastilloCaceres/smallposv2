@@ -4,17 +4,24 @@ import api from '../../../services/api'
 
 // Etiquetas legibles — mismas que RolesTab/UserPermissionsModal para consistencia
 const MODULE_LABELS = {
-  pos:       'Punto de Venta',
-  orders:    'Ventas',
-  products:  'Productos',
-  inventory: 'Inventario',
-  customers: 'Clientes',
-  providers: 'Proveedores',
-  credit:    'Crédito',
-  layaway:   'Apartados',
-  reports:   'Reportes',
-  users:     'Usuarios',
-  settings:  'Configuración',
+  pos:             'Punto de Venta',
+  dashboard:       'Dashboard',
+  orders:          'Ventas',
+  products:        'Productos',
+  inventory:       'Inventario',
+  customers:       'Clientes',
+  providers:       'Proveedores',
+  credit:          'Crédito',
+  layaway:         'Apartados',
+  returns:         'Devoluciones',
+  reports:         'Reportes',
+  users:           'Usuarios',
+  roles:           'Roles y permisos',
+  branches:        'Sucursales',
+  categories:      'Categorías',
+  payment_methods: 'Métodos de pago',
+  cash_registers:  'Cajas registradoras',
+  settings:        'Configuración',
 }
 
 const ACTION_LABELS = {
@@ -32,17 +39,24 @@ const ACTION_LABELS = {
 }
 
 const MODULE_ICONS = {
-  pos:       'bi-pc-display-horizontal',
-  orders:    'bi-clipboard2-data',
-  products:  'bi-boxes',
-  inventory: 'bi-archive',
-  customers: 'bi-person-badge',
-  providers: 'bi-truck',
-  credit:    'bi-clock-history',
-  layaway:   'bi-bookmark-check',
-  reports:   'bi-bar-chart-line',
-  users:     'bi-person',
-  settings:  'bi-gear',
+  pos:             'bi-pc-display-horizontal',
+  dashboard:       'bi-speedometer2',
+  orders:          'bi-clipboard2-data',
+  products:        'bi-boxes',
+  inventory:       'bi-archive',
+  customers:       'bi-person-badge',
+  providers:       'bi-truck',
+  credit:          'bi-clock-history',
+  layaway:         'bi-bookmark-check',
+  returns:         'bi-arrow-return-left',
+  reports:         'bi-bar-chart-line',
+  users:           'bi-person',
+  roles:           'bi-shield-check',
+  branches:        'bi-diagram-3',
+  categories:      'bi-tags',
+  payment_methods: 'bi-credit-card',
+  cash_registers:  'bi-cash-stack',
+  settings:        'bi-gear',
 }
 
 const PermissionsModal = ({ role, allPermissions, onSaved, onClose }) => {

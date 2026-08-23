@@ -23,8 +23,11 @@ const todayStr = () => {
 }
 
 const STATUS_META = {
-  completed: { label: 'Completada', cls: 'sls-status--on' },
-  cancelled: { label: 'Cancelada',  cls: 'sls-status--off' },
+  completed:      { label: 'Completada', cls: 'sls-status--on' },
+  cancelled:      { label: 'Cancelada',  cls: 'sls-status--off' },
+  refunded:       { label: 'Reembolsada',  cls: 'sls-status--refunded' },
+  partial_refund: { label: 'Reembolso parcial',  cls: 'sls-status--partial' }
+  
 }
 
 const SaleTypeBadge = ({ isCredit }) => (
@@ -192,6 +195,8 @@ const SalesTab = () => {
         <select className="sls-select" value={status} onChange={handleStatusChange}>
           <option value="">Todas</option>
           <option value="completed">Completadas</option>
+          <option value="partial_refund">Reembolso parcial</option>
+          <option value="refunded">Reembolsadas</option>
           <option value="cancelled">Canceladas</option>
         </select>
       </div>
@@ -249,7 +254,18 @@ const SalesTab = () => {
                       {isConsolidated && <td className="sls-td-muted">{o.branch_name}</td>}
                       <td className="sls-td-muted">{o.cash_register_name}</td>
                       <td><SaleTypeBadge isCredit={!!o.is_credit} /></td>
-                      <td className="num">{money(o.total)}</td>
+                      <td className="num">
+                        {Number(o.net_total) !== Number(o.total) ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
+                            <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 12 }}>
+                              {money(o.total)}
+                            </span>
+                            <strong>{money(o.net_total)}</strong>
+                          </div>
+                        ) : (
+                          money(o.total)
+                        )}
+                      </td>
                       <td>
                         <span className={`sls-status ${st.cls}`}>
                           <span className="sls-status__dot" />
@@ -291,7 +307,16 @@ const SalesTab = () => {
                   </div>
                   <div className="sls-card__total">
                     <span className="sls-muted">Total</span>
-                    <strong>{money(o.total)}</strong>
+                    {Number(o.net_total) !== Number(o.total) ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.3 }}>
+                        <span style={{ textDecoration: 'line-through', color: '#94a3b8', fontSize: 12 }}>
+                          {money(o.total)}
+                        </span>
+                        <strong>{money(o.net_total)}</strong>
+                      </div>
+                    ) : (
+                      <strong>{money(o.total)}</strong>
+                    )}
                   </div>
                 </button>
               )

@@ -508,8 +508,20 @@ const cancelCreditSale = async (conn, { orderId }) => {
     await conn.query(`DELETE FROM credit_payments WHERE payment_id IN (?)`, [paymentIds]);
   }
 
+  // FIX: 'balance = 0' a mano violaba chk_credit_sales_balance
+  // (balance = total_amount - amount_paid) porque total_amount nunca se
+  // toca aquí — con amount_paid ya en 0, el único balance matemáticamente
+  // válido ES total_amount (nada se pagó, y la venta completa quedó
+  // cancelada, así que tampoco se debe nada realmente: un balance de
+  // 'total_amount' en un crédito 'cancelled' no representa saldo
+  // pendiente, es solo el remanente aritmético de la fórmula del CHECK —
+  // getOverdueCredits/getActiveCreditsByBranch nunca listan 'cancelled'
+  // como adeudo). Se referencia la columna total_amount directamente en el
+  // mismo UPDATE en vez de hacer un segundo SELECT.
   await conn.query(
-    `UPDATE credit_sales SET status = 'cancelled', amount_paid = 0, balance = 0, updated_at = NOW() WHERE credit_sale_id = ?`,
+    `UPDATE credit_sales
+     SET status = 'cancelled', amount_paid = 0, balance = total_amount, updated_at = NOW()
+     WHERE credit_sale_id = ?`,
     [credit.credit_sale_id]
   );
 

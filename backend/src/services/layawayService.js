@@ -314,6 +314,34 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null,
       );
     }
 
+    // [FIX] La caja ahora es obligatoria para CUALQUIER abono, sin importar
+    // el método de pago — igual que en una venta normal del POS, donde
+    // cash_register_id siempre queda vinculado a la orden aunque toda la
+    // venta sea con tarjeta. Esto además nos da, de forma consistente, una
+    // caja de la cual derivar la orden cuando este abono complete el
+    // apartado (orders.cash_register_id es NOT NULL).
+    if (!cashRegisterId) {
+      throw new ValidationError('Selecciona la caja donde se registrará este abono');
+    }
+    const [registers] = await conn.query(
+      `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
+      [cashRegisterId]
+    );
+    if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
+    if (!registers[0].is_open) {
+      throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono.');
+    }
+
+    const [sessions] = await conn.query(
+      `SELECT session_id, user_id FROM cash_register_sessions
+       WHERE cash_register_id = ? AND closed_at IS NULL
+       ORDER BY session_id DESC LIMIT 1`,
+      [cashRegisterId]
+    );
+    if (sessions.length === 0) {
+      throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono.');
+    }
+
     const newAmountPaid = layaway.amount_paid + amount;
     const newBalance    = layaway.balance - amount;
     const newStatus     = newBalance === 0 ? 'completed' : 'active';
@@ -342,43 +370,19 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null,
       );
     }
 
-    // [FIX] Igual que en creditService.addPayment: un abono hecho desde el
-    // módulo de Apartados (no desde el POS) no trae una sesión de caja
-    // implícita. Si el abono incluye efectivo, se exige indicar a qué caja
-    // se aplica, y esa caja debe estar abierta con una sesión propia del
-    // usuario que registra el abono.
+    // La restricción de "solo tu propia caja abierta" se mantiene, pero
+    // ahora acotada a cuando de verdad hay efectivo de por medio — elegir
+    // la caja para trazabilidad (tarjeta/transferencia) no toca ningún
+    // cajón de dinero ajeno, así que no necesita esa restricción.
     const cashAmount = payments.reduce((sum, p) => {
       const method = methodsById.get(Number(p.payment_method_id));
       return method?.code === 'cash' ? sum + Number(p.amount) : sum;
     }, 0);
 
     if (cashAmount > 0) {
-      if (!cashRegisterId) {
-        throw new ValidationError('Selecciona la caja donde se registrará el efectivo del abono');
-      }
-
-      const [registers] = await conn.query(
-        `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
-        [cashRegisterId]
-      );
-      if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
-      if (!registers[0].is_open) {
-        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono en efectivo.');
-      }
-
-      const [sessions] = await conn.query(
-        `SELECT session_id, user_id FROM cash_register_sessions
-         WHERE cash_register_id = ? AND closed_at IS NULL
-         ORDER BY session_id DESC LIMIT 1`,
-        [cashRegisterId]
-      );
-      if (sessions.length === 0) {
-        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono en efectivo.');
-      }
       if (sessions[0].user_id !== userId) {
         throw new ForbiddenError('Solo puedes registrar el efectivo del abono en una caja que tú mismo tengas abierta.');
       }
-
       await conn.query(
         `INSERT INTO cash_movements
            (session_id, movement_type, amount, description, user_id)
@@ -387,14 +391,103 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null,
       );
     }
 
+    // [FIX] Si este abono completa el apartado, se convierte en una orden
+    // real (orders/order_details/order_payments) — ver nota al inicio del
+    // archivo: "el stock se descuenta definitivamente al completarlo
+    // (convertirlo en venta)". Esa conversión nunca estaba implementada,
+    // por eso los apartados no aparecían en dashboard, módulo de ventas ni
+    // reportes de productos vendidos. El stock NO se vuelve a descontar
+    // aquí — ya se reservó/descontó por completo al crear el apartado
+    // ('layaway_reserve'); esta orden es solo el rastro contable.
+    let orderId = null;
+    if (newStatus === 'completed') {
+      orderId = await convertLayawayToOrder(conn, {
+        layawayId, customerId: layaway.customer_id,
+        totalAmount: Number(layaway.total_amount),
+        branchId, cashRegisterId, userId,
+      });
+    }
+
     await conn.commit();
-    return { layawayId, newBalance, status: newStatus };
+    return { layawayId, newBalance, status: newStatus, orderId };
   } catch (err) {
     await conn.rollback();
     throw err;
   } finally {
     conn.release();
   }
+};
+
+// ─── Completar apartado → registrar como venta ────────────────────────────────
+// Se ejecuta dentro de la MISMA transacción de addPayment cuando el saldo
+// llega a $0. El stock ya se descontó al crear el apartado ('layaway_reserve'),
+// así que aquí NO se toca inventario — solo se genera el rastro contable
+// (orders/order_details/order_payments) para dashboard, módulo de ventas y
+// reportes de productos vendidos.
+//
+// NOTA: purchase_price no se guarda en layaway_details al crear el apartado
+// (solo product_id, variant_id, quantity, unit_price), así que se toma el
+// purchase_price ACTUAL de products (las variantes no tienen costo propio,
+// siempre vive en el producto base) al momento de completar, no el que
+// tenía cuando se apartó. Si tu negocio necesita el costo histórico
+// exacto, habría que agregar esa columna a layaway_details desde la creación.
+const convertLayawayToOrder = async (conn, { layawayId, customerId, totalAmount, branchId, cashRegisterId, userId }) => {
+  const [details] = await conn.query(
+    `SELECT ld.product_id, ld.variant_id, ld.quantity, ld.unit_price,
+            p.purchase_price
+     FROM layaway_details ld
+     JOIN products p ON ld.product_id = p.product_id
+     WHERE ld.layaway_id = ?`,
+    [layawayId]
+  );
+
+  // Todos los pagos acumulados del apartado (anticipo inicial + cada abono,
+  // incluido el que se acaba de insertar en esta misma transacción).
+  const [payments] = await conn.query(
+    `SELECT lpd.payment_method_id, lpd.amount, lpd.cash_received, lpd.cash_change, lpd.reference
+     FROM layaway_payments lp
+     JOIN layaway_payment_details lpd ON lpd.payment_id = lp.payment_id
+     WHERE lp.layaway_id = ?`,
+    [layawayId]
+  );
+
+  const [orderResult] = await conn.query(
+    `INSERT INTO orders
+       (branch_id, cash_register_id, customer_id, user_id,
+        subtotal, discount, total, notes, status, layaway_id)
+     VALUES (?, ?, ?, ?, ?, 0, ?, ?, 'completed', ?)`,
+    [
+      branchId, cashRegisterId, customerId, userId,
+      totalAmount, totalAmount,
+      `Apartado #${layawayId}`, layawayId,
+    ]
+  );
+  const orderId = orderResult.insertId;
+
+  for (const item of details) {
+    await conn.query(
+      `INSERT INTO order_details
+         (order_id, product_id, variant_id, quantity,
+          unit_price, purchase_price, discount, subtotal)
+       VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+      [
+        orderId, item.product_id, item.variant_id, item.quantity,
+        item.unit_price, item.purchase_price,
+        item.unit_price * item.quantity,
+      ]
+    );
+  }
+
+  for (const p of payments) {
+    await conn.query(
+      `INSERT INTO order_payments
+         (order_id, payment_method_id, amount, cash_received, cash_change, reference)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [orderId, p.payment_method_id, p.amount, p.cash_received, p.cash_change, p.reference]
+    );
+  }
+
+  return orderId;
 };
 
 // ─── Cancelar apartado ────────────────────────────────────────────────────────

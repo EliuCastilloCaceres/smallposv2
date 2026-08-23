@@ -71,8 +71,8 @@ const createOrder = async (req, res, next) => {
       due_date,
     } = req.body;
 
-    if (!Array.isArray(payments) || payments.length === 0) {
-      return res.status(400).json({ status: 'error', message: 'payments debe ser un arreglo con al menos un pago' });
+    if (!Array.isArray(payments)) {
+      return res.status(400).json({ status: 'error', message: 'payments debe ser un arreglo' });
     }
 
     const branchId = resolveBranchId(req)

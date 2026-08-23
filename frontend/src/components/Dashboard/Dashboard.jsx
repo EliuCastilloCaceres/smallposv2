@@ -1,10 +1,11 @@
 // src/components/Dashboard/Dashboard.jsx
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { useUser }   from '../../context/UserContext'
-import useApi        from '../../hooks/useApi'
-import api           from '../../services/api'
+import { useUser } from '../../context/UserContext'
+import useApi from '../../hooks/useApi'
+import api from '../../services/api'
+import { getImageUrl } from '../../utils/imageUrl'
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
-import { es }        from 'date-fns/locale'
+import { es } from 'date-fns/locale'
 import './dashboard.css'
 import { Navigate } from 'react-router-dom'
 
@@ -512,16 +513,14 @@ const TopProductsTable = ({ products, isLoading, fullMode = false }) => {
                 <td className={`rank ${rankClass(i)}`}>{i + 1}</td>
                 <td>
                   <div className="dash-product">
-                    {/* <div className="dash-product__img-wrap">
-                      <img
-                        src={`${import.meta.env.VITE_URL_BASE}product/images/${p.image ?? 'sin_imagen.jpg'}`}
-                        alt={p.name}
-                        className="dash-product__img"
-                        loading="lazy"
-                        onError={e => { e.target.src = '/placeholder.png' }}
-                      />
+                    <div className="dash-product__img-wrap">
+                      {
+                        p.image
+                          ? <img src={getImageUrl(p.image)} alt={p.name} className="dash-product__img" loading="lazy" onError={e => e.target.style.display = 'none'} />
+                          : <i className="bi bi-box-seam" />
+                      }
                       {i < 3 && <span className="dash-product__rank-badge">{i + 1}</span>}
-                    </div> */}
+                    </div>
                     <div>
                       <span className="dash-product__name">{p.name}</span>
                       <div className="dash-product__bar">
@@ -547,16 +546,14 @@ const TopProductsTable = ({ products, isLoading, fullMode = false }) => {
       <ul className="dash-products-mobile">
         {products.map((p, i) => (
           <li key={p.product_id} className="dash-product-card">
-            {/* <div className="dash-product-card__img-wrap">
-              <img
-                src={`${import.meta.env.VITE_URL_BASE}product/images/${p.image ?? 'sin_imagen.jpg'}`}
-                alt={p.name}
-                className="dash-product__img"
-                loading="lazy"
-                onError={e => { e.target.src = '/placeholder.png' }}
-              />
+            <div className="dash-product-card__img-wrap">
+              {
+                p.image
+                  ? <img src={getImageUrl(p.image)} alt={p.name} className="dash-product__img" loading="lazy" onError={e => e.target.style.display = 'none'} />
+                  : <i className="bi bi-box-seam" />
+              }
               {i < 3 && <span className="dash-product__rank-badge">{i + 1}</span>}
-            </div> */}
+            </div>
             <div className="dash-product-card__info">
               <span className="dash-product-card__name">{p.name}</span>
               <div className="dash-product-card__meta">
@@ -675,7 +672,7 @@ const FilterControls = ({
     <div className="dash-preset-group" role="tablist" aria-label="Rango de fechas">
       {[
         { id: 'today', label: 'Hoy' },
-        { id: 'week',  label: 'Esta semana' },
+        { id: 'week', label: 'Esta semana' },
         { id: 'month', label: 'Este mes' },
         { id: 'custom', label: 'Personalizado' },
       ].map(p => (
@@ -810,9 +807,9 @@ const DashHeader = ({
 const Dashboard = () => {
   const { user, isCentralAdmin, hasPermission } = useUser()
 
-  const [preset,       setPreset]       = useState('today')
-  const [customRange,  setCustomRange]  = useState({ start: today(), end: today() })
-  const [branches,     setBranches]     = useState([])
+  const [preset, setPreset] = useState('today')
+  const [customRange, setCustomRange] = useState({ start: today(), end: today() })
+  const [branches, setBranches] = useState([])
   const [selectedBranchId, setSelectedBranchId] = useState('')
 
   // Modales
@@ -825,7 +822,7 @@ const Dashboard = () => {
     if (!isCentralAdmin) return
     api.get('branches?is_active=true')
       .then(({ data }) => setBranches(data.data))
-      .catch(() => {})
+      .catch(() => { })
   }, [isCentralAdmin])
 
   const { start, end } = useMemo(() => getPresetRange(preset, customRange), [preset, customRange])
@@ -845,15 +842,15 @@ const Dashboard = () => {
     )
   }
 
-  const kpis             = data?.kpis ?? {}
-  const comparison       = kpis.comparison ?? {}
-  const comparisonLabel  = comparison.label || 'período anterior'
-  const topProducts      = data?.top_products ?? []
+  const kpis = data?.kpis ?? {}
+  const comparison = kpis.comparison ?? {}
+  const comparisonLabel = comparison.label || 'período anterior'
+  const topProducts = data?.top_products ?? []
   const paymentBreakdown = data?.payment_breakdown ?? []
-  const cashRegs         = data?.cash_registers ?? []
-  const lowStock         = data?.low_stock ?? []
-  const salesByHour      = data?.sales_by_hour ?? []
-  const isConsolidated   = data?.mode === 'consolidated'
+  const cashRegs = data?.cash_registers ?? []
+  const lowStock = data?.low_stock ?? []
+  const salesByHour = data?.sales_by_hour ?? []
+  const isConsolidated = data?.mode === 'consolidated'
 
   return (
     <div className="dash-root">

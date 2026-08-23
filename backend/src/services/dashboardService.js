@@ -88,6 +88,23 @@ const pctChange = (current, previous) => {
 
 // ─── KPIs ───────────────────────────────────────────────────────────────────
 
+// FIX: una devolución PARCIAL deja la orden en status = 'partial_refund'
+// (ver returnService.createReturn), no 'completed' — si aquí solo se
+// contara 'completed', esas órdenes desaparecerían enteras del KPI en vez
+// de contar por la parte no devuelta, que sigue siendo ingreso real. Se
+// incluyen ambos estados y se resta lo reembolsado (returns.amount_refunded,
+// solo devoluciones status='completed') y las unidades físicamente
+// devueltas (sí vuelven a stock, a diferencia del caso de descuento).
+//
+// FIX 2: 'refunded' también se incluye — NO se excluye por completo. Una
+// orden pasa a 'refunded' cuando se devolvieron TODAS las unidades (ver
+// allReturned en returnService.createReturn), pero eso es una decisión
+// sobre PRODUCTO, no sobre DINERO: si se cobró una tarifa de restock (se
+// reembolsó menos del 100% del monto pagado), la orden queda 'refunded'
+// aunque sí quedó ingreso real. El neteo de abajo (o.total - refunded_amount)
+// ya reduce correctamente a $0 cuando el reembolso fue del 100% del dinero,
+// así que no hace falta excluir el status aparte — excluirlo tiraba a la
+// basura ese ingreso por tarifa de restock en vez de contarlo.
 const getKpis = async ({ startDate, endDate, branchId }) => {
   const range = toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
@@ -96,16 +113,28 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
   const [[totals]] = await db.query(
     `SELECT
        COUNT(o.order_id)          AS orders_total,
-       COALESCE(SUM(o.total), 0)  AS income,
+       COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0)  AS income,
        COALESCE(SUM(o.discount), 0) AS total_discounts,
-       COALESCE(SUM(qty.total_units), 0) AS total_units_sold
+       COALESCE(SUM(qty.total_units - COALESCE(rq.returned_units, 0)), 0) AS total_units_sold
      FROM orders o
      LEFT JOIN (
        SELECT order_id, SUM(quantity) AS total_units
        FROM order_details GROUP BY order_id
      ) qty ON qty.order_id = o.order_id
+     LEFT JOIN (
+       SELECT order_id, SUM(amount_refunded) AS refunded
+       FROM returns WHERE status = 'completed'
+       GROUP BY order_id
+     ) rf ON rf.order_id = o.order_id
+     LEFT JOIN (
+       SELECT r.order_id, SUM(rd.quantity) AS returned_units
+       FROM return_details rd
+       JOIN returns r ON rd.return_id = r.return_id
+       WHERE r.status = 'completed'
+       GROUP BY r.order_id
+     ) rq ON rq.order_id = o.order_id
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status = 'completed'
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
        ${branchClause}`,
     [...range, ...branchParam]
   );
@@ -114,7 +143,7 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
     `SELECT HOUR(o.created_at) AS hour, COUNT(*) AS cnt
      FROM orders o
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status = 'completed'
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
        ${branchClause}
      GROUP BY HOUR(o.created_at)
      ORDER BY cnt DESC
@@ -164,6 +193,34 @@ const getKpisWithComparison = async ({ startDate, endDate, branchId, preset }) =
 
 // ─── Top productos ──────────────────────────────────────────────────────────
 
+// FIX: total_revenue sumaba od.subtotal a secas (precio bruto de la línea),
+// sin considerar el descuento a nivel ORDEN (orders.discount/total). Como
+// PaymentModal manda siempre item.discount = 0 (el descuento se aplica al
+// carrito completo, no por renglón), una venta con 100% de descuento
+// (total = $0) seguía apareciendo aquí con el ingreso bruto de sus
+// productos — ej. 2 jugos a $45 se mostraban como $90 vendidos aunque el
+// cliente no pagó nada. Se prorratea el descuento de la orden entre sus
+// líneas usando la razón total/subtotal de esa orden, así una orden en $0
+// aporta $0 de ingreso por cada producto.
+//
+// FIX 2: tampoco se restaba nada por devoluciones. Las UNIDADES se restan
+// completas (ret_qty) — físicamente el producto regresó al inventario
+// (restoreSaleStock) sin importar cuánto dinero se reembolsó, así que ya
+// no cuenta como "vendido" neto.
+//
+// FIX 3: el DINERO no se resta a valor de lista completo (rd.quantity *
+// rd.unit_price) — eso asume que siempre se reembolsó el 100%. Si se
+// cobró una tarifa de restock (returns.amount_refunded < valor de lista de
+// lo devuelto), esa diferencia es ingreso real que se estaba perdiendo. En
+// vez de eso se prorratea el amount_refunded REAL de cada devolución entre
+// sus líneas (usando el valor de lista de cada línea DENTRO de esa
+// devolución como peso — no de toda la orden), y esa porción de dinero
+// real se resta DESPUÉS de aplicar el ratio de descuento de la orden a la
+// línea, no antes: restarlo antes volvería a aplicarle el descuento de
+// orden a un monto que ya está en dólares finales (doble descuento). Sumado
+// por orden, esto da exactamente o.total - amount_refunded — el mismo neto
+// que usa getKpis, así que "Top productos" y los KPIs cuadran entre sí
+// incluso con tarifas de restock.
 const getTopProducts = async ({ startDate, endDate, branchId }) => {
   const range = toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
@@ -171,24 +228,61 @@ const getTopProducts = async ({ startDate, endDate, branchId }) => {
 
   const [rows] = await db.query(
     `SELECT od.product_id, p.sku, p.image, p.name,
-            SUM(od.quantity) AS total_sold,
-            SUM(od.subtotal) AS total_revenue
+            SUM(od.quantity - COALESCE(ret.ret_qty, 0)) AS total_sold,
+            SUM(
+              (od.subtotal - od.discount) *
+              CASE WHEN o.subtotal > 0 THEN o.total / o.subtotal ELSE 0 END
+              - COALESCE(ret.ret_amount_actual, 0)
+            ) AS total_revenue
      FROM order_details od
      JOIN products p ON od.product_id = p.product_id
      JOIN orders   o ON od.order_id   = o.order_id
+     LEFT JOIN (
+       SELECT r.order_id, rd.product_id, rd.variant_id,
+              SUM(rd.quantity) AS ret_qty,
+              SUM(
+                r.amount_refunded * (rd.quantity * rd.unit_price)
+                / NULLIF(rf.face_value, 0)
+              ) AS ret_amount_actual
+       FROM return_details rd
+       JOIN returns r ON rd.return_id = r.return_id
+       JOIN (
+         -- Valor de lista TOTAL de cada devolución (todas sus líneas) — el
+         -- denominador del prorrateo. Separado porque necesitamos el total
+         -- de LA DEVOLUCIÓN antes de filtrar/agrupar por producto.
+         SELECT return_id, SUM(quantity * unit_price) AS face_value
+         FROM return_details
+         GROUP BY return_id
+       ) rf ON rf.return_id = rd.return_id
+       WHERE r.status = 'completed'
+       GROUP BY r.order_id, rd.product_id, rd.variant_id
+     ) ret ON ret.order_id = od.order_id
+          AND ret.product_id = od.product_id
+          AND ret.variant_id <=> od.variant_id
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status = 'completed'
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
        ${branchClause}
      GROUP BY od.product_id
      ORDER BY total_sold DESC
      LIMIT 10`,
     [...range, ...branchParam]
   );
-  return rows;
+  return rows.map(r => ({ ...r, total_revenue: +Number(r.total_revenue).toFixed(2) }));
 };
 
 // ─── Desglose de ventas por método de pago ──────────────────────────────────
 
+// FIX: incluye órdenes 'partial_refund' (antes desaparecían del desglose
+// al dejar de ser 'completed'), y resta lo reembolsado por cada método
+// (returns.payment_method_id/amount_refunded, solo status='completed').
+// Se calcula en dos queries separadas — combinarlo en un solo JOIN
+// duplicaría op.amount por cada devolución de esa orden (fan-out) — y se
+// combinan en JS.
+//
+// FIX 2: 'refunded' también se incluye (no se excluye por completo).
+// Devuelto TODO el producto no implica devuelto TODO el dinero (tarifa de
+// restock) — el pago original SÍ se cuenta y el reembolso SÍ se resta,
+// dando el neto correcto en cualquier combinación.
 const getPaymentBreakdown = async ({ startDate, endDate, branchId }) => {
   const range = toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
@@ -201,13 +295,65 @@ const getPaymentBreakdown = async ({ startDate, endDate, branchId }) => {
      JOIN payment_methods pm ON op.payment_method_id = pm.payment_method_id
      JOIN orders o ON op.order_id = o.order_id
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status = 'completed'
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
        ${branchClause}
      GROUP BY pm.payment_method_id
      ORDER BY total DESC`,
     [...range, ...branchParam]
   );
-  return rows.map(r => ({ ...r, total: Number(r.total) }));
+
+  // FIX: esta query no filtraba por o.status — con 'refunded' ahora
+  // incluido en ambas queries (arriba y aquí abajo), el pago original de
+  // una orden 'refunded' SÍ se suma en `rows` y su reembolso SÍ se resta
+  // aquí — se compensan y el neto queda correcto (ej. $0 si se devolvió el
+  // 100% del dinero, o el monto de la tarifa de restock si se devolvió
+  // menos). Antes 'refunded' estaba excluido de ambas: el pago original no
+  // se sumaba en `rows` pero tampoco había nada que restar aquí, así que
+  // coincidentemente daba bien SOLO cuando el reembolso era del 100% del
+  // dinero — con una tarifa de restock (reembolso parcial de dinero sobre
+  // una devolución total de producto) se perdía ese ingreso por completo.
+  const [refundRows] = await db.query(
+    `SELECT r.payment_method_id,
+            COALESCE(SUM(r.amount_refunded - COALESCE(r.credit_adjustment_amount, 0)), 0) AS refunded
+     FROM returns r
+     JOIN orders o ON r.order_id = o.order_id
+     WHERE o.created_at BETWEEN ? AND ?
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
+       AND r.status = 'completed'
+       AND r.payment_method_id IS NOT NULL
+       ${branchClause}
+     GROUP BY r.payment_method_id`,
+    [...range, ...branchParam]
+  );
+
+  // FIX: cuando una devolución sobre venta a crédito se absorbe total o
+  // parcialmente contra el saldo pendiente (credit_adjustment_amount), esa
+  // porción NUNCA pasó por r.payment_method_id (puede incluso ser NULL si
+  // no hubo dinero real de vuelta) — la query de arriba la ignoraba por
+  // completo. Se resta aparte, siempre del bucket 'credit', sin importar
+  // si esa misma devolución también tuvo un payment_method_id real.
+  const [[creditRefund]] = await db.query(
+    `SELECT COALESCE(SUM(r.credit_adjustment_amount), 0) AS refunded_credit
+     FROM returns r
+     JOIN orders o ON r.order_id = o.order_id
+     WHERE o.created_at BETWEEN ? AND ?
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
+       AND r.status = 'completed'
+       ${branchClause}`,
+    [...range, ...branchParam]
+  );
+
+  const refundedByMethod = new Map(refundRows.map(r => [r.payment_method_id, Number(r.refunded)]));
+
+  return rows
+    .map(r => {
+      const creditDeduction = r.code === 'credit' ? Number(creditRefund.refunded_credit) : 0;
+      return {
+        ...r,
+        total: +(Number(r.total) - (refundedByMethod.get(r.payment_method_id) ?? 0) - creditDeduction).toFixed(2),
+      };
+    })
+    .sort((a, b) => b.total - a.total);
 };
 
 // ─── Cajas abiertas ─────────────────────────────────────────────────────────
@@ -292,15 +438,32 @@ const getLowStock = async ({ branchId }) => {
 const getSalesByHour = async ({ startDate, endDate, branchId }) => {
   const range = toRange(startDate, endDate);
 
+  // FIX: incluye 'partial_refund' e ingreso neto de lo reembolsado
+  // (returns.amount_refunded), mismo criterio que getKpis — sin esto una
+  // orden con devolución parcial desaparecía del todo de la gráfica en vez
+  // de contar por la parte no devuelta.
+  //
+  // FIX 2: también incluye 'refunded' — el neteo ya reduce a $0 cuando se
+  // devolvió el 100% del dinero, así que excluir el status aparte solo
+  // servía para perder el ingreso de una tarifa de restock (devolución
+  // total de producto, parcial de dinero).
+  const refundsSubquery = `
+    LEFT JOIN (
+      SELECT order_id, SUM(amount_refunded) AS refunded
+      FROM returns WHERE status = 'completed'
+      GROUP BY order_id
+    ) rf ON rf.order_id = o.order_id`;
+
   // Modo sucursal: una fila por hora con datos
   if (branchId) {
     const [rows] = await db.query(
       `SELECT HOUR(o.created_at) AS hour,
-              COUNT(o.order_id)          AS orders_count,
-              COALESCE(SUM(o.total), 0)  AS income
+              COUNT(o.order_id) AS orders_count,
+              COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0) AS income
        FROM orders o
+       ${refundsSubquery}
        WHERE o.created_at BETWEEN ? AND ?
-         AND o.status = 'completed'
+         AND o.status IN ('completed', 'partial_refund', 'refunded')
          AND o.branch_id = ?
        GROUP BY HOUR(o.created_at)
        ORDER BY hour ASC`,
@@ -312,12 +475,13 @@ const getSalesByHour = async ({ startDate, endDate, branchId }) => {
   // Modo consolidado: una fila por combinación hora + sucursal
   const [rows] = await db.query(
     `SELECT HOUR(o.created_at) AS hour, o.branch_id, b.name AS branch_name,
-            COUNT(o.order_id)          AS orders_count,
-            COALESCE(SUM(o.total), 0)  AS income
+            COUNT(o.order_id) AS orders_count,
+            COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0) AS income
      FROM orders o
      JOIN branches b ON b.branch_id = o.branch_id
+     ${refundsSubquery}
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status = 'completed'
+       AND o.status IN ('completed', 'partial_refund', 'refunded')
      GROUP BY HOUR(o.created_at), o.branch_id
      ORDER BY hour ASC, branch_name ASC`,
     range

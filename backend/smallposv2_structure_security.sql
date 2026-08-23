@@ -553,7 +553,7 @@ CREATE TABLE `orders` (
   CONSTRAINT `fk_order_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
   CONSTRAINT `fk_order_register` FOREIGN KEY (`cash_register_id`) REFERENCES `cash_registers` (`cash_register_id`),
   CONSTRAINT `fk_order_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `chk_orders_status` CHECK ((`status` in (_utf8mb4'completed',_utf8mb4'cancelled',_utf8mb4'pending',_utf8mb4'refunded')))
+  CONSTRAINT `chk_orders_status` CHECK ((`status` in (_utf8mb4'completed',_utf8mb4'cancelled',_utf8mb4'pending',_utf8mb4'refunded',_utf8mb4'partial_refund')))
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

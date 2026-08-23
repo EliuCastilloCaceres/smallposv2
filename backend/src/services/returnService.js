@@ -65,7 +65,7 @@ const getReturnsByBranch = async ({
   );
 
   const [rows] = await db.query(
-    `SELECT r.return_id, r.order_id, r.branch_id, r.amount_refunded, r.refund_method,
+    `SELECT r.return_id, r.order_id, r.branch_id, r.amount_refunded, r.credit_adjustment_amount, r.refund_method,
             r.status, r.reason, r.created_at,
             b.name as branch_name,
             c.first_name, c.last_name,
@@ -202,6 +202,9 @@ const createReturn = async ({
     if (order.status === 'cancelled') {
       throw new ValidationError('No se puede devolver una venta cancelada');
     }
+    if (order.status === 'refunded') {
+      throw new ValidationError('Esta venta ya fue devuelta por completo');
+    }
 
     const [details] = await conn.query(
       `SELECT product_id, variant_id, quantity, unit_price FROM order_details WHERE order_id = ?`,
@@ -245,10 +248,74 @@ const createReturn = async ({
       returnedMap.set(key, alreadyReturned + Number(it.quantity));
     }
 
+    // FIX: refundAmount llegaba sin ningún tope — el frontend
+    // (CreateReturnModal) lo pre-llena con el valor de lo seleccionado
+    // pero, a diferencia de la cantidad (que sí tiene un
+    // Math.min/Math.max contra returnable_quantity), el monto es
+    // completamente editable sin límite superior una vez que el cajero lo
+    // toca. Nada impedía mandar, por error o abuso, un refundAmount mayor
+    // al valor real de los artículos devueltos — y con el neteo de
+    // crédito de arriba, eso ahora además dispararía una reducción de
+    // saldo/crédito por un monto que no corresponde a nada físicamente
+    // devuelto. Se valida aquí, server-side, contra el valor de lista de
+    // los items ya verificados (stockItems) — no contra lo que el cliente
+    // mande como "seleccionado", que no es confiable.
+    const itemsValue = stockItems.reduce((sum, it) => sum + Number(it.quantity) * Number(it.unit_price), 0);
+    if (Number(refundAmount) > itemsValue + 1e-9) {
+      throw new ValidationError(
+        `El monto a devolver ($${Number(refundAmount).toFixed(2)}) no puede ser mayor al valor de los artículos seleccionados ($${itemsValue.toFixed(2)})`
+      );
+    }
+
+    // ── Ventas a crédito: la devolución puede resolverse como reducción de
+    // deuda, como efectivo real, o una mezcla de ambos ─────────────────────
+    // Si la orden tiene un crédito asociado, el valor devuelto (R =
+    // refundAmount) se aplica PRIMERO contra el saldo pendiente del
+    // crédito (credit_sales.balance) — solo lo que sobra de eso, si sobra,
+    // sale como efectivo/tarjeta real de caja:
+    //
+    //   reducción_de_crédito = min(R, balance)
+    //   efectivo_a_devolver  = R - reducción_de_crédito
+    //
+    // Ej. crédito de $150 con $100 de anticipo (balance=$50), se devuelve
+    // mercancía por $120: los primeros $50 cancelan el saldo pendiente
+    // (balance queda en $0, status pasa a 'paid'), y los $70 restantes SÍ
+    // hay que devolverlos en efectivo porque el cliente ya los había
+    // pagado como parte del anticipo. Si en cambio se devuelve algo de
+    // $30 (< balance), todo baja del saldo y no sale nada de caja.
+    //
+    // amount_refunded en `returns` SIEMPRE guarda R completo (el valor
+    // devuelto) — eso es lo que ya usa el dashboard para netear ingresos,
+    // sin importar cómo se liquidó. credit_adjustment_amount guarda la
+    // porción que se resolvió como reducción de crédito, para poder
+    // reconstruir esa mezcla por devolución en vez de inferirla.
+    const [creditRows] = await conn.query(
+      `SELECT * FROM credit_sales WHERE order_id = ? FOR UPDATE`,
+      [orderId]
+    );
+    const creditSale = creditRows[0] ?? null;
+
+    let creditReduction = 0;
+    let cashPortion     = +Number(refundAmount).toFixed(2);
+
+    if (creditSale && creditSale.status !== 'cancelled') {
+      if (Number(refundAmount) > Number(creditSale.total_amount) + 1e-9) {
+        throw new ValidationError(
+          `El monto a devolver ($${refundAmount}) excede el total de la venta a crédito ($${creditSale.total_amount})`
+        );
+      }
+      creditReduction = Math.min(Number(refundAmount), Number(creditSale.balance));
+      creditReduction = +creditReduction.toFixed(2);
+      cashPortion      = +(Number(refundAmount) - creditReduction).toFixed(2);
+    }
+
     // Resolver el método de pago del reembolso ANTES de insertar la
-    // cabecera, para no tener que hacer un UPDATE después.
+    // cabecera, para no tener que hacer un UPDATE después. Solo se exige
+    // si de verdad va a salir efectivo/tarjeta de caja (cashPortion > 0)
+    // — si el valor devuelto se absorbió por completo como reducción de
+    // crédito, no se mueve dinero y no hace falta método de pago.
     let paymentMethod = null;
-    if (Number(refundAmount) > 0) {
+    if (cashPortion > 0) {
       if (!paymentMethodId) throw new ValidationError('Selecciona el método del reembolso');
       const [methods] = await conn.query(
         `SELECT payment_method_id, code, is_active FROM payment_methods WHERE payment_method_id = ?`,
@@ -263,11 +330,12 @@ const createReturn = async ({
     const [result] = await conn.query(
       `INSERT INTO returns
          (order_id, branch_id, customer_id, user_id, reason,
-          amount_refunded, refund_method, payment_method_id, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
+          amount_refunded, credit_adjustment_amount, refund_method, payment_method_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
       [
         orderId, branchId, order.customer_id, userId, reason ?? null,
-        refundAmount, paymentMethod?.code ?? null, paymentMethod?.payment_method_id ?? null,
+        refundAmount, creditReduction,
+        paymentMethod?.code ?? null, paymentMethod?.payment_method_id ?? null,
       ]
     );
     const returnId = result.insertId;
@@ -290,11 +358,43 @@ const createReturn = async ({
       userId,
     });
 
+    // Aplicar la reducción de crédito, si hubo. total_amount SÍ baja por R
+    // completo (el crédito representaba esa mercancía y ya no existe);
+    // amount_paid solo baja por la porción que se devolvió en efectivo
+    // real (lo demás nunca "se pagó y se devolvió", se quedó como saldo
+    // que simplemente se canceló). balance se deriva de ambos, nunca se
+    // fuerza a mano — mismo criterio que ya corregimos en
+    // creditService.cancelCreditSale para no violar chk_credit_sales_balance.
+    if (creditSale && creditReduction > 0) {
+      const newTotalAmount = +(Number(creditSale.total_amount) - Number(refundAmount)).toFixed(2);
+      const newAmountPaid  = +(Number(creditSale.amount_paid) - cashPortion).toFixed(2);
+      const newBalance     = +(newTotalAmount - newAmountPaid).toFixed(2);
+      // Si con esto el crédito queda saldado, pasa a 'paid'; si no, se deja
+      // el status como estaba (no se reactiva un 'overdue' a 'active' aquí
+      // — eso es tarea del cron de markOverdueCredits, no de esta función).
+      const newStatus = newBalance <= 0 ? 'paid' : creditSale.status;
+
+      await conn.query(
+        `UPDATE credit_sales
+         SET total_amount = ?, amount_paid = ?, balance = ?, status = ?, updated_at = NOW()
+         WHERE credit_sale_id = ?`,
+        [newTotalAmount, newAmountPaid, newBalance, newStatus, creditSale.credit_sale_id]
+      );
+
+      await conn.query(
+        `UPDATE customers SET credit_balance = credit_balance - ?, updated_at = NOW() WHERE customer_id = ?`,
+        [creditReduction, creditSale.customer_id]
+      );
+    }
+
     // Reembolso en efectivo — mismo tratamiento que los abonos de
     // crédito/apartado: la caja debe estar abierta y ser del usuario que
     // registra la devolución. Aquí no hay "efectivo recibido/cambio" (el
     // dinero sale de la caja, no entra), solo el monto que se descuenta.
-    if (Number(refundAmount) > 0 && paymentMethod?.code === 'cash') {
+    // Se usa cashPortion (no refundAmount completo) — si parte del valor
+    // devuelto se absorbió como reducción de crédito, esa parte nunca
+    // salió ni sale de caja.
+    if (cashPortion > 0 && paymentMethod?.code === 'cash') {
       if (!cashRegisterId) {
         throw new ValidationError('Selecciona la caja de la que saldrá el efectivo del reembolso');
       }
@@ -324,26 +424,33 @@ const createReturn = async ({
       await conn.query(
         `INSERT INTO cash_movements (session_id, movement_type, amount, description, user_id)
          VALUES (?, 'return', ?, ?, ?)`,
-        [sessions[0].session_id, refundAmount, `Devolución #${returnId} (venta #${orderId})`, userId]
+        [sessions[0].session_id, cashPortion, `Devolución #${returnId} (venta #${orderId})`, userId]
       );
     }
 
     // Si con esta devolución se devolvió TODO lo vendido en la orden (sumando
     // devoluciones previas + esta), marcar la orden como 'refunded'. Si fue
-    // parcial, la orden se queda 'completed' — sigue siendo una venta válida.
+    // parcial, pasa a 'partial_refund' — ya no es una venta "completa" al
+    // 100%, pero tampoco se perdió del todo: sigue representando ingreso
+    // real por la parte no devuelta (dashboard/reportes la siguen contando,
+    // solo que neta de lo reembolsado — ver dashboardService/orderService).
     const allReturned = details.every(d => {
       const key = keyOf(d.product_id, d.variant_id);
       return (returnedMap.get(key) ?? 0) >= Number(d.quantity) - 1e-9;
     });
-    if (allReturned) {
-      await conn.query(
-        `UPDATE orders SET status = 'refunded', updated_at = NOW() WHERE order_id = ?`,
-        [orderId]
-      );
-    }
+    await conn.query(
+      `UPDATE orders SET status = ?, updated_at = NOW() WHERE order_id = ?`,
+      [allReturned ? 'refunded' : 'partial_refund', orderId]
+    );
 
     await conn.commit();
-    return { returnId, amountRefunded: Number(refundAmount), orderFullyRefunded: allReturned };
+    return {
+      returnId,
+      amountRefunded: Number(refundAmount),
+      creditAdjustmentAmount: creditReduction,
+      cashRefunded: cashPortion,
+      orderFullyRefunded: allReturned,
+    };
   } catch (err) {
     await conn.rollback();
     throw err;

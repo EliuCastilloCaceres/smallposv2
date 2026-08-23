@@ -19,7 +19,13 @@ const CREDIT_STATUS_META = {
   paid:      { label: 'Pagado',    cls: 'sls-status--on' },
   cancelled: { label: 'Cancelado', cls: 'sls-status--off' },
 }
-
+const STATUS_META = {
+  completed:      { label: 'Completada', cls: 'sls-status--on' },
+  cancelled:      { label: 'Cancelada',  cls: 'sls-status--off' },
+  refunded:       { label: 'Reembolsada',  cls: 'sls-status--refunded' },
+  partial_refund: { label: 'Reembolso parcial',  cls: 'sls-status--partial' }
+  
+}
 const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
   // FIX: ya no depende de BranchContext para nada — receipt y branchName
   // ahora vienen de la orden misma (ver handleReprint)
@@ -142,10 +148,10 @@ const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
                 <div><span className="sls-muted">Caja</span><strong>{order.cash_register_name}</strong></div>
                 <div>
                   <span className="sls-muted">Estado</span>
-                  <span className={`sls-status ${order.status === 'completed' ? 'sls-status--on' : 'sls-status--off'}`}>
-                    <span className="sls-status__dot" />
-                    {order.status === 'completed' ? 'Completada' : 'Cancelada'}
-                  </span>
+                      <span className={`sls-status ${(STATUS_META[data.order.status] ?? {}).cls ?? ''}`}>
+                        <span className="sls-status__dot" />
+                        {(STATUS_META[data.order.status] ?? {}).label ?? data.order.status}
+                      </span>
                 </div>
               </div>
 

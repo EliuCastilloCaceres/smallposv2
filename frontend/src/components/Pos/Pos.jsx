@@ -1,7 +1,7 @@
 // src/components/Pos/Pos.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { PosContextProvider, usePos } from '../../Context/PosContext'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import BranchGate from '../Common/BranchGate'
 import ConfirmDialog from '../Common/ConfirmDialog'
 import RegisterGate from './RegisterGate'
@@ -649,59 +649,65 @@ const SaleScreen = () => {
               const key = item.variant_id ?? item.product_id
               return (
                 <div key={key} className="pos-cart-item">
-                  {/* Fila 1: imagen + nombre + eliminar */}
-                  <div className="pos-cart-item__row1">
-                    <div className="pos-thumb-sm">
-                      {item.image ? <img src={item.image} alt="" /> : <i className="bi bi-box-seam" />}
-                    </div>
-                    <div className="pos-cart-item__info">
-                      <span className="pos-cart-item__name">{item.name}</span>
-                    </div>
-                    <button type="button" className="pos-cart-item__remove"
-                      onClick={() => { removeItem(item.product_id, item.variant_id); focusSearch() }}>
-                      <i className="bi bi-trash3" />
-                    </button>
+                  {/* [NUEVO] Imagen fuera de las filas de texto — ocupa todo
+                      el alto de la tarjeta (nombre + precio/cantidad juntos)
+                      vía align-items: stretch en el contenedor padre. */}
+                  <div className="pos-cart-item__thumb">
+                    {item.image ? <img src={item.image} alt="" /> : <i className="bi bi-box-seam" />}
                   </div>
 
-                  {/* Fila 2: precio editable + cantidad editable + subtotal — alineados, sin depender del ancho del nombre */}
-                  <div className="pos-cart-item__row2">
-                    <div className="pos-cart-item__price-group">
-                      <span className="pos-cart-item__price-currency">$</span>
-                      <EditableNumber
-                        min="0" step="0.01" inputMode="decimal"
-                        className="pos-cart-item__price-input"
-                        value={item.unit_price}
-                        emptyFallback={item.original_price ?? 1}
-                        onCommit={(v) => updatePrice(item.product_id, item.variant_id, v)}
-                        onEnterNext={focusSearch}
-                      />
-                      <span className="pos-cart-item__price">c/u</span>
+                  <div className="pos-cart-item__body">
+                    {/* Fila 1: nombre + eliminar */}
+                    <div className="pos-cart-item__row1">
+                      <div className="pos-cart-item__info">
+                        <span className="pos-cart-item__name">{item.name}</span>
+                      </div>
+                      <button type="button" className="pos-cart-item__remove"
+                        onClick={() => { removeItem(item.product_id, item.variant_id); focusSearch() }}>
+                        <i className="bi bi-trash3" />
+                      </button>
                     </div>
 
-                    <span className="pos-cart-item__spacer" />
+                    {/* Fila 2: precio editable + cantidad editable + subtotal */}
+                    <div className="pos-cart-item__row2">
+                      <div className="pos-cart-item__price-group">
+                        <span className="pos-cart-item__price-currency">$</span>
+                        <EditableNumber
+                          min="0" step="0.01" inputMode="decimal"
+                          className="pos-cart-item__price-input"
+                          value={item.unit_price}
+                          emptyFallback={item.original_price ?? 1}
+                          onCommit={(v) => updatePrice(item.product_id, item.variant_id, v)}
+                          onEnterNext={focusSearch}
+                        />
+                        <span className="pos-cart-item__price">c/u</span>
+                      </div>
 
-                    <div className="pos-cart-item__qty">
-                      <button type="button" onClick={() => handleDecreaseQty(item)}>
-                        <i className="bi bi-dash" />
-                      </button>
-                      <EditableNumber
-                        min="0.001" step="any" inputMode="decimal"
-                        className="pos-cart-item__qty-input"
-                        value={item.quantity}
-                        maxValue={item.stock}
-                        onCommit={(v) => updateQty(item.product_id, item.variant_id, v)}
-                        onClamped={() => warnMaxStock(item.variant_id ?? item.product_id)}
-                        onEnterNext={focusSearch}
-                      />
-                      <button type="button" onClick={() => handleIncreaseQty(item)}>
-                        <i className="bi bi-plus" />
-                      </button>
-                      {qtyWarnKey === (item.variant_id ?? item.product_id) && (
-                        <span className="pos-cart-item__qty-warn">Stock máximo: {item.stock}</span>
-                      )}
+                      <span className="pos-cart-item__spacer" />
+
+                      <div className="pos-cart-item__qty">
+                        <button type="button" onClick={() => handleDecreaseQty(item)}>
+                          <i className="bi bi-dash" />
+                        </button>
+                        <EditableNumber
+                          min="0.001" step="any" inputMode="decimal"
+                          className="pos-cart-item__qty-input"
+                          value={item.quantity}
+                          maxValue={item.stock}
+                          onCommit={(v) => updateQty(item.product_id, item.variant_id, v)}
+                          onClamped={() => warnMaxStock(item.variant_id ?? item.product_id)}
+                          onEnterNext={focusSearch}
+                        />
+                        <button type="button" onClick={() => handleIncreaseQty(item)}>
+                          <i className="bi bi-plus" />
+                        </button>
+                        {qtyWarnKey === (item.variant_id ?? item.product_id) && (
+                          <span className="pos-cart-item__qty-warn">Stock máximo: {item.stock}</span>
+                        )}
+                      </div>
+
+                      <strong className="pos-cart-item__subtotal">{money(item.subtotal)}</strong>
                     </div>
-
-                    <strong className="pos-cart-item__subtotal">{money(item.subtotal)}</strong>
                   </div>
                 </div>
               )

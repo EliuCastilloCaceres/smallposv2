@@ -15,6 +15,8 @@
   --sls-green-bg:   rgba(22,163,74,.10);
   --sls-red:        #dc2626;
   --sls-red-bg:     rgba(220,38,38,.08);
+  --sls-purple:    #9333ea;
+  --sls-yellow:    #eab308;
   --touch-min:      44px;
 }
 
@@ -108,6 +110,11 @@
 .sls-status--on  .sls-status__dot { background: var(--sls-green); }
 .sls-status--off { color: var(--sls-red); }
 .sls-status--off .sls-status__dot { background: var(--sls-red); }
+.sls-status--refunded { color: var(--sls-purple); }
+.sls-status--refunded .sls-status__dot { background: var(--sls-purple); }
+.sls-status--partial { color: var(--sls-yellow); }
+.sls-status--partial .sls-status__dot { background: var(--sls-yellow); }
+
 
 /* ── Tabla (desktop) ─────────────────────────────────────── */
 .sls-table-wrap {

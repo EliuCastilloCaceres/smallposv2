@@ -757,23 +757,43 @@
 .dash-product__img-wrap {
   position: relative;
   flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .dash-product__img {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  object-fit: cover;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  object-fit: contain;
   background: var(--dash-bg);
   border: 1px solid var(--dash-border);
+}
+/* FIX: sin imagen se mostraba el ícono "suelto" (tamaño de fuente natural,
+   sin caja) en vez de ocupar el mismo espacio que .dash-product__img
+   — quedaba descuadrado frente a los productos que sí tienen foto. */
+.dash-product__img-wrap i {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--dash-bg);
+  border: 1px solid var(--dash-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--dash-text-3);
 }
 .dash-product__rank-badge {
   position: absolute;
   bottom: -4px; right: -4px;
-  width: 18px; height: 18px;
+  width: 20px; height: 20px;
   border-radius: 50%;
   background: var(--dash-accent);
   color: #fff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -845,6 +865,25 @@
 .dash-product-card__img-wrap {
   position: relative;
   flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* FIX: mismo problema que en .dash-product__img-wrap — el ícono de
+   respaldo sin imagen quedaba sin caja propia en la vista de tarjetas. */
+.dash-product-card__img-wrap i {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--dash-bg);
+  border: 1px solid var(--dash-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  color: var(--dash-text-3);
 }
 .dash-product-card__info {
   display: flex;

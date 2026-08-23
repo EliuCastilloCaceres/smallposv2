@@ -37,9 +37,12 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
   const [error,    setError]    = useState(null)
   const [result,   setResult]   = useState(null) // { orderId } tras éxito
 
-  const assigned  = lines.reduce((s, l) => s + l.amount, 0)
+  const assigned  = lines.reduce((s, l) => s + (Number(l.amount) || 0), 0)
   const remaining = Math.max(0, +(total - assigned).toFixed(2))
   const totalChange = lines.reduce((s, l) => s + (l.cash_change ?? 0), 0)
+  // Venta con total $0 (p. ej. descuento del 100%) — no requiere método de
+  // pago, se confirma directo sin líneas asignadas.
+  const isFreeSale = total === 0
 
   // 'credit' se excluye del selector de métodos — tiene su propio flujo en
   // CreditModal (ver botón "Crédito" junto a "Apartar" en la pantalla de venta).
@@ -47,8 +50,17 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
 
   const removeLine = (idx) => setLines(prev => prev.filter((_, i) => i !== idx))
   const updateLineAmount = (idx, value) => {
+    // Permite dejar el input vacío mientras el cajero escribe (sin forzar el
+    // 0 en cada tecleo); se normaliza en blurLineAmount si queda vacío.
+    if (value === '') {
+      setLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: '' } : l))
+      return
+    }
     const n = Math.max(0, Number(value) || 0)
     setLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: n } : l))
+  }
+  const blurLineAmount = (idx) => {
+    setLines(prev => prev.map((l, i) => (i === idx && l.amount === '') ? { ...l, amount: 0 } : l))
   }
 
   const pickMethod = (method) => {
@@ -90,7 +102,7 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
     setCashReceived('')
   }
 
-  const canConfirm = remaining === 0 && lines.length > 0 && !isSaving
+  const canConfirm = !isSaving && (isFreeSale || (remaining === 0 && lines.length > 0))
 
   const handleConfirmSale = async () => {
     setIsSaving(true)
@@ -113,7 +125,7 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
         })),
         payments: lines.map(l => ({
           payment_method_id: l.payment_method_id,
-          amount:            l.amount,
+          amount:            Number(l.amount) || 0,
           cash_received:     l.cash_received,
           cash_change:       l.cash_change,
         })),
@@ -177,88 +189,98 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
                 <div className="pos-alert pos-alert--error"><i className="bi bi-exclamation-circle" /><span>{error}</span></div>
               )}
 
-              {/* Líneas de pago ya asignadas */}
-              {lines.length > 0 && (
-                <div className="pos-pay-lines">
-                  {lines.map((l, i) => (
-                    <div key={i} className="pos-pay-line">
-                      <span className="pos-pay-line__name">{l.name}</span>
-                      <input
-                        type="number" min="0" step="0.01"
-                        className="pos-pay-line__amount"
-                        value={l.amount}
-                        onChange={e => updateLineAmount(i, e.target.value)}
-                      />
-                      {l.cash_change > 0 && (
-                        <span className="pos-pay-line__change">cambio {money(l.cash_change)}</span>
-                      )}
-                      <button type="button" className="pos-pay-line__remove" onClick={() => removeLine(i)}>
-                        <i className="bi bi-x" />
-                      </button>
-                    </div>
-                  ))}
+              {isFreeSale ? (
+                <div className="pos-alert pos-alert--info">
+                  <i className="bi bi-info-circle" />
+                  <span>Esta venta no tiene costo (descuento del 100% o total en $0). No se requiere método de pago.</span>
                 </div>
-              )}
-
-              {/* Restante por asignar */}
-              {remaining > 0 && (
-                <div className="pos-pay-remaining">
-                  Falta por asignar: <strong>{money(remaining)}</strong>
-                </div>
-              )}
-
-              {/* Panel de efectivo recibido */}
-              {cashPanel ? (
-                <div className="pos-pay-cash-panel">
-                  <div className="pos-field pos-field__prefix">
-                    <label className="pos-field__label">Monto recibido</label>
-                    <span>$</span>
-                    <input
-                      type="number" min="0" step="0.01"
-                      className="pos-field__input"
-                      value={cashReceived}
-                      onChange={e => setCashReceived(e.target.value)}
-                      placeholder="0.00"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="pos-pay-quick-grid">
-                    <button type="button" className="pos-btn pos-btn--ghost pos-pay-quick-exact"
-                      onClick={() => setCashReceived(String(remaining))}>
-                      Exacto ({money(remaining)})
-                    </button>
-                    {QUICK_AMOUNTS.map(n => (
-                      <button key={n} type="button" className="pos-btn pos-btn--ghost" onClick={() => addQuickAmount(n)}>
-                        +${n}
-                      </button>
-                    ))}
-                  </div>
-                  {Number(cashReceived) > 0 && (
-                    <div className="pos-pay-change-preview">
-                      Cambio: <strong>{money(Math.max(0, Number(cashReceived) - remaining))}</strong>
+              ) : (
+                <>
+                  {/* Líneas de pago ya asignadas */}
+                  {lines.length > 0 && (
+                    <div className="pos-pay-lines">
+                      {lines.map((l, i) => (
+                        <div key={i} className="pos-pay-line">
+                          <span className="pos-pay-line__name">{l.name}</span>
+                          <input
+                            type="number" min="0" step="0.01"
+                            className="pos-pay-line__amount"
+                            value={l.amount}
+                            onChange={e => updateLineAmount(i, e.target.value)}
+                            onBlur={() => blurLineAmount(i)}
+                          />
+                          {l.cash_change > 0 && (
+                            <span className="pos-pay-line__change">cambio {money(l.cash_change)}</span>
+                          )}
+                          <button type="button" className="pos-pay-line__remove" onClick={() => removeLine(i)}>
+                            <i className="bi bi-x" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="pos-btn pos-btn--ghost" style={{ flex: 1 }}
-                      onClick={() => { setCashPanel(false); setCashReceived('') }}>Cancelar</button>
-                    <button type="button" className="pos-btn pos-btn--primary" style={{ flex: 1 }}
-                      onClick={confirmCashLine} disabled={!(Number(cashReceived) > 0)}>
-                      <i className="bi bi-check-lg" /> Agregar pago
-                    </button>
-                  </div>
-                </div>
-              ) : remaining > 0 && (
-                <div className="pos-pay-methods">
-                  {availableMethods.map(m => (
-                    <button
-                      key={m.payment_method_id} type="button" className="pos-pay-method-btn"
-                      onClick={() => pickMethod(m)}
-                    >
-                      <i className={`bi ${m.code === 'cash' ? 'bi-cash' : 'bi-credit-card'}`} />
-                      <span>{m.name}</span>
-                    </button>
-                  ))}
-                </div>
+
+                  {/* Restante por asignar */}
+                  {remaining > 0 && (
+                    <div className="pos-pay-remaining">
+                      Falta por asignar: <strong>{money(remaining)}</strong>
+                    </div>
+                  )}
+
+                  {/* Panel de efectivo recibido */}
+                  {cashPanel ? (
+                    <div className="pos-pay-cash-panel">
+                      <div className="pos-field pos-field__prefix">
+                        <label className="pos-field__label">Monto recibido</label>
+                        <span>$</span>
+                        <input
+                          type="number" min="0" step="0.01"
+                          className="pos-field__input"
+                          value={cashReceived}
+                          onChange={e => setCashReceived(e.target.value)}
+                          placeholder="0.00"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="pos-pay-quick-grid">
+                        <button type="button" className="pos-btn pos-btn--ghost pos-pay-quick-exact"
+                          onClick={() => setCashReceived(String(remaining))}>
+                          Exacto ({money(remaining)})
+                        </button>
+                        {QUICK_AMOUNTS.map(n => (
+                          <button key={n} type="button" className="pos-btn pos-btn--ghost" onClick={() => addQuickAmount(n)}>
+                            +${n}
+                          </button>
+                        ))}
+                      </div>
+                      {Number(cashReceived) > 0 && (
+                        <div className="pos-pay-change-preview">
+                          Cambio: <strong>{money(Math.max(0, Number(cashReceived) - remaining))}</strong>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" className="pos-btn pos-btn--ghost" style={{ flex: 1 }}
+                          onClick={() => { setCashPanel(false); setCashReceived('') }}>Cancelar</button>
+                        <button type="button" className="pos-btn pos-btn--primary" style={{ flex: 1 }}
+                          onClick={confirmCashLine} disabled={!(Number(cashReceived) > 0)}>
+                          <i className="bi bi-check-lg" /> Agregar pago
+                        </button>
+                      </div>
+                    </div>
+                  ) : remaining > 0 && (
+                    <div className="pos-pay-methods">
+                      {availableMethods.map(m => (
+                        <button
+                          key={m.payment_method_id} type="button" className="pos-pay-method-btn"
+                          onClick={() => pickMethod(m)}
+                        >
+                          <i className={`bi ${m.code === 'cash' ? 'bi-cash' : 'bi-credit-card'}`} />
+                          <span>{m.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </>
           ) : (

@@ -216,22 +216,25 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, cashCounted, wi
       [session.session_id]
     );
 
-    // [NUEVO] Total vendido por método de pago en esta sesión (mismo patrón
-    // que getSessionStatus — cash_movements solo cubre efectivo, el resto
-    // sale de order_payments de las órdenes de esta caja).
+    // [FIX] Total vendido por método de pago en esta sesión. Antes salía de
+    // order_payments + un JOIN por cash_register_id/fecha — eso solo
+    // cubría ventas normales del POS, y para apartados/créditos atribuía
+    // mal el dinero (todo el historial de abonos aparecía en la sesión que
+    // completó/canceló, no en la sesión real donde se cobró cada uno).
+    // payment_events ya trae, para cada abono de CUALQUIER origen (venta,
+    // apartado, crédito), la sesión exacta en que se cobró — así que aquí
+    // basta filtrar por session_id, sin JOIN a orders ni rango de fechas.
     const [methodRows] = await conn.query(
       `SELECT pm.payment_method_id, pm.code, pm.name,
-              COALESCE(SUM(CASE WHEN o.order_id IS NOT NULL THEN op.amount ELSE 0 END), 0) AS total
+              COALESCE(SUM(pe.amount), 0) AS total
        FROM payment_methods pm
-       LEFT JOIN order_payments op ON op.payment_method_id = pm.payment_method_id
-       LEFT JOIN orders o ON o.order_id = op.order_id
-         AND o.cash_register_id = ?
-         AND o.status = 'completed'
-         AND o.created_at >= ?
+       LEFT JOIN payment_events pe
+         ON pe.payment_method_id = pm.payment_method_id
+         AND pe.session_id = ?
        WHERE pm.is_active = 1
        GROUP BY pm.payment_method_id, pm.code, pm.name
        ORDER BY pm.name ASC`,
-      [cashRegisterId, session.opened_at]
+      [session.session_id]
     );
     // [FIX] Antes se sobreescribía el total de la fila "cash" con
     // expectedClose (saldo neto del retiro) — por eso en "Ventas por método
@@ -402,24 +405,24 @@ const getSessionStatus = async ({ cashRegisterId, branchId }) => {
 
   const expectedClose = +(session.open_amount + totals.total_in - totals.total_out).toFixed(2);
 
-  // [NUEVO] Esperado por método de pago — para el corte de caja detallado.
-  // cash_movements solo registra la porción en EFECTIVO de cada venta (así
-  // se calcula expectedClose arriba), así que para el resto de los métodos
-  // (tarjeta, crédito, etc.) hay que sumar directo de order_payments de las
-  // órdenes de ESTA sesión (mismo patrón que reportsService.getSalesByPaymentMethod).
+  // [FIX] Esperado por método de pago — para el corte de caja detallado.
+  // Antes salía de order_payments + orders filtrado por cash_register_id y
+  // fecha; eso dejaba fuera cualquier abono de apartados/créditos con
+  // método distinto a efectivo (nunca tocaban orders), y cuando sí se
+  // reflejaban (al completar un apartado) quedaban atribuidos a la sesión
+  // equivocada. payment_events ya tiene, para cada cobro de cualquier
+  // origen, la sesión real en que ocurrió — basta filtrar por session_id.
   const [methodRows] = await db.query(
     `SELECT pm.payment_method_id, pm.code, pm.name,
-            COALESCE(SUM(CASE WHEN o.order_id IS NOT NULL THEN op.amount ELSE 0 END), 0) AS expected
+            COALESCE(SUM(pe.amount), 0) AS expected
      FROM payment_methods pm
-     LEFT JOIN order_payments op ON op.payment_method_id = pm.payment_method_id
-     LEFT JOIN orders o ON o.order_id = op.order_id
-       AND o.cash_register_id = ?
-       AND o.status = 'completed'
-       AND o.created_at >= ?
+     LEFT JOIN payment_events pe
+       ON pe.payment_method_id = pm.payment_method_id
+       AND pe.session_id = ?
      WHERE pm.is_active = 1
      GROUP BY pm.payment_method_id, pm.code, pm.name
      ORDER BY pm.name ASC`,
-    [cashRegisterId, session.opened_at]
+    [session.session_id]
   );
 
   // El renglón de efectivo usa expectedClose (incluye apertura + movimientos

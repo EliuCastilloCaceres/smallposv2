@@ -178,6 +178,7 @@ const createLayaway = async ({
   customerId, branchId, userId,
   items, initialPayments = [],
   dueDate = null, notes = null,
+  cashRegisterId = null,
 }) => {
   if (!items || items.length === 0) {
     throw new ValidationError('El apartado debe tener al menos un producto');
@@ -202,8 +203,41 @@ const createLayaway = async ({
   try {
     await conn.beginTransaction();
 
+    let session = null;
+    let methods  = [];
     if (hasInitialPayment) {
-      await validatePayments(conn, initialPayments);
+      // [FIX] Antes se llamaba a validatePayments sin capturar su
+      // resultado — 'methods' quedaba undefined y tronaba con
+      // ReferenceError más abajo, en el cálculo de cashAmount del
+      // anticipo, cada vez que se creaba un apartado con anticipo.
+      methods = await validatePayments(conn, initialPayments);
+
+      // [FIX] Antes, el anticipo inicial de un apartado no validaba caja
+      // ni dejaba NINGÚN rastro en cash_movements — ni siquiera la parte en
+      // efectivo. Ahora es obligatorio indicar la caja, igual que en un
+      // abono posterior, para que el anticipo también quede reflejado en
+      // el corte de caja de la sesión en que se recibió.
+      if (!cashRegisterId) {
+        throw new ValidationError('Selecciona la caja donde se registrará el anticipo');
+      }
+      const [registers] = await conn.query(
+        `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
+        [cashRegisterId]
+      );
+      if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
+      if (!registers[0].is_open) {
+        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el anticipo.');
+      }
+      const [sessions] = await conn.query(
+        `SELECT session_id, user_id FROM cash_register_sessions
+         WHERE cash_register_id = ? AND closed_at IS NULL
+         ORDER BY session_id DESC LIMIT 1`,
+        [cashRegisterId]
+      );
+      if (sessions.length === 0) {
+        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el anticipo.');
+      }
+      session = sessions[0];
     }
 
     // Verificar stock disponible para todos los items antes de reservar
@@ -270,6 +304,35 @@ const createLayaway = async ({
              (payment_id, payment_method_id, amount, cash_received, cash_change, reference)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [paymentId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
+        );
+
+        // [NUEVO] Rastro en payment_events para el corte de caja —
+        // independiente del método de pago.
+        await conn.query(
+          `INSERT INTO payment_events
+             (source_type, source_id, branch_id, cash_register_id, session_id,
+              payment_method_id, amount, user_id)
+           VALUES ('layaway', ?, ?, ?, ?, ?, ?, ?)`,
+          [layawayId, branchId, cashRegisterId, session.session_id, p.payment_method_id, p.amount, userId]
+        );
+      }
+
+      // [NUEVO] La porción en efectivo del anticipo también mueve
+      // cash_movements — antes NO se registraba en absoluto (ni siquiera
+      // para efectivo), así que ese dinero nunca aparecía en el corte.
+      const cashAmount = initialPayments.reduce((sum, p) => {
+        const method = methods.find(m => m.payment_method_id === Number(p.payment_method_id));
+        return method?.code === 'cash' ? sum + Number(p.amount) : sum;
+      }, 0);
+      if (cashAmount > 0) {
+        if (session.user_id !== userId) {
+          throw new ForbiddenError('Solo puedes registrar el efectivo del anticipo en una caja que tú mismo tengas abierta.');
+        }
+        await conn.query(
+          `INSERT INTO cash_movements
+             (session_id, movement_type, amount, description, user_id)
+           VALUES (?, 'sale', ?, ?, ?)`,
+          [session.session_id, cashAmount, `Anticipo de apartado #${layawayId}`, userId]
         );
       }
     }
@@ -367,6 +430,16 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null,
            (payment_id, payment_method_id, amount, cash_received, cash_change, reference)
          VALUES (?, ?, ?, ?, ?, ?)`,
         [paymentId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
+      );
+
+      // [NUEVO] Rastro en payment_events para el corte de caja — cubre
+      // TODOS los métodos, no solo efectivo (a diferencia de cash_movements).
+      await conn.query(
+        `INSERT INTO payment_events
+           (source_type, source_id, branch_id, cash_register_id, session_id,
+            payment_method_id, amount, user_id)
+         VALUES ('layaway', ?, ?, ?, ?, ?, ?, ?)`,
+        [layawayId, branchId, cashRegisterId, sessions[0].session_id, p.payment_method_id, p.amount, userId]
       );
     }
 
@@ -493,6 +566,23 @@ const convertLayawayToOrder = async (conn, { layawayId, customerId, totalAmount,
 // ─── Cancelar apartado ────────────────────────────────────────────────────────
 // Devuelve el stock reservado al inventario disponible.
 
+// ─── Cancelar apartado ─────────────────────────────────────────────────────
+// [CAMBIO] Mismo criterio que creditService.cancelCreditSale: si el cliente
+// ya pagó algo, solo se cancela automáticamente cuando TODO lo pagado es el
+// anticipo inicial — si hay abonos reales hechos después (otra visita),
+// mezclar esa cancelación con dinero ya cobrado en otra sesión es un caso
+// ambiguo (¿se le devuelve? ¿se le abona a otra cosa?) que debe resolverse
+// a mano desde el módulo de apartados, no de forma automática aquí.
+//
+// A diferencia de un crédito -donde el anticipo es parte de la MISMA orden
+// que se cancela en otro lado (orderService.cancelOrder) y por eso
+// cancelCreditSale solo limpia su propio ledger- en un apartado el anticipo
+// genera su propio cash_movements y payment_events directamente aquí (ver
+// createLayaway), sin ninguna orden de por medio todavía. Por eso, si se
+// revierte, también hay que revertir esos dos rastros, o el dinero se queda
+// contado en el corte de caja de una sesión que ya no respalda nada.
+const LAYAWAY_ANTICIPO_NOTE = 'Anticipo inicial';
+
 const cancelLayaway = async ({ layawayId, userId }) => {
   const conn = await db.getConnection();
   try {
@@ -505,6 +595,87 @@ const cancelLayaway = async ({ layawayId, userId }) => {
     const layaway = rows[0];
     if (layaway.status !== 'active') {
       throw new ValidationError(`El apartado ya está en estado "${layaway.status}"`);
+    }
+
+    if (Number(layaway.amount_paid) > 0) {
+      const [payments] = await conn.query(
+        `SELECT payment_id, notes FROM layaway_payments WHERE layaway_id = ?`,
+        [layawayId]
+      );
+      const onlyInitialAnticipo = payments.length > 0 && payments.every(p => p.notes === LAYAWAY_ANTICIPO_NOTE);
+
+      if (!onlyInitialAnticipo) {
+        throw new ValidationError(
+          'No se puede cancelar el apartado: el cliente ya hizo abonos además del anticipo inicial. Ajusta el apartado manualmente desde el módulo correspondiente antes de cancelar.'
+        );
+      }
+
+      // Revertir el rastro en payment_events y cash_movements — mismo
+      // patrón que orderService.cancelOrder: se busca la sesión
+      // ACTUALMENTE ABIERTA de cada caja involucrada (no la sesión en la
+      // que se recibió el anticipo) y ahí se inserta la reversa. Si esa
+      // caja ya no tiene sesión abierta, no se corrige retroactivamente
+      // ese corte — la reversa queda pendiente, igual que en cancelOrder.
+      const [events] = await conn.query(
+        `SELECT * FROM payment_events WHERE source_type = 'layaway' AND source_id = ?`,
+        [layawayId]
+      );
+
+      const registerIds = [...new Set(events.map(e => e.cash_register_id))];
+      const openSessionByRegister = new Map();
+      for (const registerId of registerIds) {
+        const [session] = await conn.query(
+          `SELECT session_id FROM cash_register_sessions
+           WHERE cash_register_id = ? AND closed_at IS NULL
+           ORDER BY session_id DESC LIMIT 1`,
+          [registerId]
+        );
+        if (session.length > 0) openSessionByRegister.set(registerId, session[0].session_id);
+      }
+
+      // payment_events: una línea negativa por cada línea original, cubre
+      // todos los métodos, no solo efectivo — igual que cancelOrder.
+      for (const ev of events) {
+        const sessionId = openSessionByRegister.get(ev.cash_register_id);
+        if (!sessionId) continue; // esa caja ya no tiene sesión abierta
+        await conn.query(
+          `INSERT INTO payment_events
+             (source_type, source_id, branch_id, cash_register_id, session_id,
+              payment_method_id, amount, user_id)
+           VALUES ('layaway', ?, ?, ?, ?, ?, ?, ?)`,
+          [layawayId, ev.branch_id, ev.cash_register_id, sessionId, ev.payment_method_id, -Number(ev.amount), userId]
+        );
+      }
+
+      // cash_movements: 'return' con monto POSITIVO (igual que
+      // cancelOrder — el signo/dirección lo lleva movement_type, no el
+      // número), agrupado por caja por si el anticipo llegó a tener
+      // líneas de efectivo en más de una (no debería, pero no se asume).
+      const [cashEvents] = await conn.query(
+        `SELECT pe.cash_register_id, pe.amount
+         FROM payment_events pe
+         JOIN payment_methods pm ON pe.payment_method_id = pm.payment_method_id
+         WHERE pe.source_type = 'layaway' AND pe.source_id = ? AND pm.code = 'cash'`,
+        [layawayId]
+      );
+      const cashByRegister = new Map();
+      for (const e of cashEvents) {
+        cashByRegister.set(e.cash_register_id, (cashByRegister.get(e.cash_register_id) ?? 0) + Number(e.amount));
+      }
+      for (const [registerId, cashAmount] of cashByRegister) {
+        const sessionId = openSessionByRegister.get(registerId);
+        if (!sessionId || cashAmount <= 0) continue; // esa caja ya no tiene sesión abierta
+        await conn.query(
+          `INSERT INTO cash_movements
+             (session_id, movement_type, amount, description, user_id)
+           VALUES (?, 'return', ?, ?, ?)`,
+          [sessionId, cashAmount, `Cancelación de apartado #${layawayId}`, userId]
+        );
+      }
+
+      const paymentIds = payments.map(p => p.payment_id);
+      await conn.query(`DELETE FROM layaway_payment_details WHERE payment_id IN (?)`, [paymentIds]);
+      await conn.query(`DELETE FROM layaway_payments WHERE payment_id IN (?)`, [paymentIds]);
     }
 
     // Restaurar stock reservado
@@ -522,8 +693,15 @@ const cancelLayaway = async ({ layawayId, userId }) => {
       });
     }
 
+    // [FIX] antes se dejaba amount_paid/balance intactos al cancelar,
+    // incluso con el anticipo ya revertido arriba — con amount_paid en 0,
+    // el único balance matemáticamente consistente es total_amount (mismo
+    // razonamiento que creditService.cancelCreditSale con su CHECK de
+    // balance = total_amount - amount_paid).
     await conn.query(
-      `UPDATE layaways SET status = 'cancelled', updated_at = NOW() WHERE layaway_id = ?`,
+      `UPDATE layaways
+       SET status = 'cancelled', amount_paid = 0, balance = total_amount, updated_at = NOW()
+       WHERE layaway_id = ?`,
       [layawayId]
     );
 

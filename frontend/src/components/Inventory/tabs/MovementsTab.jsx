@@ -12,6 +12,7 @@ const OPERATION_LABELS = {
   return:            { label: 'Devolución',         cls: 'inv-op--entry'    },
   layaway_reserve:   { label: 'Apartado',           cls: 'inv-op--exit'    },
   layaway_cancelled: { label: 'Apartado Cancelado', cls: 'inv-op--entry'    },
+  sale_cancelled:    { label: 'Venta Cancelada',    cls: 'inv-op--entry'    },
   adjustment:        { label: 'Ajuste',             cls: 'inv-op--adjust'   },
   transfer_out:      { label: 'Traspaso salida',    cls: 'inv-op--exit'   },
   transfer_in:       { label: 'Traspaso entrada',   cls: 'inv-op--entry' },

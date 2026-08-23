@@ -18,15 +18,6 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
   const [methods,   setMethods]   = useState([])
   const [registers, setRegisters] = useState([])
 
-  // FIX: branch puede venir null (admin central sin sucursal "operativa"
-  // seleccionada en ningún otro lado de la app — ver Credits.jsx). Como el
-  // abono SIEMPRE necesita una sucursal (creditService.addPayment la
-  // exige, sin importar el método de pago), se ofrece un selector propio
-  // aquí para ese caso — branches solo se usa cuando branch es null.
-  const [branches,        setBranches]        = useState([])
-  const [paymentBranchId, setPaymentBranchId]  = useState('')
-  const effectiveBranchId = branch?.branch_id ?? (paymentBranchId ? Number(paymentBranchId) : null)
-
   // ── Abono ──
   const [showPayForm,     setShowPayForm]     = useState(false)
   const [payAmount,       setPayAmount]       = useState('')
@@ -54,15 +45,7 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
   useEffect(load, [creditSaleId])
   useEffect(() => {
     api.get('payment-methods?is_active=true').then(({ data }) => setMethods(data.data)).catch(() => {})
-    // FIX: si no hay branch (admin central), se trae el listado de
-    // sucursales para el selector propio del abono en vez de tronar
-    // leyendo branch.branch_id de null. /branches/list en vez de
-    // /branches — no exige branches:read ni restringe a la sucursal
-    // propia (ver Credits.jsx)
-    if (!branch) {
-      api.get('branches/list').then(({ data }) => setBranches(data.data)).catch(() => {})
-    }
-  }, [branch])
+  }, [])
 
   // FIX: la caja depende del USUARIO, no de la sucursal elegida para el
   // abono — un usuario sin sucursal asignada (admin central) ve TODAS las
@@ -70,7 +53,7 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
   // asignada solo ve las de la suya. El backend ya resuelve esto
   // (resolveOptionalBranchId en cashRegistersController.getAll), así que
   // aquí ya no se manda branch_id ni se espera a que haya un
-  // effectiveBranchId — se carga una sola vez, igual que methods/branches.
+  // effectiveBranchId — se carga una sola vez, igual que methods.
   useEffect(() => {
     api.get('cash-registers').then(({ data }) => setRegisters(data.data)).catch(() => {})
   }, [])
@@ -80,6 +63,12 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
   const selectedMethod   = methods.find(m => m.payment_method_id === payMethodId)
   const isCash            = selectedMethod?.code === 'cash'
   const selectedRegister = registers.find(r => r.cash_register_id === cashRegisterId)
+
+  // FIX: la caja ahora es obligatoria para CUALQUIER abono (no solo
+  // efectivo), así que la sucursal siempre se deriva de la caja elegida —
+  // ya no hace falta un selector manual de sucursal aparte. Igual que en
+  // LayawayDetailModal.
+  const effectiveBranchId = branch?.branch_id ?? (selectedRegister?.branch_id ?? null)
 
   // FIX: cuando el usuario no tiene sucursal asignada, ve cajas de TODAS
   // las sucursales — sin el nombre de sucursal, dos cajas iguales en
@@ -110,15 +99,14 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
     if (!payMethodId) { setPayError('Selecciona un método de pago'); return }
     if (!(amount > 0)) { setPayError('Ingresa un monto válido'); return }
     if (amount > Number(credit.balance)) { setPayError(`El abono no puede superar el saldo pendiente (${money(credit.balance)})`); return }
-    // FIX: el abono siempre necesita una sucursal (efectivo o no) — antes
-    // se asumía branch.branch_id sin validar, y tronaba si branch era null
-    if (!effectiveBranchId) { setPayError('Selecciona la sucursal donde se recibe este abono'); return }
-
-    if (isCash) {
-      if (!cashRegisterId) { setPayError('Selecciona la caja donde se registrará el efectivo'); return }
-      if (registerError) { setPayError(registerError); return }
-      if (received < amount) { setPayError('El efectivo recibido no puede ser menor al monto del abono'); return }
-    }
+    // FIX: la caja ahora es obligatoria para cualquier abono — antes solo
+    // se exigía para efectivo. Igual que en Layaways, cada línea de pago
+    // debe quedar ligada a una caja para que payment_events sea exacto, y
+    // de ahí se deriva effectiveBranchId — ya no hace falta validarla
+    // aparte.
+    if (!cashRegisterId) { setPayError('Selecciona la caja donde se registrará este abono'); return }
+    if (registerError) { setPayError(registerError); return }
+    if (isCash && received < amount) { setPayError('El efectivo recibido no puede ser menor al monto del abono'); return }
 
     setIsPaying(true)
     setPayError(null)
@@ -130,7 +118,7 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
           cash_received: isCash ? received : null,
           cash_change:   isCash ? change   : null,
         }],
-        cashRegisterId: isCash ? cashRegisterId : null,
+        cashRegisterId,
         branch_id: effectiveBranchId,
       })
       setShowPayForm(false)
@@ -263,20 +251,6 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
                     <div className="crd-limit-edit">
                       {payError && <div className="crd-alert"><i className="bi bi-exclamation-circle" /><span>{payError}</span></div>}
 
-                      {/* FIX: solo se muestra cuando no hay una sucursal
-                          "operativa" implícita (admin central) — un
-                          usuario con sucursal asignada nunca ve esto, la
-                          suya se usa automáticamente */}
-                      {!branch && (
-                        <div className="crd-field">
-                          <label className="crd-field__label">Sucursal donde se recibe el abono</label>
-                          <select className="crd-field__input" value={paymentBranchId} onChange={e => setPaymentBranchId(e.target.value)}>
-                            <option value="">Selecciona...</option>
-                            {branches.map(b => <option key={b.branch_id} value={b.branch_id}>{b.name}</option>)}
-                          </select>
-                        </div>
-                      )}
-
                       <div className="crd-field">
                         <label className="crd-field__label">Monto</label>
                         <input type="number" min="0" step="0.01" className="crd-field__input"
@@ -302,20 +276,22 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
                             <span>Cambio</span>
                             <strong>{money(change)}</strong>
                           </div>
-
-                          <div className="crd-field">
-                            <label className="crd-field__label">Caja donde se registrará el efectivo</label>
-                            <select className="crd-field__input" value={cashRegisterId} onChange={e => setCashRegisterId(Number(e.target.value))}>
-                              <option value="">Selecciona...</option>
-                              {registers.map(r => (
-                                <option key={r.cash_register_id} value={r.cash_register_id}>{registerLabel(r)}</option>
-                              ))}
-                            </select>
-                          </div>
-                          {registerError && (
-                            <div className="crd-alert"><i className="bi bi-exclamation-circle" /><span>{registerError}</span></div>
-                          )}
                         </>
+                      )}
+
+                      {/* FIX: la caja ahora es obligatoria para cualquier
+                          abono, no solo efectivo — igual que en Layaways. */}
+                      <div className="crd-field">
+                        <label className="crd-field__label">Caja donde se registrará el abono</label>
+                        <select className="crd-field__input" value={cashRegisterId} onChange={e => setCashRegisterId(Number(e.target.value))}>
+                          <option value="">Selecciona...</option>
+                          {registers.map(r => (
+                            <option key={r.cash_register_id} value={r.cash_register_id}>{registerLabel(r)}</option>
+                          ))}
+                        </select>
+                      </div>
+                      {registerError && (
+                        <div className="crd-alert"><i className="bi bi-exclamation-circle" /><span>{registerError}</span></div>
                       )}
 
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -323,7 +299,7 @@ const CreditDetailModal = ({ creditSaleId, canApprove, onClose, onChanged, branc
                         <button
                           className="crd-btn crd-btn--primary" style={{ flex: 1 }}
                           onClick={handlePay}
-                          disabled={isPaying || !effectiveBranchId || (isCash && (!cashRegisterId || !!registerError))}
+                          disabled={isPaying || !cashRegisterId || !!registerError}
                         >
                           {isPaying ? <span className="crd-spinner" /> : 'Registrar abono'}
                         </button>

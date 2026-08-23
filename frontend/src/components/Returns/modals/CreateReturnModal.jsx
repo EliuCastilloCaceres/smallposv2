@@ -1,11 +1,14 @@
 // src/components/Returns/modals/CreateReturnModal.jsx
 // Flujo: 1) buscar la venta por folio -> 2) elegir productos/cantidades a
 // devolver (con "seleccionar todos") -> 3) monto a reembolsar + método +
-// (si es efectivo) la caja de la que sale ese efectivo, con la misma
-// validación que ya usan los abonos de crédito/apartado: la caja debe
-// estar abierta y ser una sesión propia del usuario. A diferencia de un
-// abono, aquí no hay "efectivo recibido / cambio" — el dinero SALE de la
-// caja, no entra, así que solo se pide el monto a descontar.
+// caja, con la misma validación que ya usan los abonos de crédito/apartado:
+// la caja debe estar abierta y ser una sesión propia del usuario. La caja
+// se pide siempre que haya un monto a reembolsar (no solo si el método es
+// efectivo) — el backend también la necesita cuando la devolución se
+// resuelve como reducción de crédito, y aquí no sabemos de antemano si
+// esta orden tiene un crédito asociado. A diferencia de un abono, aquí no
+// hay "efectivo recibido / cambio" — el dinero SALE de la caja, no entra,
+// así que solo se pide el monto a descontar.
 
 import { useState, useEffect } from 'react'
 import { useUser } from '../../../Context/UserContext'
@@ -133,9 +136,15 @@ const CreateReturnModal = ({ branch, branches = [], onClose, onCreated }) => {
     }))
 
   const amountNum = Number(refundAmount) || 0
+  // [FIX] Antes solo se exigía caja cuando el método era efectivo. El
+  // backend ahora la exige también cuando la devolución se resuelve como
+  // reducción de crédito (returnService.createReturn) — y aquí no sabemos
+  // de antemano si esta orden tiene un crédito asociado ni cuánto de
+  // refundAmount se absorbería contra su saldo, así que se pide la caja
+  // siempre que haya un monto a reembolsar, sin importar el método.
   const canConfirm = selectedItems.length > 0
     && !isSaving
-    && (amountNum === 0 || (payMethodId && (!isCash || (cashRegisterId && !registerError))))
+    && (amountNum === 0 || (payMethodId && cashRegisterId && !registerError))
 
   const handleConfirm = async () => {
     if (!canConfirm) return
@@ -148,7 +157,7 @@ const CreateReturnModal = ({ branch, branches = [], onClose, onCreated }) => {
         reason: reason.trim() || null,
         refundAmount: amountNum,
         paymentMethodId: amountNum > 0 ? payMethodId : null,
-        cashRegisterId: amountNum > 0 && isCash ? cashRegisterId : null,
+        cashRegisterId: amountNum > 0 ? cashRegisterId : null,
       }
       const { data } = await api.post(`returns?branch_id=${selectedBranch.branch_id}`, payload)
       setResult(data.data)
@@ -289,10 +298,10 @@ const CreateReturnModal = ({ branch, branches = [], onClose, onCreated }) => {
                     </div>
                   )}
 
-                  {amountNum > 0 && isCash && (
+                  {amountNum > 0 && (
                     <>
                       <div className="rtn-field">
-                        <label className="rtn-field__label">Caja de la que saldrá el efectivo</label>
+                        <label className="rtn-field__label">Caja</label>
                         <select className="rtn-field__input" value={cashRegisterId} onChange={e => setCashRegisterId(Number(e.target.value))}>
                           <option value="">Selecciona...</option>
                           {registers.map(r => (

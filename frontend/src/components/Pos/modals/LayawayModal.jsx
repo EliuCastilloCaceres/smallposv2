@@ -31,7 +31,7 @@ const defaultDueDate = () => {
 const itemLabel = (i) => i.name
 
 const LayawayModal = ({ onClose, onSaleCompleted }) => {
-  const { cart, subtotal, paymentMethods, branchId, completeSale } = usePos()
+  const { cart, subtotal, paymentMethods, branchId, activeRegisterId, isRegisterOpen, completeSale } = usePos()
 
   const isGenericCustomer = !cart.customerId || cart.customerId === GENERIC_CUSTOMER_ID
   const hasDiscount       = cart.discount.applied > 0
@@ -52,9 +52,16 @@ const LayawayModal = ({ onClose, onSaleCompleted }) => {
 
   const downAmt   = Math.max(0, Number(downAmount) || 0)
   const downError = downAmt > subtotal ? 'El anticipo no puede ser mayor al total' : null
+  // El anticipo se cobra en la caja que el POS ya tiene abierta — igual
+  // que una venta normal, no se le vuelve a preguntar al cajero. Si no
+  // hay ninguna caja abierta, no tiene sentido dejar capturar un anticipo.
+  const registerError = downAmt > 0 && !isRegisterOpen
+    ? 'Abre una caja antes de registrar un anticipo'
+    : null
 
   const handleConfirm = async () => {
     if (downError) { setError(downError); return }
+    if (registerError) { setError(registerError); return }
     setIsSaving(true)
     setError(null)
     try {
@@ -74,6 +81,9 @@ const LayawayModal = ({ onClose, onSaleCompleted }) => {
           unit_price: i.unit_price,
         })),
         initialPayments,
+        // Igual que una venta normal: la caja es la que el POS ya tiene
+        // abierta, no algo que el cajero deba volver a elegir aquí.
+        cashRegisterId: activeRegisterId,
         dueDate,
         notes: notes.trim() || null,
       }
@@ -164,6 +174,10 @@ const LayawayModal = ({ onClose, onSaleCompleted }) => {
                     </div>
                   )}
 
+                  {registerError && (
+                    <div className="pos-alert pos-alert--error"><i className="bi bi-exclamation-circle" /><span>{registerError}</span></div>
+                  )}
+
                   <div className="pos-pay-remaining">
                     Saldo pendiente: <strong>{money(Math.max(0, subtotal - downAmt))}</strong>
                   </div>
@@ -205,7 +219,7 @@ const LayawayModal = ({ onClose, onSaleCompleted }) => {
             <button
               type="button" className="pos-btn pos-btn--primary pos-btn--block"
               onClick={handleConfirm}
-              disabled={isSaving || hasDiscount || isGenericCustomer || !dueDate || !!downError}
+              disabled={isSaving || hasDiscount || isGenericCustomer || !dueDate || !!downError || !!registerError}
             >
               {isSaving ? <span className="pos-spinner" /> : <><i className="bi bi-bag-check" /> Crear apartado</>}
             </button>

@@ -387,27 +387,26 @@ const createReturn = async ({
       );
     }
 
-    // Reembolso en efectivo — mismo tratamiento que los abonos de
-    // crédito/apartado: la caja debe estar abierta y ser del usuario que
-    // registra la devolución. Aquí no hay "efectivo recibido/cambio" (el
-    // dinero sale de la caja, no entra), solo el monto que se descuenta.
-    // Se usa cashPortion (no refundAmount completo) — si parte del valor
-    // devuelto se absorbió como reducción de crédito, esa parte nunca
-    // salió ni sale de caja.
-    if (cashPortion > 0 && paymentMethod?.code === 'cash') {
+    // [FIX] Antes la caja solo se exigía cuando el reembolso salía en
+    // efectivo real. Pero payment_events necesita una sesión para CUALQUIER
+    // ajuste de dinero que se reporte — incluida la reducción de crédito,
+    // que no mueve un cajón físico pero sí debe restarse del bucket
+    // 'credit' en dashboard/ventas (igual que ya se resta ahí, ver
+    // dashboardService.getPaymentBreakdown). Por eso ahora se exige caja
+    // en cualquiera de los dos casos, no solo cuando hay efectivo/tarjeta.
+    let session = null;
+    if (cashPortion > 0 || creditReduction > 0) {
       if (!cashRegisterId) {
-        throw new ValidationError('Selecciona la caja de la que saldrá el efectivo del reembolso');
+        throw new ValidationError('Selecciona la caja donde se registrará esta devolución');
       }
-
       const [registers] = await conn.query(
         `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
         [cashRegisterId]
       );
       if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
       if (!registers[0].is_open) {
-        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el reembolso en efectivo.');
+        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar la devolución.');
       }
-
       const [sessions] = await conn.query(
         `SELECT session_id, user_id FROM cash_register_sessions
          WHERE cash_register_id = ? AND closed_at IS NULL
@@ -415,16 +414,62 @@ const createReturn = async ({
         [cashRegisterId]
       );
       if (sessions.length === 0) {
-        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el reembolso en efectivo.');
+        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar la devolución.');
       }
-      if (sessions[0].user_id !== userId) {
+      session = sessions[0];
+    }
+
+    // Reembolso en efectivo — mismo tratamiento que los abonos de
+    // crédito/apartado: la caja debe ser del usuario que registra la
+    // devolución SOLO cuando de verdad sale efectivo físico (elegir la
+    // caja para trazabilidad de tarjeta/crédito no toca ningún cajón
+    // ajeno, así que no necesita esa restricción). Aquí no hay "efectivo
+    // recibido/cambio" (el dinero sale de la caja, no entra), solo el
+    // monto que se descuenta. Se usa cashPortion (no refundAmount
+    // completo) — si parte del valor devuelto se absorbió como reducción
+    // de crédito, esa parte nunca salió ni sale de caja.
+    if (cashPortion > 0 && paymentMethod?.code === 'cash') {
+      if (session.user_id !== userId) {
         throw new ForbiddenError('Solo puedes registrar el efectivo del reembolso en una caja que tú mismo tengas abierta.');
       }
-
       await conn.query(
         `INSERT INTO cash_movements (session_id, movement_type, amount, description, user_id)
          VALUES (?, 'return', ?, ?, ?)`,
-        [sessions[0].session_id, cashPortion, `Devolución #${returnId} (venta #${orderId})`, userId]
+        [session.session_id, cashPortion, `Devolución #${returnId} (venta #${orderId})`, userId]
+      );
+    }
+
+    // [NUEVO] Reversa en payment_events — por CADA porción del reembolso,
+    // con signo negativo, para que dashboard/ventas y corte de caja bajen
+    // exactamente lo mismo que ya bajan en `returns`/`getPaymentBreakdown`.
+    // Antes esta tabla no se tocaba en absoluto desde devoluciones: un
+    // reembolso con tarjeta reducía el ingreso en el dashboard (por el
+    // neteo contra `returns`) pero el corte de caja de esa sesión seguía
+    // contando el cobro original como si nunca se hubiera devuelto.
+    if (cashPortion > 0) {
+      await conn.query(
+        `INSERT INTO payment_events
+           (source_type, source_id, branch_id, cash_register_id, session_id,
+            payment_method_id, amount, user_id)
+         VALUES ('return', ?, ?, ?, ?, ?, ?, ?)`,
+        [returnId, branchId, cashRegisterId, session.session_id,
+          paymentMethod.payment_method_id, -cashPortion, userId]
+      );
+    }
+    if (creditReduction > 0) {
+      const [creditMethodRows] = await conn.query(
+        `SELECT payment_method_id FROM payment_methods WHERE code = 'credit' LIMIT 1`
+      );
+      if (creditMethodRows.length === 0) {
+        throw new ValidationError('No existe un método de pago con code "credit" configurado');
+      }
+      await conn.query(
+        `INSERT INTO payment_events
+           (source_type, source_id, branch_id, cash_register_id, session_id,
+            payment_method_id, amount, user_id)
+         VALUES ('return', ?, ?, ?, ?, ?, ?, ?)`,
+        [returnId, branchId, cashRegisterId, session.session_id,
+          creditMethodRows[0].payment_method_id, -creditReduction, userId]
       );
     }
 

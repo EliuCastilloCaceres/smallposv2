@@ -34,7 +34,7 @@ const create = async (req, res, next) => {
   try {
     const userId   = req.user.user_id;
     const branchId = resolveBranchId(req);
-    const { customerId, items, initialPayments, dueDate, notes } = req.body;
+    const { customerId, items, initialPayments, dueDate, notes, cashRegisterId } = req.body;
 
     if (initialPayments !== undefined && !Array.isArray(initialPayments)) {
       return res.status(400).json({ status: 'error', message: 'initialPayments debe ser un arreglo' });
@@ -43,7 +43,7 @@ const create = async (req, res, next) => {
     const data = await layawayService.createLayaway({
       customerId: parseInt(customerId), branchId, userId,
       items, initialPayments: initialPayments ?? [],
-      dueDate, notes,
+      dueDate, notes, cashRegisterId,
     });
     res.status(201).json({ status: 'success', data });
   } catch (err) { next(err); }

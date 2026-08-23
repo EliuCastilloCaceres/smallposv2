@@ -140,6 +140,18 @@ const createOrder = async ({
          VALUES (?, ?, ?, ?, ?, ?)`,
         [orderId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
       );
+
+      // [NUEVO] Cada línea de pago también queda registrada en
+      // payment_events, con la sesión/caja REAL en que se cobró — esto es
+      // lo que ahora alimenta el corte de caja (ver cashRegisterService),
+      // en vez de derivarlo de order_payments + rango de fechas.
+      await conn.query(
+        `INSERT INTO payment_events
+           (source_type, source_id, branch_id, cash_register_id, session_id,
+            payment_method_id, amount, user_id)
+         VALUES ('order', ?, ?, ?, ?, ?, ?, ?)`,
+        [orderId, branchId, cashRegisterId, sessionId, p.payment_method_id, p.amount, userId]
+      );
     }
 
     // 7. Si alguna porción del pago fue a crédito, registrar el crédito por
@@ -241,28 +253,50 @@ const cancelOrder = async ({ orderId, userId, branchId }) => {
     // momento. Si esa sesión ya cerró, no se toca nada — ese corte ya
     // quedó hecho con ese ingreso contado, no se puede corregir
     // retroactivamente desde aquí.
-    const [[{ cash_amount: cashAmount }]] = await conn.query(
-      `SELECT COALESCE(SUM(op.amount), 0) AS cash_amount
+    const [orderPayments] = await conn.query(
+      `SELECT op.payment_method_id, op.amount, pm.code
        FROM order_payments op
        JOIN payment_methods pm ON pm.payment_method_id = op.payment_method_id
-       WHERE op.order_id = ? AND pm.code = 'cash'`,
+       WHERE op.order_id = ?`,
       [orderId]
     );
+    const cashAmount = orderPayments
+      .filter(p => p.code === 'cash')
+      .reduce((sum, p) => sum + Number(p.amount), 0);
 
-    if (Number(cashAmount) > 0) {
+    if (orderPayments.length > 0) {
       const [session] = await conn.query(
         `SELECT session_id FROM cash_register_sessions
          WHERE cash_register_id = ? AND closed_at IS NULL
          ORDER BY session_id DESC LIMIT 1`,
         [order.cash_register_id]
       );
+
       if (session.length > 0) {
-        await conn.query(
-          `INSERT INTO cash_movements
-             (session_id, movement_type, amount, description, user_id)
-           VALUES (?, 'return', ?, ?, ?)`,
-          [session[0].session_id, Number(cashAmount), `Cancelación de venta #${orderId}`, userId]
-        );
+        if (cashAmount > 0) {
+          await conn.query(
+            `INSERT INTO cash_movements
+               (session_id, movement_type, amount, description, user_id)
+             VALUES (?, 'return', ?, ?, ?)`,
+            [session[0].session_id, cashAmount, `Cancelación de venta #${orderId}`, userId]
+          );
+        }
+
+        // [NUEVO] Reversa en payment_events por CADA método (no solo
+        // efectivo) — con signo negativo, en la sesión actualmente abierta
+        // de ese registro. Igual que con cash_movements: si la sesión que
+        // recibió el pago original ya cerró, no se corrige
+        // retroactivamente ese corte; la reversa queda en la sesión de hoy.
+        for (const p of orderPayments) {
+          await conn.query(
+            `INSERT INTO payment_events
+               (source_type, source_id, branch_id, cash_register_id, session_id,
+                payment_method_id, amount, user_id)
+             VALUES ('order', ?, ?, ?, ?, ?, ?, ?)`,
+            [orderId, order.branch_id, order.cash_register_id, session[0].session_id,
+              p.payment_method_id, -Number(p.amount), userId]
+          );
+        }
       }
     }
 
@@ -420,15 +454,23 @@ const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, force
   return { where, params };
 };
 
-// FIX: totales por método de pago para el rango/sucursal/búsqueda
-// filtrados. A propósito IGNORA el dropdown de estado — el filtro de
-// estado es para revisar/auditar (incluidas canceladas), pero una
-// "Cancelada" ya no representa dinero cobrado, así que contarla en el
-// total inflaría la cifra. Los totales siempre son sobre completadas.
-// Extraído como helper porque tanto el listado de ventas como la nueva
-// pestaña de productos vendidos necesitan el mismo desglose para el
-// mismo rango/sucursal (los totales de caja no cambian según qué
-// producto o categoría se esté mirando en la tabla).
+// [REVERTIDO] Se probó sobre payment_events, igual que
+// dashboardService.getPaymentBreakdown, y con el mismo problema: el bucket
+// 'credit' de una venta a crédito se inserta ahí el día de la venta (para
+// que el corte de caja de ESE día cuadre), y cada abono real posterior
+// TAMBIÉN inserta su propia fila — el mismo dinero contado dos veces frente
+// a kpis.income (que no ve/recibe reportado el mismo request pero SÍ debe
+// coincidir en criterio: reconoce la venta una sola vez, el día que se
+// vendió/completó, nunca el día que se termina de cobrar).
+//
+// Vuelve a order_payments — mismo criterio de "cuándo cuenta" que
+// getSoldProducts/kpis.income (fecha de la orden). payment_events queda
+// exclusivamente para el corte de caja (cashRegisterService), que sí
+// necesita "cuándo se cobró" en vez de "cuándo se vendió". A propósito
+// IGNORA el dropdown de estado — el filtro de estado es para
+// revisar/auditar (incluidas canceladas), pero una "Cancelada" ya no
+// representa dinero cobrado, así que contarla en el total inflaría la
+// cifra. Los totales siempre son sobre completadas.
 const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search }) => {
   const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
     branchId, startDate, endDate, search, forceCompleted: true,

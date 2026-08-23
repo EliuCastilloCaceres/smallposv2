@@ -272,12 +272,26 @@ const getTopProducts = async ({ startDate, endDate, branchId }) => {
 
 // ─── Desglose de ventas por método de pago ──────────────────────────────────
 
-// FIX: incluye órdenes 'partial_refund' (antes desaparecían del desglose
-// al dejar de ser 'completed'), y resta lo reembolsado por cada método
-// (returns.payment_method_id/amount_refunded, solo status='completed').
-// Se calcula en dos queries separadas — combinarlo en un solo JOIN
-// duplicaría op.amount por cada devolución de esa orden (fan-out) — y se
-// combinan en JS.
+// [REVERTIDO] Esto se probó sobre payment_events (para reusar el mismo
+// origen que el corte de caja) y causaba doble conteo: orderService.createOrder
+// ya inserta en payment_events el bucket 'credit' completo el día de la
+// venta (para que el corte de caja de ESE día cuadre con lo realmente
+// cobrado), y luego cada abono real a ese crédito TAMBIÉN inserta su propia
+// fila — el mismo dinero contado dos veces frente a kpis.income, que solo
+// lo reconoce una vez, el día de la venta.
+//
+// kpis.income y este desglose deben compartir el mismo criterio de "cuándo
+// cuenta una venta": el día en que se vendió/completó (order_payments,
+// fecha de la orden) — NUNCA el día en que se termina de cobrar. Por eso
+// vuelve a order_payments + neteo de returns, igual que antes. payment_events
+// queda exclusivamente para el corte de caja (cashRegisterService), que sí
+// necesita "cuándo se cobró" en vez de "cuándo se vendió".
+//
+// FIX: incluye órdenes 'partial_refund' (antes desaparecían del desglose al
+// dejar de ser 'completed'), y resta lo reembolsado por cada método
+// (returns.payment_method_id/amount_refunded, solo status='completed'). Se
+// calcula en dos queries separadas — combinarlo en un solo JOIN duplicaría
+// op.amount por cada devolución de esa orden (fan-out) — y se combinan en JS.
 //
 // FIX 2: 'refunded' también se incluye (no se excluye por completo).
 // Devuelto TODO el producto no implica devuelto TODO el dinero (tarifa de
@@ -302,16 +316,6 @@ const getPaymentBreakdown = async ({ startDate, endDate, branchId }) => {
     [...range, ...branchParam]
   );
 
-  // FIX: esta query no filtraba por o.status — con 'refunded' ahora
-  // incluido en ambas queries (arriba y aquí abajo), el pago original de
-  // una orden 'refunded' SÍ se suma en `rows` y su reembolso SÍ se resta
-  // aquí — se compensan y el neto queda correcto (ej. $0 si se devolvió el
-  // 100% del dinero, o el monto de la tarifa de restock si se devolvió
-  // menos). Antes 'refunded' estaba excluido de ambas: el pago original no
-  // se sumaba en `rows` pero tampoco había nada que restar aquí, así que
-  // coincidentemente daba bien SOLO cuando el reembolso era del 100% del
-  // dinero — con una tarifa de restock (reembolso parcial de dinero sobre
-  // una devolución total de producto) se perdía ese ingreso por completo.
   const [refundRows] = await db.query(
     `SELECT r.payment_method_id,
             COALESCE(SUM(r.amount_refunded - COALESCE(r.credit_adjustment_amount, 0)), 0) AS refunded
@@ -326,12 +330,6 @@ const getPaymentBreakdown = async ({ startDate, endDate, branchId }) => {
     [...range, ...branchParam]
   );
 
-  // FIX: cuando una devolución sobre venta a crédito se absorbe total o
-  // parcialmente contra el saldo pendiente (credit_adjustment_amount), esa
-  // porción NUNCA pasó por r.payment_method_id (puede incluso ser NULL si
-  // no hubo dinero real de vuelta) — la query de arriba la ignoraba por
-  // completo. Se resta aparte, siempre del bucket 'credit', sin importar
-  // si esa misma devolución también tuvo un payment_method_id real.
   const [[creditRefund]] = await db.query(
     `SELECT COALESCE(SUM(r.credit_adjustment_amount), 0) AS refunded_credit
      FROM returns r

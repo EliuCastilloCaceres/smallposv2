@@ -341,6 +341,32 @@ const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = nu
     const newBalance    = credit.balance - amount;
     const newStatus     = newBalance === 0 ? 'paid' : 'active';
 
+    // [FIX] La caja ahora es obligatoria para CUALQUIER abono, no solo
+    // efectivo — mismo criterio ya aplicado en layawayService.addPayment.
+    // Sin esto, un abono con tarjeta/transferencia queda sin ninguna sesión
+    // a la cual atribuirlo, y por diseño (ver payment_events) necesitamos
+    // esa sesión para que aparezca en el corte de caja correcto.
+    if (!cashRegisterId) {
+      throw new ValidationError('Selecciona la caja donde se registrará este abono');
+    }
+    const [registers] = await conn.query(
+      `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
+      [cashRegisterId]
+    );
+    if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
+    if (!registers[0].is_open) {
+      throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono.');
+    }
+    const [sessions] = await conn.query(
+      `SELECT session_id, user_id FROM cash_register_sessions
+       WHERE cash_register_id = ? AND closed_at IS NULL
+       ORDER BY session_id DESC LIMIT 1`,
+      [cashRegisterId]
+    );
+    if (sessions.length === 0) {
+      throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono.');
+    }
+
     // Actualizar crédito
     await conn.query(
       `UPDATE credit_sales
@@ -373,47 +399,31 @@ const addPayment = async ({ creditSaleId, branchId, userId, payments, notes = nu
          VALUES (?, ?, ?, ?, ?, ?)`,
         [paymentId, p.payment_method_id, p.amount, p.cash_received ?? null, p.cash_change ?? null, p.reference ?? null]
       );
+
+      // [NUEVO] Rastro en payment_events para el corte de caja — cubre
+      // TODOS los métodos, no solo efectivo.
+      await conn.query(
+        `INSERT INTO payment_events
+           (source_type, source_id, branch_id, cash_register_id, session_id,
+            payment_method_id, amount, user_id)
+         VALUES ('credit', ?, ?, ?, ?, ?, ?, ?)`,
+        [creditSaleId, branchId, cashRegisterId, sessions[0].session_id, p.payment_method_id, p.amount, userId]
+      );
     }
 
-    // [FIX] Un abono hecho desde el módulo de Créditos (no desde el POS) no
-    // trae una sesión de caja "actual" implícita — antes, si el abono era
-    // en efectivo, ese dinero jamás quedaba reflejado en ninguna caja. Ahora,
-    // si alguna porción del abono es en efectivo, es obligatorio indicar a
-    // qué caja se aplica, y esa caja debe estar abierta con una sesión
-    // propia del usuario que registra el abono (misma regla que aplicaría
-    // si lo estuviera cobrando desde el POS).
+    // La restricción de "solo tu propia caja abierta" se mantiene, pero
+    // acotada a cuando de verdad hay efectivo de por medio — elegir la
+    // caja para trazabilidad (tarjeta/transferencia) no toca ningún cajón
+    // de dinero ajeno, así que no necesita esa restricción.
     const cashAmount = payments.reduce((sum, p) => {
       const method = methodsById.get(Number(p.payment_method_id));
       return method?.code === 'cash' ? sum + Number(p.amount) : sum;
     }, 0);
 
     if (cashAmount > 0) {
-      if (!cashRegisterId) {
-        throw new ValidationError('Selecciona la caja donde se registrará el efectivo del abono');
-      }
-
-      const [registers] = await conn.query(
-        `SELECT cash_register_id, is_open FROM cash_registers WHERE cash_register_id = ?`,
-        [cashRegisterId]
-      );
-      if (registers.length === 0) throw new NotFoundError('Caja no encontrada');
-      if (!registers[0].is_open) {
-        throw new ValidationError('Esa caja no está abierta. Ábrela desde el POS antes de registrar el abono en efectivo.');
-      }
-
-      const [sessions] = await conn.query(
-        `SELECT session_id, user_id FROM cash_register_sessions
-         WHERE cash_register_id = ? AND closed_at IS NULL
-         ORDER BY session_id DESC LIMIT 1`,
-        [cashRegisterId]
-      );
-      if (sessions.length === 0) {
-        throw new ValidationError('Esa caja no tiene una sesión activa. Ábrela desde el POS antes de registrar el abono en efectivo.');
-      }
       if (sessions[0].user_id !== userId) {
         throw new ForbiddenError('Solo puedes registrar el efectivo del abono en una caja que tú mismo tengas abierta.');
       }
-
       await conn.query(
         `INSERT INTO cash_movements
            (session_id, movement_type, amount, description, user_id)

@@ -2,8 +2,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { UserContextProvider } from './Context/UserContext.jsx'
-import { PosContextProvider }  from './Context/PosContext.jsx'
+import { UserContextProvider } from './context/UserContext.jsx'
+import { PosContextProvider }  from './context/PosContext.jsx'
 import {BranchContextProvider} from './context/BranchContext.jsx'
 import App from './components/App.jsx'
 
@@ -19,6 +19,7 @@ import Returns            from './components/Returns/Returns.jsx'
 import Products           from './components/Products/Products.jsx'
 import Inventory          from './components/Inventory/Inventory.jsx'
 import Providers          from './components/Providers/Providers.jsx'
+import Reports            from './components/Reports/Reports.jsx'
 import Pos                from './components/Pos/Pos.jsx'
 import Orders from './components/Orders/Orders.jsx'
 // Módulos nuevos
@@ -45,10 +46,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path='providers'                        element={<Providers/>}/>
             <Route path='users'                           element={<Users />} />
             <Route path='settings'                        element={<Settings/>}/>
-            {/* Módulos nuevos */}
-            {/* <Route path='layaways'                        element={<Layaways />} />
-            <Route path='credits'                         element={<Credits />} />
-            <Route path='reports'                         element={<Reports />} /> */}
+            <Route path='reports'                         element={<Reports />} /> 
           </Route>
           <Route path='/login'                            element={<Login />} />
         </Routes>

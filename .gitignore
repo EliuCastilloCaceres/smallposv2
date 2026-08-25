@@ -4,6 +4,7 @@
 
 #archivos publicos
 public/
+backend.zip
 
 # Dependencias
 node_modules/

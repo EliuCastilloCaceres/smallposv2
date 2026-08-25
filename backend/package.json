@@ -16,7 +16,8 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.6.1",
-    "papaparse": "^5.5.4"
+    "papaparse": "^5.5.4",
+    "file-type": "16.5.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

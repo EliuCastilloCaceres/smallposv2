@@ -1,6 +1,6 @@
 // src/components/Sales/tabs/SalesTab.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser }   from '../../../Context/UserContext'
+import { useUser }   from '../../../context/UserContext'
 import api from '../../../services/api'
 import OrderDetailModal from '../modals/OrderDetailModal'
 

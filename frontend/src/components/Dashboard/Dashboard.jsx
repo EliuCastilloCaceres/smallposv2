@@ -23,6 +23,21 @@ const fmtCompact = (n) =>
     maximumFractionDigits: 1,
   }).format(n ?? 0)
 
+// FIX: versión compacta con símbolo de moneda para los KPIs en móvil
+// ($12,500.00 -> $12.5k). Bajo 1000 se muestra el monto normal, ya
+// que "$999.0" abreviado se ve peor que "$999.00".
+const fmtCompactCurrency = (n) => {
+  const val = n ?? 0
+  if (Math.abs(val) < 1000) return fmt(val)
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    notation: 'compact',
+    compactDisplay: 'short',
+    maximumFractionDigits: 1,
+  }).format(val).replace(/\s+/g, '') // Intl mete un espacio entre el número y la "k"/"M" en es-MX
+}
+
 const toISO = (d) => format(d, 'yyyy-MM-dd')
 const today = () => toISO(new Date())
 
@@ -64,6 +79,26 @@ const CHART_COLORS = [
   '#4f8ef7', '#10b981', '#f59e0b', '#8b5cf6',
   '#ef4444', '#0891b2', '#db2777', '#65a30d',
 ]
+
+// FIX: hook para detectar móvil por ancho de viewport (mismo breakpoint
+// de 640px que ya usa el resto del dashboard para alternar tabla/tarjetas).
+// Se usa para mostrar los KPIs abreviados y el botón "Ver cifras completas".
+const useIsMobile = (breakpoint = 640) => {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth <= breakpoint
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia(`(max-width: ${breakpoint}px)`)
+    const handler = (e) => setIsMobile(e.matches)
+    handler(mq)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [breakpoint])
+
+  return isMobile
+}
 
 // ═══════════════════════════════════════════════════════════════
 //  Modal Reutilizable
@@ -137,7 +172,7 @@ const ScrollablePanel = ({ children, maxHeight = 380, itemCount = 0, itemLimit =
 //  StatCard
 // ═══════════════════════════════════════════════════════════════
 
-const StatCard = ({ icon, label, value, comparisonValue, comparisonLabel, accent, delay = 0 }) => {
+const StatCard = ({ icon, label, value, fullValue, comparisonValue, comparisonLabel, accent, delay = 0 }) => {
   const hasComparison = comparisonValue !== undefined && comparisonValue !== null
   const trend = hasComparison
     ? (comparisonValue > 0 ? 'up' : comparisonValue < 0 ? 'down' : 'neutral')
@@ -157,7 +192,11 @@ const StatCard = ({ icon, label, value, comparisonValue, comparisonLabel, accent
         <i className={`bi ${icon}`} />
       </div>
       <div className="dash-stat__body">
-        <span className="dash-stat__value">{value}</span>
+        {/* FIX: title con el valor completo — si `value` viene abreviado
+            (ej. "$12.5k"), esto permite ver el monto exacto sin abrir el modal */}
+        <span className="dash-stat__value" title={fullValue && fullValue !== value ? fullValue : undefined}>
+          {value}
+        </span>
         <span className="dash-stat__label">{label}</span>
         {hasComparison && (
           <span className={`dash-stat__sub ${trend}`}>
@@ -521,7 +560,16 @@ const TopProductsTable = ({ products, isLoading, fullMode = false }) => {
                       }
                       {i < 3 && <span className="dash-product__rank-badge">{i + 1}</span>}
                     </div>
-                    <div>
+                    {/* FIX: antes este <div> no tenía ancho propio, así que se
+                        encogía al ancho del texto del nombre (contenido flex sin
+                        flex-basis). Eso hacía que la barra de abajo, aunque su
+                        width fuera un % correcto, se dibujara sobre un contenedor
+                        angosto para nombres cortos y ancho para nombres largos —
+                        dando la ilusión de más/menos ventas según el largo del
+                        nombre, no según total_sold real. flex:1 + minWidth:0
+                        fuerza a que ocupe todo el espacio restante de la fila,
+                        igual para todos los productos. */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <span className="dash-product__name">{p.name}</span>
                       <div className="dash-product__bar">
                         <div className="dash-product__bar-fill" style={{ width: `${(p.total_sold / maxSold) * 100}%` }} />
@@ -816,6 +864,9 @@ const Dashboard = () => {
   const [modalProducts, setModalProducts] = useState(false)
   const [modalCashRegs, setModalCashRegs] = useState(false)
   const [modalLowStock, setModalLowStock] = useState(false)
+  const [modalKpis, setModalKpis] = useState(false)
+
+  const isMobile = useIsMobile()
 
   // Catálogo de sucursales
   useEffect(() => {
@@ -897,7 +948,8 @@ const Dashboard = () => {
         <StatCard
           icon="bi-cash-stack"
           label="Total Vendido"
-          value={isLoading ? '—' : fmt(kpis.income)}
+          value={isLoading ? '—' : (isMobile ? fmtCompactCurrency(kpis.income) : fmt(kpis.income))}
+          fullValue={isLoading ? null : fmt(kpis.income)}
           comparisonValue={isLoading ? null : comparison.income}
           comparisonLabel={isLoading ? null : comparisonLabel}
           accent
@@ -906,12 +958,23 @@ const Dashboard = () => {
         <StatCard
           icon="bi-receipt-cutoff"
           label="Ticket promedio"
-          value={isLoading ? '—' : fmt(kpis.avg_ticket)}
+          value={isLoading ? '—' : (isMobile ? fmtCompactCurrency(kpis.avg_ticket) : fmt(kpis.avg_ticket))}
+          fullValue={isLoading ? null : fmt(kpis.avg_ticket)}
           comparisonValue={isLoading ? null : comparison.avg_ticket}
           comparisonLabel={isLoading ? null : comparisonLabel}
           delay={250}
         />
       </section>
+
+      {/* FIX: opción "ver completo" para los KPIs en móvil, mismo patrón
+          que "Ver todo" de ScrollablePanel — solo se muestra cuando los
+          valores están abreviados (móvil) */}
+      {isMobile && !isLoading && (
+        <button className="dash-view-all-btn dash-stats__expand-btn" onClick={() => setModalKpis(true)}>
+          <span>Ver cifras completas</span>
+          <i className="bi bi-arrows-fullscreen" />
+        </button>
+      )}
 
       {/* ── Cuerpo ── */}
       <div className="dash-body">
@@ -999,6 +1062,45 @@ const Dashboard = () => {
       </div>
 
       {/* ── Modales de vista completa ── */}
+      <Modal
+        isOpen={modalKpis}
+        onClose={() => setModalKpis(false)}
+        title="Cifras completas"
+        icon="bi-arrows-fullscreen"
+      >
+        <section className="dash-stats dash-stats--modal">
+          <StatCard
+            icon="bi-cart-check"
+            label="Total de tickets"
+            value={(kpis.orders_total ?? 0).toLocaleString('es-MX')}
+            comparisonValue={comparison.orders_total}
+            comparisonLabel={comparisonLabel}
+          />
+          <StatCard
+            icon="bi-boxes"
+            label="Productos vendidos"
+            value={(kpis.total_units_sold ?? 0).toLocaleString('es-MX')}
+            comparisonValue={comparison.total_units_sold}
+            comparisonLabel={comparisonLabel}
+          />
+          <StatCard
+            icon="bi-cash-stack"
+            label="Total Vendido"
+            value={fmt(kpis.income)}
+            comparisonValue={comparison.income}
+            comparisonLabel={comparisonLabel}
+            accent
+          />
+          <StatCard
+            icon="bi-receipt-cutoff"
+            label="Ticket promedio"
+            value={fmt(kpis.avg_ticket)}
+            comparisonValue={comparison.avg_ticket}
+            comparisonLabel={comparisonLabel}
+          />
+        </section>
+      </Modal>
+
       <Modal
         isOpen={modalProducts}
         onClose={() => setModalProducts(false)}

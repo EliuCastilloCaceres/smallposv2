@@ -41,6 +41,19 @@ const validate = {
   },
 };
 
+// FIX: '' (string vacío) NO es lo mismo que null/undefined para `??`, así
+// que `sku ?? null` dejaba pasar un SKU vacío tal cual. La BD sí permite
+// sku NULL (y lo trata como "sin SKU" sin chocar entre sí), pero dos
+// productos con sku = '' literal chocaban contra el índice único y
+// devolvían 409 "ya existe" al segundo producto sin SKU. Todo SKU debe
+// pasar por aquí antes de tocar la BD — vacío o solo espacios se guarda
+// como NULL, nunca como ''.
+const normalizeSku = (v) => {
+  if (v === undefined || v === null) return null;
+  const trimmed = String(v).trim();
+  return trimmed === '' ? null : trimmed;
+};
+
 const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'paq'];
 
 // ─── getAllProducts ────────────────────────────────────────────────────────────
@@ -121,6 +134,7 @@ const createProduct = async ({
   validate.price(purchasePrice, 'El precio de compra');
   validate.price(salePrice, 'El precio de venta');
   validate.sku(sku);
+  sku = normalizeSku(sku);
 
   if (uom && !UOM_OPTIONS.includes(uom))
     throw new ValidationError(`Unidad de medida inválida. Opciones: ${UOM_OPTIONS.join(', ')}`);
@@ -147,7 +161,7 @@ const createProduct = async ({
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         providerId, categoryId ?? null, isVariable ? 1 : 0,
-        sku ?? null, name.trim(), description ?? null,
+        sku, name.trim(), description ?? null,
         color ?? null, purchasePrice, salePrice,
         uom ?? 'pza', image ?? null,
       ]
@@ -157,18 +171,19 @@ const createProduct = async ({
     if (isVariable && variants.length > 0) {
       for (const v of variants) {
         if (!v.label?.trim()) throw new ValidationError('Cada variante debe tener una etiqueta');
+        const vSku = normalizeSku(v.sku);
 
-        if (v.sku) {
+        if (vSku) {
           const [[vExisting]] = await conn.query(
             'SELECT variant_id FROM product_variants WHERE sku = ?',
-            [v.sku]
+            [vSku]
           );
-          if (vExisting) throw new ConflictError(`El SKU de variante "${v.sku}" ya existe`);
+          if (vExisting) throw new ConflictError(`El SKU de variante "${vSku}" ya existe`);
         }
 
         await conn.query(
           'INSERT INTO product_variants (product_id, sku, label) VALUES (?, ?, ?)',
-          [productId, v.sku ?? null, v.label.trim()]
+          [productId, vSku, v.label.trim()]
         );
       }
     }
@@ -191,7 +206,10 @@ const updateProduct = async ({ productId, updates, newImage, variants = [], user
   if (updates.name          !== undefined) validate.name(updates.name);
   if (updates.salePrice     !== undefined) validate.price(updates.salePrice, 'El precio de venta');
   if (updates.purchasePrice !== undefined) validate.price(updates.purchasePrice, 'El precio de compra');
-  if (updates.sku           !== undefined) validate.sku(updates.sku);
+  if (updates.sku           !== undefined) {
+    validate.sku(updates.sku);
+    updates.sku = normalizeSku(updates.sku);
+  }
 
   if (updates.uom && !UOM_OPTIONS.includes(updates.uom))
     throw new ValidationError(`Unidad de medida inválida. Opciones: ${UOM_OPTIONS.join(', ')}`);
@@ -233,16 +251,17 @@ const updateProduct = async ({ productId, updates, newImage, variants = [], user
     //    ya existe el variant_id destino antes de migrar el stock.
     let firstNewVariantId = null;
     for (const v of variants) {
+      const vSku = normalizeSku(v.sku);
       if (v.variant_id) {
         await conn.query(
           'UPDATE product_variants SET label = ?, sku = ? WHERE variant_id = ? AND product_id = ?',
-          [v.label?.trim(), v.sku ?? null, v.variant_id, productId]
+          [v.label?.trim(), vSku, v.variant_id, productId]
         );
       } else {
         if (!v.label?.trim()) throw new ValidationError('Cada variante debe tener una etiqueta');
         const [vResult] = await conn.query(
           'INSERT INTO product_variants (product_id, sku, label) VALUES (?, ?, ?)',
-          [productId, v.sku ?? null, v.label.trim()]
+          [productId, vSku, v.label.trim()]
         );
         if (firstNewVariantId === null) firstNewVariantId = vResult.insertId;
       }
@@ -443,7 +462,7 @@ const bulkCreateProducts = async ({ products, userId }) => {
 
     const p = group.productRow;
     const isVariable = parseBool(p.is_variable);
-    const productSku = p.sku?.trim();
+    const productSku = normalizeSku(p.sku);
 
     const conn = await db.getConnection();
     try {
@@ -500,7 +519,7 @@ const bulkCreateProducts = async ({ products, userId }) => {
           p.provider_id,
           p.category_id ?? null,
           isVariable ? 1 : 0,
-          productSku ?? null,
+          productSku,
           p.name.trim(),
           p.description?.trim() ?? null,
           p.color?.trim()       ?? null,
@@ -517,7 +536,7 @@ const bulkCreateProducts = async ({ products, userId }) => {
           if (!v.label?.trim())
             throw new ValidationError(`Fila ${v.row}: cada variante debe tener variant_label`);
 
-          const variantSku = v.sku?.trim();
+          const variantSku = normalizeSku(v.sku);
           if (variantSku) {
             const otherVRows = (dupVariantSkus.get(variantSku) ?? []).filter(r => r !== v.row);
             if (otherVRows.length > 0) {
@@ -534,7 +553,7 @@ const bulkCreateProducts = async ({ products, userId }) => {
 
           await conn.query(
             'INSERT INTO product_variants (product_id, sku, label) VALUES (?, ?, ?)',
-            [productId, variantSku ?? null, v.label.trim()]
+            [productId, variantSku, v.label.trim()]
           );
         }
       }

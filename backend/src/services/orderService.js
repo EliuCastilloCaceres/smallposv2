@@ -418,7 +418,7 @@ const getOrderById = async (orderId, branchId) => {
 // ahora necesitan builds de WHERE ligeramente distintos (los totales
 // siempre son sobre ventas completadas, sin importar el filtro de estado
 // de la tabla — ver comentario en getOrdersByBranchAndDateRange).
-const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, forceCompleted = false }) => {
+const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, userId, forceCompleted = false }) => {
   let where = 'WHERE o.created_at BETWEEN ? AND ?';
   const params = [startDate, `${endDate} 23:59:59`];
 
@@ -427,6 +427,12 @@ const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, force
   if (branchId) {
     where += ' AND o.branch_id = ?';
     params.push(branchId);
+  }
+
+  // Filtro por cajero — o.user_id ya vive en orders, no requiere JOIN extra
+  if (userId) {
+    where += ' AND o.user_id = ?';
+    params.push(userId);
   }
 
   if (forceCompleted) {
@@ -471,9 +477,9 @@ const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, force
 // revisar/auditar (incluidas canceladas), pero una "Cancelada" ya no
 // representa dinero cobrado, así que contarla en el total inflaría la
 // cifra. Los totales siempre son sobre completadas.
-const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search }) => {
+const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, userId }) => {
   const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
-    branchId, startDate, endDate, search, forceCompleted: true,
+    branchId, startDate, endDate, search, userId, forceCompleted: true,
   });
 
   const [totalsRows] = await db.query(
@@ -537,13 +543,13 @@ const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search }) 
 };
 
 const getOrdersByBranchAndDateRange = async ({
-  branchId, startDate, endDate, status = null, search, page = 1, limit = 20,
+  branchId, startDate, endDate, status = null, search, userId = null, page = 1, limit = 20,
 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage = Math.max(parseInt(page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const { where, params } = buildOrdersFilter({ branchId, startDate, endDate, status, search });
+  const { where, params } = buildOrdersFilter({ branchId, startDate, endDate, status, search, userId });
 
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
@@ -590,7 +596,7 @@ const getOrdersByBranchAndDateRange = async ({
     [...params, safeLimit, offset]
   );
 
-  const totals = await getPaymentMethodTotals({ branchId, startDate, endDate, search });
+  const totals = await getPaymentMethodTotals({ branchId, startDate, endDate, search, userId });
 
   return {
     data: rows,
@@ -604,6 +610,30 @@ const getOrdersByBranchAndDateRange = async ({
   };
 };
 
+// ─── Cajeros para el filtro de Ventas / Productos vendidos ─────────────────
+// A propósito NO vive en userService/user_routes: ese endpoint exige el
+// permiso users:read, y cualquiera con acceso a Ventas debe poder filtrar
+// por cajero aunque no tenga permiso para administrar usuarios. Devuelve
+// solo lo necesario para poblar el <select>, no el registro completo.
+const getCashiers = async ({ branchId }) => {
+  let where = 'WHERE is_active = true';
+  const params = [];
+
+  if (branchId) {
+    where += ' AND branch_id = ?';
+    params.push(branchId);
+  }
+
+  const [rows] = await db.query(
+    `SELECT user_id, first_name, last_name
+     FROM users
+     ${where}
+     ORDER BY first_name, last_name`,
+    params
+  );
+  return rows;
+};
+
 // ─── Productos vendidos (agregado) ─────────────────────────────────────────
 // A diferencia del listado de ventas (que filtra ÓRDENES), esto agrega por
 // PRODUCTO: cuánto se vendió de cada uno en el rango. Un producto de
@@ -611,7 +641,7 @@ const getOrdersByBranchAndDateRange = async ({
 // la orden completa que lo contiene (eso es lo que el filtro de categoría
 // en el listado de ventas hacía mal).
 
-const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, providerId, search }) => {
+const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, providerId, userId, search }) => {
   // FIX: incluye 'partial_refund' — una orden con devolución parcial sigue
   // aportando ingreso real por lo no devuelto; se resta lo devuelto más
   // abajo en getSoldProducts, no se excluye la orden entera.
@@ -634,6 +664,11 @@ const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, pro
   if (providerId) {
     where += ' AND p.provider_id = ?';
     params.push(providerId);
+  }
+  // Filtro por cajero — o.user_id ya vive en orders, no requiere JOIN extra
+  if (userId) {
+    where += ' AND o.user_id = ?';
+    params.push(userId);
   }
   if (search) {
     where += ' AND (p.name LIKE ? OR p.sku LIKE ?)';
@@ -670,14 +705,14 @@ const RETURN_ATTRIBUTION_SUBQUERY = `
 `;
 
 const getSoldProducts = async ({
-  branchId, startDate, endDate, categoryId = null, providerId = null, search,
+  branchId, startDate, endDate, categoryId = null, providerId = null, userId = null, search,
   page = 1, limit = 20,
 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage = Math.max(parseInt(page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const { where, params } = buildSoldProductsFilter({ branchId, startDate, endDate, categoryId, providerId, search });
+  const { where, params } = buildSoldProductsFilter({ branchId, startDate, endDate, categoryId, providerId, userId, search });
 
   // Conteo de productos DISTINTOS que califican (para paginar la tabla
   // agrupada) — no es lo mismo que sumar renglones de order_details.
@@ -782,4 +817,4 @@ const getSoldProducts = async ({
     totals: { total_items: Number(total_items), total_amount: Number(total_amount) },
   };
 };
-module.exports = { createOrder, cancelOrder, getOrderById, getOrdersByBranchAndDateRange, getSoldProducts };
+module.exports = { createOrder, cancelOrder, getOrderById, getOrdersByBranchAndDateRange, getSoldProducts, getCashiers };

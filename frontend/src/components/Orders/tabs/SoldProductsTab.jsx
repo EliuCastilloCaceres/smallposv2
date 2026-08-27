@@ -44,6 +44,13 @@ const SoldProductsTab = () => {
   const [providers,          setProviders]          = useState([])
   const [selectedProviderId, setSelectedProviderId] = useState('')
 
+  // FIX: filtro de cajero — usa orders/cashiers en vez de users/, ese
+  // endpoint exige el permiso users:read y no todo el que tiene acceso a
+  // Ventas lo tiene. Se re-fetchea al cambiar de sucursal (admin central)
+  // para no listar cajeros que no pertenecen a la sucursal seleccionada.
+  const [users,          setUsers]          = useState([])
+  const [selectedUserId, setSelectedUserId] = useState('')
+
   const searchTimer = useRef(null)
   const searchRef   = useRef('')
 
@@ -63,6 +70,14 @@ const SoldProductsTab = () => {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
+    api.get(`orders/cashiers?${params}`)
+      .then(({ data }) => setUsers(data.data))
+      .catch(() => {})
+  }, [isCentralAdmin, selectedBranchId])
+
   // ── Fetch ──
   const fetchSoldProducts = useCallback(async (currentPage = 1) => {
     setIsLoading(true)
@@ -75,6 +90,7 @@ const SoldProductsTab = () => {
       if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
       if (selectedCategoryId) params.set('category_id', selectedCategoryId)
       if (selectedProviderId) params.set('provider_id', selectedProviderId)
+      if (selectedUserId)     params.set('user_id', selectedUserId)
       if (searchRef.current)  params.set('search', searchRef.current)
 
       const { data } = await api.get(`orders/sold-products?${params}`)
@@ -86,7 +102,7 @@ const SoldProductsTab = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [startDate, endDate, isCentralAdmin, selectedBranchId, selectedCategoryId, selectedProviderId])
+  }, [startDate, endDate, isCentralAdmin, selectedBranchId, selectedCategoryId, selectedProviderId, selectedUserId])
 
   useEffect(() => { fetchSoldProducts(page) }, [page, fetchSoldProducts])
 
@@ -107,6 +123,7 @@ const SoldProductsTab = () => {
   }
   const handleBranchChange = (e) => {
     setSelectedBranchId(e.target.value)
+    setSelectedUserId('') // el cajero seleccionado puede no existir en la nueva sucursal
     setPage(1)
   }
   const handleCategoryChange = (e) => {
@@ -117,13 +134,17 @@ const SoldProductsTab = () => {
     setSelectedProviderId(e.target.value)
     setPage(1)
   }
+  const handleUserChange = (e) => {
+    setSelectedUserId(e.target.value)
+    setPage(1)
+  }
   // Mismo patrón que en SalesTab: si el filtro cambia y page ya estaba en
   // 1, el useEffect de [page, fetchSoldProducts] no se re-dispara solo
   // por eso, así que forzamos el refetch aquí.
   useEffect(() => {
     if (page === 1) fetchSoldProducts(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, selectedBranchId, selectedCategoryId, selectedProviderId])
+  }, [startDate, endDate, selectedBranchId, selectedCategoryId, selectedProviderId, selectedUserId])
 
   return (
     <div className="sls-panel">
@@ -178,6 +199,13 @@ const SoldProductsTab = () => {
           <option value="">Todos los proveedores</option>
           {providers.map(p => (
             <option key={p.provider_id} value={p.provider_id}>{p.name}</option>
+          ))}
+        </select>
+
+        <select className="sls-select" value={selectedUserId} onChange={handleUserChange}>
+          <option value="">Todos los cajeros</option>
+          {users.map(u => (
+            <option key={u.user_id} value={u.user_id}>{u.first_name} {u.last_name}</option>
           ))}
         </select>
       </div>

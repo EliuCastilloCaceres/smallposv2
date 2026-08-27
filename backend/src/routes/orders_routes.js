@@ -9,6 +9,10 @@ router.use(verifyToken);
 
 router.get('/',                           requirePermission('orders', 'read'),   ordersCtrl.getOrdersByDateRange);
 router.get('/sold-products',              requirePermission('orders', 'read'),   ordersCtrl.getSoldProducts);
+// Sin requirePermission a propósito: cualquiera con acceso a Ventas debe
+// poder poblar el filtro de cajero, aunque no tenga permiso users:read.
+// Solo requiere estar autenticado (router.use(verifyToken) arriba).
+router.get('/cashiers',                                                           ordersCtrl.getCashiers);
 router.get('/:orderId',                   requirePermission('orders', 'read'),   ordersCtrl.getOrderById);
 router.post('/',                          requirePermission('pos',    'use'),     ordersCtrl.createOrder);
 router.patch('/:orderId/cancel',          requirePermission('orders', 'cancel'), ordersCtrl.cancelOrder);

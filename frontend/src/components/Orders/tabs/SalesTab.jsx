@@ -71,6 +71,13 @@ const SalesTab = () => {
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const isConsolidated = isCentralAdmin && !selectedBranchId
 
+  // FIX: filtro de cajero — usa orders/cashiers en vez de users/, ese
+  // endpoint exige el permiso users:read y no todo el que tiene acceso a
+  // Ventas lo tiene. Se re-fetchea al cambiar de sucursal (admin central)
+  // para no listar cajeros que no pertenecen a la sucursal seleccionada.
+  const [users,          setUsers]          = useState([])
+  const [selectedUserId, setSelectedUserId] = useState('')
+
   const [detailId, setDetailId] = useState(null)
 
   const searchTimer = useRef(null)
@@ -83,6 +90,14 @@ const SalesTab = () => {
       .catch(() => {})
   }, [isCentralAdmin])
 
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
+    api.get(`orders/cashiers?${params}`)
+      .then(({ data }) => setUsers(data.data))
+      .catch(() => {})
+  }, [isCentralAdmin, selectedBranchId])
+
   // ── Fetch ──
   const fetchOrders = useCallback(async (currentPage = 1) => {
     setIsLoading(true)
@@ -93,6 +108,7 @@ const SalesTab = () => {
         startDate, endDate,
       })
       if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
+      if (selectedUserId)    params.set('user_id', selectedUserId)
       if (status)            params.set('status', status)
       if (searchRef.current) params.set('search', searchRef.current)
 
@@ -105,7 +121,7 @@ const SalesTab = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [startDate, endDate, status, isCentralAdmin, selectedBranchId])
+  }, [startDate, endDate, status, isCentralAdmin, selectedBranchId, selectedUserId])
 
   useEffect(() => { fetchOrders(page) }, [page, fetchOrders])
 
@@ -136,10 +152,16 @@ const SalesTab = () => {
   useEffect(() => {
     if (page === 1) fetchOrders(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, status, selectedBranchId])
+  }, [startDate, endDate, status, selectedBranchId, selectedUserId])
 
   const handleBranchChange = (e) => {
     setSelectedBranchId(e.target.value)
+    setSelectedUserId('') // el cajero seleccionado puede no existir en la nueva sucursal
+    setPage(1)
+  }
+
+  const handleUserChange = (e) => {
+    setSelectedUserId(e.target.value)
     setPage(1)
   }
 
@@ -198,6 +220,13 @@ const SalesTab = () => {
           <option value="partial_refund">Reembolso parcial</option>
           <option value="refunded">Reembolsadas</option>
           <option value="cancelled">Canceladas</option>
+        </select>
+
+        <select className="sls-select" value={selectedUserId} onChange={handleUserChange}>
+          <option value="">Todos los cajeros</option>
+          {users.map(u => (
+            <option key={u.user_id} value={u.user_id}>{u.first_name} {u.last_name}</option>
+          ))}
         </select>
       </div>
 

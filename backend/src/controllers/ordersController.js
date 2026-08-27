@@ -20,17 +20,18 @@ const getOrderById = async (req, res, next) => {
 
 const getOrdersByDateRange = async (req, res, next) => {
   try {
-    const { startDate, endDate, status, search, page, limit } = req.query;
+    const { startDate, endDate, status, search, user_id, page, limit } = req.query;
 
     // FIX: opcional — "todas las sucursales" es un filtro válido para el
     // admin central, no un error de validación
     const branchId = resolveOptionalBranchId(req)
+    const userId   = user_id ? parseInt(user_id) : null;
 
     const result = await orderService.getOrdersByBranchAndDateRange({
       branchId,
       startDate: startDate ?? '1970-01-01',
       endDate:   endDate   ?? new Date().toISOString().split('T')[0],
-      status, search, page, limit,
+      status, search, userId, page, limit,
     });
     res.json({ status: 'success', ...result });
   } catch (err) {
@@ -43,19 +44,34 @@ const getOrdersByDateRange = async (req, res, next) => {
 // "Productos vendidos" del módulo de Ventas.
 const getSoldProducts = async (req, res, next) => {
   try {
-    const { startDate, endDate, search, category_id, provider_id, page, limit } = req.query;
+    const { startDate, endDate, search, category_id, provider_id, user_id, page, limit } = req.query;
 
     const branchId    = resolveOptionalBranchId(req);
     const categoryId  = category_id  ? parseInt(category_id)  : null;
     const providerId  = provider_id  ? parseInt(provider_id)  : null;
+    const userId      = user_id      ? parseInt(user_id)      : null;
 
     const result = await orderService.getSoldProducts({
       branchId,
       startDate: startDate ?? '1970-01-01',
       endDate:   endDate   ?? new Date().toISOString().split('T')[0],
-      categoryId, providerId, search, page, limit,
+      categoryId, providerId, userId, search, page, limit,
     });
     res.json({ status: 'success', ...result });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /orders/cashiers
+// Lista mínima de cajeros para el <select> de filtro en Ventas / Productos
+// vendidos. Sin permiso propio a propósito — ver comentario en
+// orderService.getCashiers.
+const getCashiers = async (req, res, next) => {
+  try {
+    const branchId = resolveOptionalBranchId(req);
+    const data = await orderService.getCashiers({ branchId });
+    res.json({ status: 'success', data });
   } catch (err) {
     next(err);
   }
@@ -105,4 +121,4 @@ const cancelOrder = async (req, res, next) => {
   }
 };
 
-module.exports = { getOrderById, getOrdersByDateRange, getSoldProducts, createOrder, cancelOrder };
+module.exports = { getOrderById, getOrdersByDateRange, getSoldProducts, getCashiers, createOrder, cancelOrder };

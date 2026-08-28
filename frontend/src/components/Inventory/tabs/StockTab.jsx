@@ -1,6 +1,6 @@
 // src/components/Inventory/tabs/StockTab.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import AdjustDrawer   from '../drawers/AdjustDrawer'
 import BulkAdjustModal from '../modals/BulkAdjustModal'

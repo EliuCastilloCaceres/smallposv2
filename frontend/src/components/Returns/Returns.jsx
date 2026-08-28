@@ -1,18 +1,16 @@
 // src/components/Returns/Returns.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser }   from '../../Context/UserContext'
-import { useBranch } from '../../Context/BranchContext'
+import { useUser }   from '../../context/UserContext'
+import { useBranch } from '../../context/BranchContext'
 import api from '../../services/api'
 import ReturnDetailModal from './modals/ReturnDetailModal'
 import CreateReturnModal from './modals/CreateReturnModal'
+import { fmtDateTime } from '../../utils/dateFormatter'
 import './returns.css'
 
 const PAGE_SIZE = 20
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-})
 // Mismo fix que en Orders.jsx: toISOString() convierte a UTC antes de
 // cortar la fecha, lo que adelanta el día en zonas horarias negativas.
 const todayStr = () => {

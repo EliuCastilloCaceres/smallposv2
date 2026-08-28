@@ -1,16 +1,17 @@
 // src/components/Credits/Credits.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser }   from '../../Context/UserContext'
+import { useUser }   from '../../context/UserContext'
 import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
 import CreditDetailModal from './modals/CreditDetailModal'
 import AdjustLimitModal from './modals/AdjustLimitModal'
+import { fmtDateTime } from  '../../utils/dateFormatter'
 import './credits.css'
 
 const PAGE_SIZE = 20
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+
 
 const STATUS_META = {
   active:  { label: 'Activo',  cls: 'crd-status--on' },
@@ -212,12 +213,12 @@ const Credits = () => {
                     <tr key={c.credit_sale_id} onClick={() => setDetailId(c.credit_sale_id)}>
                       <td className="crd-folio">#{c.credit_sale_id}</td>
                       <td>{c.first_name} {c.last_name}</td>
-                      <td className="crd-td-muted">{fmtDate(c.created_at)}</td>
+                      <td className="crd-td-muted">{fmtDateTime(c.created_at)}</td>
                       {isConsolidated && <td className="crd-td-muted">{c.branch_name}</td>}
                       <td className="num">{money(c.total_amount)}</td>
                       <td className="num crd-td-muted">{money(c.amount_paid)}</td>
                       <td className="num crd-folio">{money(c.balance)}</td>
-                      <td className="crd-td-muted">{fmtDate(c.due_date)}</td>
+                      <td className="crd-td-muted">{fmtDateTime(c.due_date)}</td>
                       <td>
                         <span className={`crd-status ${st.cls}`}>
                           <span className="crd-status__dot" />{st.label}
@@ -242,8 +243,8 @@ const Credits = () => {
                     </span>
                   </div>
                   <div className="crd-card__meta">
-                    <span className="crd-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDate(c.created_at)}</span>
-                    <span className="crd-td-muted"><i className="bi bi-calendar-event" />Vence {fmtDate(c.due_date)}</span>
+                    <span className="crd-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDateTime(c.created_at)}</span>
+                    <span className="crd-td-muted"><i className="bi bi-calendar-event" />Vence {fmtDateTime(c.due_date)}</span>
                     {isConsolidated && (
                       <span className="crd-td-muted"><i className="bi bi-shop" />{c.branch_name}</span>
                     )}

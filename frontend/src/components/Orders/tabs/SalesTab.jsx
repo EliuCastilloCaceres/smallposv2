@@ -3,13 +3,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../../context/UserContext'
 import api from '../../../services/api'
 import OrderDetailModal from '../modals/OrderDetailModal'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const PAGE_SIZE = 20
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-})
 // [FIX] toISOString() convierte a UTC antes de cortar la fecha — en
 // Mérida (UTC-6), desde media tarde en adelante la hora UTC ya cruzó a la
 // madrugada del día siguiente, así que marcaba un día adelantado. Se arma

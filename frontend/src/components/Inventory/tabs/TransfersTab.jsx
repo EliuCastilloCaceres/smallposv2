@@ -4,6 +4,7 @@ import { useUser } from '../../../Context/UserContext'
 import api from '../../../services/api'
 import TransferModal from '../modals/TransferModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const PAGE_SIZE = 20
 
@@ -17,10 +18,6 @@ const StatusBadge = ({ status }) => {
   const { label, cls } = STATUS_MAP[status] ?? { label: status, cls: '' }
   return <span className={`inv-status-badge ${cls}`}>{label}</span>
 }
-
-const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  : '—'
 
 const TransfersTab = ({ isAdmin, branchId}) => {
   const { hasPermission } = useUser()
@@ -144,7 +141,7 @@ const TransfersTab = ({ isAdmin, branchId}) => {
                     <td className="inv-td-muted">{t.to_branch_name}</td>
                     <td className="num"><strong>{t.quantity}</strong></td>
                     <td><StatusBadge status={t.status} /></td>
-                    <td className="inv-td-muted">{fmtDate(t.created_at)}</td>
+                    <td className="inv-td-muted">{fmtDateTime(t.created_at)}</td>
                     {canTransfer && (
                       <td>
                         {t.status === 'pending' && (
@@ -200,7 +197,7 @@ const TransfersTab = ({ isAdmin, branchId}) => {
                     <i className="bi bi-boxes" />{t.quantity} unidades
                   </span>
                   <span className="inv-muted">
-                    <i className="bi bi-calendar" />{fmtDate(t.created_at)}
+                    <i className="bi bi-calendar" />{fmtDateTime(t.created_at)}
                   </span>
                 </div>
                 {t.notes && <p className="inv-muted" style={{ fontSize: '12px' }}>{t.notes}</p>}

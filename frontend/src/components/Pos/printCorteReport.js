@@ -3,14 +3,9 @@
 // PrintBarcodesModal.jsx: abre una ventana nueva con HTML propio y llama a
 // window.print() — el navegador ya permite "Guardar como PDF" desde ahí,
 // así que no hace falta ninguna librería de PDF nueva.
+import { fmtDateTime } from "../../utils/dateFormatter"
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-
-const fmtDateTime = (d) => d
-  ? new Date(d).toLocaleString('es-MX', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-  : '—'
 
 // DDMMAAAAHHmm (24hrs) para el título de la ventana/pestaña — ej. cierre
 // 04/08/2026 10:50pm -> "040820262250"

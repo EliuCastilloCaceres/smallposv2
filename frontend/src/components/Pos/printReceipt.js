@@ -9,12 +9,9 @@
 // (carrito, líneas de pago, totales) más la fecha/hora actual del cliente,
 // que coincide prácticamente con la del servidor porque se imprime justo
 // después de confirmar la venta.
+import { fmtDateTime } from "../../utils/dateFormatter"
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-
-const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-})
 
 const escapeHtml = (str = '') =>
   String(str).replace(/[&<>"']/g, c => ({

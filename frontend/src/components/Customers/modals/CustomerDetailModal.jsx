@@ -2,13 +2,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import api from '../../../services/api'
 import { CreditBar } from '../Customers'
+import { fmtDateTime } from  '../../../utils/dateFormatter'
 
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-
-const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  : '—'
 
 // ── Status badge ──────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
@@ -201,8 +198,8 @@ const CustomerDetailModal = ({ customerId, canEdit, onClose, onEdit }) => {
                   <div className="cst-detail__section">
                     <span className="cst-detail__section-title">Sistema</span>
                     <DetailRow icon="bi-hash"     label="ID"        value={`#${customer.customer_id}`} />
-                    <DetailRow icon="bi-calendar" label="Registro"  value={fmtDate(customer.created_at)} />
-                    <DetailRow icon="bi-pencil-square" label="Actualizado" value={fmtDate(customer.updated_at)} />
+                    <DetailRow icon="bi-calendar" label="Registro"  value={fmtDateTime(customer.created_at)} />
+                    <DetailRow icon="bi-pencil-square" label="Actualizado" value={fmtDateTime(customer.updated_at)} />
                   </div>
                 </div>
               )}
@@ -219,7 +216,7 @@ const CustomerDetailModal = ({ customerId, canEdit, onClose, onEdit }) => {
                           <StatusBadge status={o.status} />
                         </div>
                         <div className="cst-hist-card__meta">
-                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDate(o.created_at)}</span>
+                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDateTime(o.created_at)}</span>
                           <span className="cst-muted"><i className="bi bi-building" />{o.branch_name ?? '—'}</span>
                           <span className="cst-muted"><i className="bi bi-person" />{o.seller ?? '—'}</span>
                         </div>
@@ -245,10 +242,10 @@ const CustomerDetailModal = ({ customerId, canEdit, onClose, onEdit }) => {
                           <StatusBadge status={cr.status} />
                         </div>
                         <div className="cst-hist-card__meta">
-                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDate(cr.created_at)}</span>
+                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDateTime(cr.created_at)}</span>
                           <span className="cst-muted"><i className="bi bi-building" />{cr.branch_name ?? '—'}</span>
                           {cr.due_date && (
-                            <span className="cst-muted"><i className="bi bi-alarm" />Vence: {fmtDate(cr.due_date)}</span>
+                            <span className="cst-muted"><i className="bi bi-alarm" />Vence: {fmtDateTime(cr.due_date)}</span>
                           )}
                         </div>
                         <div className="cst-hist-card__rows">
@@ -280,10 +277,10 @@ const CustomerDetailModal = ({ customerId, canEdit, onClose, onEdit }) => {
                           <StatusBadge status={l.status} />
                         </div>
                         <div className="cst-hist-card__meta">
-                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDate(l.created_at)}</span>
+                          <span className="cst-muted"><i className="bi bi-calendar" />{fmtDateTime(l.created_at)}</span>
                           <span className="cst-muted"><i className="bi bi-building" />{l.branch_name ?? '—'}</span>
                           {l.due_date && (
-                            <span className="cst-muted"><i className="bi bi-alarm" />Vence: {fmtDate(l.due_date)}</span>
+                            <span className="cst-muted"><i className="bi bi-alarm" />Vence: {fmtDateTime(l.due_date)}</span>
                           )}
                         </div>
                         {l.notes && <p className="cst-hist-card__notes">{l.notes}</p>}

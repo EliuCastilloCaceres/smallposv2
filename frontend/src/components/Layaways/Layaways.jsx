@@ -1,15 +1,15 @@
 // src/components/Layaways/Layaways.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser }   from '../../Context/UserContext'
+import { useUser }   from '../../context/UserContext'
 import { useBranch } from '../../Context/BranchContext'
 import api from '../../services/api'
 import LayawayDetailModal from './modals/LayawayDetailModal'
+import { fmtDate, fmtDateTime } from '../../utils/dateFormatter'
 import './layaways.css'
 
 const PAGE_SIZE = 20
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 const STATUS_META = {
   active:    { label: 'Activo',    cls: 'lwy-status--on' },
@@ -174,7 +174,7 @@ const Layaways = () => {
                     <tr key={l.layaway_id} onClick={() => setDetailId(l.layaway_id)}>
                       <td className="lwy-folio">#{l.layaway_id}</td>
                       <td>{l.first_name} {l.last_name}</td>
-                      <td className="lwy-td-muted">{fmtDate(l.created_at)}</td>
+                      <td className="lwy-td-muted">{fmtDateTime(l.created_at)}</td>
                       {isConsolidated && <td className="lwy-td-muted">{l.branch_name}</td>}
                       <td className="num">{money(l.total_amount)}</td>
                       <td className="num lwy-td-muted">{money(l.amount_paid)}</td>
@@ -204,7 +204,7 @@ const Layaways = () => {
                     </span>
                   </div>
                   <div className="lwy-card__meta">
-                    <span className="lwy-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDate(l.created_at)}</span>
+                    <span className="lwy-td-muted"><i className="bi bi-calendar-plus" />Creado {fmtDateTime(l.created_at)}</span>
                     <span className="lwy-td-muted"><i className="bi bi-calendar-event" />Entrega {fmtDate(l.due_date)}</span>
                     {isConsolidated && (
                       <span className="lwy-td-muted"><i className="bi bi-shop" />{l.branch_name}</span>

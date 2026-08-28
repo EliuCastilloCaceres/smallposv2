@@ -3,15 +3,11 @@ import { useState, useEffect } from 'react'
 import api from '../../../services/api'
 import ConfirmDialog from '../../Common/ConfirmDialog'
 import { openReceiptWindow } from '../../Pos/printReceipt'
+import { fmtDateTime, fmtDate } from '../../../utils/dateFormatter'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-})
 
 const itemLabel = (d) => d.variant_label ? `${d.product_name} - ${d.variant_label}` : d.product_name
-
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
 
 const CREDIT_STATUS_META = {
   active:    { label: 'Activo',    cls: 'sls-status--on' },
@@ -221,7 +217,7 @@ const OrderDetailModal = ({ orderId, canCancel, onClose, onCancelled }) => {
                       <span>Último abono</span>
                       <span>
                         {data.credit.last_payment
-                          ? `${money(data.credit.last_payment.amount)} · ${fmtDate(data.credit.last_payment.created_at)}`
+                          ? `${money(data.credit.last_payment.amount)} · ${fmtDateTime(data.credit.last_payment.created_at)}`
                           : 'Sin abonos aún'}
                       </span>
                     </div>

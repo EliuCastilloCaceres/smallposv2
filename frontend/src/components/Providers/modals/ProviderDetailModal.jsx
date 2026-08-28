@@ -1,13 +1,12 @@
 // src/components/Providers/modals/ProviderDetailModal.jsx
 import { useState, useEffect, useCallback } from 'react'
 import api from '../../../services/api'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
 
-const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  : '—'
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -150,8 +149,8 @@ const ProviderDetailModal = ({ providerId, canEdit, onClose, onEdit }) => {
                   <div className="cst-detail__section">
                     <span className="cst-detail__section-title">Sistema</span>
                     <DetailRow icon="bi-hash"          label="ID"          value={`#${provider.provider_id}`} />
-                    <DetailRow icon="bi-calendar"      label="Registro"    value={fmtDate(provider.created_at)} />
-                    <DetailRow icon="bi-pencil-square" label="Actualizado" value={fmtDate(provider.updated_at)} />
+                    <DetailRow icon="bi-calendar"      label="Registro"    value={fmtDateTime(provider.created_at)} />
+                    <DetailRow icon="bi-pencil-square" label="Actualizado" value={fmtDateTime(provider.updated_at)} />
                   </div>
                 </div>
               )}

@@ -1,15 +1,14 @@
 // src/components/Reports/tabs/CashSessionsTab.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import CashSessionDetailModal from '../modals/CashSessionDetailModal'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const PAGE_SIZE = 20
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDateTime = (d) => d ? new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-}) : '—'
+
 // [FIX] mismo criterio que SalesTab: fecha local, no UTC (Mérida es UTC-6,
 // toISOString() adelanta el día desde media tarde en adelante).
 const todayStr = () => {

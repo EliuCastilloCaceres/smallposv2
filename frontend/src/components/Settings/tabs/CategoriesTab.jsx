@@ -1,6 +1,6 @@
 // src/components/Settings/tabs/CategoriesTab.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import CategoryModal from '../modals/CategoryModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'

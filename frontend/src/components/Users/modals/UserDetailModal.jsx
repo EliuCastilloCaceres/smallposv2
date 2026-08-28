@@ -1,6 +1,7 @@
 // src/components/Users/modals/UserDetailModal.jsx
 import { useState, useEffect } from 'react'
 import api from '../../../services/api'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const ROLE_COLORS = {
   admin:       { bg: 'rgba(79,142,247,.12)',  color: '#4f8ef7' },
@@ -9,14 +10,6 @@ const ROLE_COLORS = {
   almacenista: { bg: 'rgba(217,119,6,.12)',   color: '#d97706' },
 }
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleDateString('es-MX', {
-    day:   '2-digit',
-    month: 'long',
-    year:  'numeric',
-  })
-}
 
 // ── Fila de detalle ───────────────────────────────────────────────────────────
 const DetailRow = ({ icon, label, value }) => (
@@ -171,8 +164,8 @@ const UserDetailModal = ({ userId, isSelf, canManage = false, onClose, onEdit, o
                 <span className="usr-detail__section-title">Sistema</span>
                 <div className="usr-detail__rows">
                   <DetailRow icon="bi-hash"        label="ID"             value={`#${user.user_id}`} />
-                  <DetailRow icon="bi-calendar"    label="Creado"         value={formatDate(user.created_at)} />
-                  <DetailRow icon="bi-pencil-square" label="Actualizado"  value={formatDate(user.updated_at)} />
+                  <DetailRow icon="bi-calendar"    label="Creado"         value={fmtDateTime(user.created_at)} />
+                  <DetailRow icon="bi-pencil-square" label="Actualizado"  value={fmtDateTime(user.updated_at)} />
                 </div>
               </div>
 

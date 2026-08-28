@@ -1,6 +1,6 @@
 // src/components/Settings/tabs/ReceiptTab.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 
 const EMPTY_FORM = {

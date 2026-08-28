@@ -1,6 +1,6 @@
 // src/components/Settings/Settings.jsx
 import { useState } from 'react'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import BranchesTab   from './tabs/BranchesTab'
 import ReceiptTab    from './tabs/ReceiptTab'
 import CashTab       from './tabs/CashTab'

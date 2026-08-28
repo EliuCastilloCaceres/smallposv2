@@ -1,6 +1,6 @@
 // src/components/Providers/Providers.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import api from '../../services/api'
 import ProviderModal       from './modals/ProviderModal'
 import ProviderDetailModal from './modals/ProviderDetailModal'

@@ -1,6 +1,7 @@
 // src/components/Inventory/tabs/MovementsTab.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import api from '../../../services/api'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const PAGE_SIZE = 30
 
@@ -22,13 +23,6 @@ const OpBadge = ({ type }) => {
   const { label, cls } = OPERATION_LABELS[type] ?? { label: type, cls: '' }
   return <span className={`inv-op-badge ${cls}`}>{label}</span>
 }
-
-const fmtDate = (d) => d
-  ? new Date(d).toLocaleString('es-MX', {
-      day: '2-digit', month: 'short', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
-    })
-  : '—'
 
 const todayStr = () => {
   const date = new Date();
@@ -149,7 +143,7 @@ const MovementsTab = ({branchId}) => {
               <tbody>
                 {movements.map(m => (
                   <tr key={m.movement_id}>
-                    <td className="inv-text-muted inv-mono">{fmtDate(m.created_at)}</td>
+                    <td className="inv-text-muted inv-mono">{fmtDateTime(m.created_at)}</td>
                     <td><OpBadge type={m.operation_type} /></td>
                     <td>
                       <div className="inv-mov-product">
@@ -184,7 +178,7 @@ const MovementsTab = ({branchId}) => {
                 <div className="inv-mov-card__top">
                   <OpBadge type={m.operation_type} />
                   <span className="inv-muted inv-mono" style={{ fontSize: '11px' }}>
-                    {fmtDate(m.created_at)}
+                    {fmtDateTime(m.created_at)}
                   </span>
                 </div>
                 <div className="inv-mov-card__product">

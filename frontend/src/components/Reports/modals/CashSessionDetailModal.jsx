@@ -1,11 +1,10 @@
 // src/components/Reports/modals/CashSessionDetailModal.jsx
 import { useState, useEffect } from 'react'
 import api from '../../../services/api'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDateTime = (d) => d ? new Date(d).toLocaleString('es-MX', {
-  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-}) : '—'
+
 
 const MOVEMENT_LABELS = {
   sale:            'Venta',

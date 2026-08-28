@@ -2,11 +2,10 @@
 import { useState, useEffect } from 'react'
 import api from '../../../services/api'
 import ConfirmDialog from '../../Common/ConfirmDialog'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
+import { fmtDateTime, fmtDate } from '../../../utils/dateFormatter'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
-const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
-const fmtDateTime = (d) => new Date(d).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 const itemLabel = (d) => d.variant_label ? `${d.product_name} - ${d.variant_label}` : d.product_name
 
 const LayawayDetailModal = ({ layawayId, canManage, onClose, onChanged, branch }) => {

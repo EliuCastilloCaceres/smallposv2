@@ -1,12 +1,13 @@
 // src/components/Pos/modals/CashMovementsModal.jsx
 import { useState, useEffect, useCallback } from 'react'
 import { usePos } from '../../../Context/PosContext'
+import { fmtDateTime, fmtTime } from '../../../utils/dateFormatter'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
-const fmtTime = (iso) => iso
-  ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-  : '—'
+// const fmtTime = (iso) => iso
+//   ? new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+//   : '—'
 
 const MOVEMENT_LABELS = {
   sale:             { label: 'Venta',            cls: 'pos-mov--in'  },
@@ -148,10 +149,12 @@ const CashMovementsModal = ({ onClose }) => {
                       <div>
                         <span className={`pos-cashmov-row__type ${meta.cls}`}>{meta.label}</span>
                         {m.description && <span className="pos-cashmov-row__desc">{m.description}</span>}
+                        {m.created_at && <span className="pos-cashmov-row__desc">{fmtTime(m.created_at)}</span>}
                       </div>
                       <span className={meta.cls}>
                         {meta.cls === 'pos-mov--in' ? '+' : '-'}{money(m.amount)}
                       </span>
+                     
                     </div>
                   )
                 })}

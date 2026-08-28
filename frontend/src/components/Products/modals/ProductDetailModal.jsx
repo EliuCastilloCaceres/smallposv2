@@ -2,14 +2,10 @@
 import { useState, useEffect } from 'react'
 import api from '../../../services/api'
 import { getImageUrl } from '../../../utils/imageUrl'
-import { StockBadge } from '../Products'
+import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
-
-const fmtDate = (d) => d
-  ? new Date(d).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })
-  : '—'
 
 const DetailRow = ({ icon, label, value }) => (
   <div className="prd-detail__row">
@@ -167,8 +163,8 @@ const ProductDetailModal = ({ productId, canEdit, branchId, onClose, onEdit }) =
               <div className="prd-detail__section">
                 <span className="prd-detail__section-title">Sistema</span>
                 <DetailRow icon="bi-hash"           label="ID"           value={`#${product.product_id}`} />
-                <DetailRow icon="bi-calendar"       label="Creado"       value={fmtDate(product.created_at)} />
-                <DetailRow icon="bi-pencil-square"  label="Actualizado"  value={fmtDate(product.updated_at)} />
+                <DetailRow icon="bi-calendar"       label="Creado"       value={fmtDateTime(product.created_at)} />
+                <DetailRow icon="bi-pencil-square"  label="Actualizado"  value={fmtDateTime(product.updated_at)} />
               </div>
 
               {/* Acciones */}

@@ -4,6 +4,7 @@
 
 const orderService = require('../services/orderService');
 const { resolveBranchId, resolveOptionalBranchId } = require('../helpers/helper');
+const { isCentralAdminOrAbove } = require('../helpers/roleHelpers');
 
 const getOrderById = async (req, res, next) => {
   try {
@@ -70,7 +71,13 @@ const getSoldProducts = async (req, res, next) => {
 const getCashiers = async (req, res, next) => {
   try {
     const branchId = resolveOptionalBranchId(req);
-    const data = await orderService.getCashiers({ branchId });
+    // Regla de negocio: admin/superadmin SIN sucursal asignada (por eso
+    // branchId resuelve null aquí — ver resolveOptionalBranchId) ve TODOS
+    // los cajeros sin restricción. Cualquier otro caso (usuario con
+    // sucursal, o admin central que sí filtró a una sucursal puntual) cae
+    // al filtro por sucursal normal dentro de orderService.getCashiers.
+    const seeAllBranches = branchId === null && isCentralAdminOrAbove(req.user);
+    const data = await orderService.getCashiers({ branchId, seeAllBranches });
     res.json({ status: 'success', data });
   } catch (err) {
     next(err);

@@ -181,7 +181,22 @@ export const PosContextProvider = ({ children }) => {
   const [paymentMethods,     setPaymentMethods]     = useState([])
   const [visibleCategories,  setVisibleCategories]  = useState([])
 
-  const prevBranchId = useRef(branchId)
+  // [FIX-persistencia] Antes arrancaba en `branchId` (el valor del primer
+  // render, casi siempre null porque BranchContext todavía no resuelve
+  // selectedBranch). Eso hacía que el efecto de abajo confundiera "la
+  // sucursal recién terminó de cargar" con "el usuario cambió de sucursal"
+  // — ver el fix completo más abajo.
+  const prevBranchId = useRef(null)
+
+  // [FIX-persistencia] Sin este guard, en el primer render con branchId ya
+  // resuelto ambos efectos (este de persistencia y el de hidratación, más
+  // abajo) corren en la misma pasada — y este, al declararse primero,
+  // ejecuta antes. Si escribiera sin esperar, guardaría el `cart` viejo
+  // (todavía newCart(1) vacío, porque el estado inicial se calculó cuando
+  // branchId aún era null) y pisaría el carrito real que el efecto de
+  // hidratación está a punto de leer del localStorage un instante después
+  // — perdiéndolo antes de que llegue a usarse.
+  const hasHydratedRef = useRef(false)
 
   // ─── Totales derivados ─────────────────────────────────────────────────────
   const subtotal = cart.items.reduce((s, i) => s + i.subtotal, 0)
@@ -190,6 +205,7 @@ export const PosContextProvider = ({ children }) => {
   // ─── [NUEVO] Persistir carrito activo + suspendidos en cada cambio ─────────
   useEffect(() => {
     if (!branchId) return
+    if (!hasHydratedRef.current) return // [FIX-persistencia] ver comentario en la declaración del ref
     writeStoredCartState({ branchId, cart, suspendedCarts })
   }, [branchId, cart, suspendedCarts])
 
@@ -254,17 +270,39 @@ export const PosContextProvider = ({ children }) => {
   }, [branchId, user?.user_id])
 
   useEffect(() => {
-    // Al cambiar de sucursal: recargar cajas y, si no es la primera carga,
-    // limpiar carrito activo/suspendidos — sus items apuntan a stock de la
-    // sucursal anterior y ya no son válidos.
-    if (prevBranchId.current !== branchId && prevBranchId.current !== undefined) {
+    if (!branchId) { fetchRegisters(); return } // sucursal aún no resuelta, nada que hacer todavía
+
+    if (prevBranchId.current === null) {
+      // [FIX-persistencia] Primera vez que branchId se resuelve en esta
+      // sesión del componente. En un reload directo en /pos, branchId
+      // arranca en null (BranchContext aún no cargó selectedBranch), así
+      // que `initialStored` de arriba se evaluó con branchId=null y no
+      // encontró nada guardado — el carrito quedó en newCart(1) vacío.
+      // Antes, este mismo efecto interpretaba esta transición null→real
+      // como "cambio de sucursal" (porque `prevBranchId.current !==
+      // undefined` era true incluso siendo null) y de paso BORRABA el
+      // localStorage con clearStoredCartState(), destruyendo el carrito
+      // guardado aunque nunca hubo un cambio real de sucursal. Ahora, en
+      // vez de limpiar, se hidrata: se relee el storage ya con el
+      // branchId correcto y se carga si hay algo.
+      const stored = readStoredCartState(branchId)
+      if (stored) {
+        dispatch({ type: 'LOAD', cart: stored.cart })
+        setSuspendedCarts(stored.suspendedCarts ?? [])
+      }
+    } else if (prevBranchId.current !== branchId) {
+      // Cambio real de sucursal (branchId pasó de un id real a otro id
+      // real distinto): los items del carrito anterior apuntan a stock de
+      // otro lugar y ya no son válidos.
       dispatch({ type: 'CLEAR' })
       setSuspendedCarts([])
       setActiveRegisterId(null)
       setSessionId(null)
-      clearStoredCartState()  // [NUEVO]
+      clearStoredCartState()
     }
+
     prevBranchId.current = branchId
+    hasHydratedRef.current = true // [FIX-persistencia] recién ahora el efecto de persistencia puede escribir con seguridad
     fetchRegisters()
   }, [branchId, fetchRegisters])
 

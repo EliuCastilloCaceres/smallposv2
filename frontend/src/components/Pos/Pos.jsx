@@ -84,6 +84,28 @@ const fetchMergedCatalog = async ({ branchId, search, categoryId, page = 1, limi
 
   const priceMap = new Map((priceRes.data.data ?? []).map(p => [p.product_id, p]))
 
+  // [FIX] El `search` de /products solo compara name/sku/description del
+  // PRODUCTO — no el sku de sus variantes. /inventory/stock sí matchea por
+  // sku de variante, así que al escanear el SKU de una variante el producto
+  // aparecía en stockRes pero quedaba fuera de priceMap, y sale_price/
+  // purchase_price caían al fallback `?? 0`: el producto se agregaba al
+  // carrito con precio $0. Para los product_id que faltan, se pide el
+  // precio directo por id — son a lo más unos pocos (típicamente 0 o 1),
+  // nunca la página completa.
+  const missingIds = (stockRes.data.data ?? [])
+    .map(p => p.product_id)
+    .filter(id => !priceMap.has(id))
+
+  if (missingIds.length > 0) {
+    const fallbacks = await Promise.all(
+      missingIds.map(id => api.get(`products/${id}`).catch(() => null))
+    )
+    for (const res of fallbacks) {
+      const p = res?.data?.data
+      if (p) priceMap.set(p.product_id, p)
+    }
+  }
+
   const data = (stockRes.data.data ?? []).map(p => {
     const priceInfo = priceMap.get(p.product_id)
     return {
@@ -180,6 +202,7 @@ const SaleScreen = () => {
   const catRef         = useRef('')
   const searchTimer    = useRef(null)
   const searchInputRef = useRef(null)
+  const catChipsRef    = useRef(null) // scroll horizontal de chips de categoría
 
   // [NUEVO] Devuelve el foco al buscador después de agregar un producto —
   // setTimeout(0) para que corra después de que React termine de re-renderizar
@@ -220,6 +243,21 @@ const SaleScreen = () => {
 
   // ── Variant picker ──
   const [variantTarget, setVariantTarget] = useState(null) // producto variable elegido
+
+  // [FIX-móvil] Mismo breakpoint que pos.css (max-width: 1024px), donde el
+  // grid se oculta y solo queda buscador + dropdown. En ese ancho no
+  // abrimos VariantPickerModal al escanear el SKU padre: se resuelve con
+  // el dropdown, igual que cualquier otra búsqueda ambigua.
+  const MOBILE_BREAKPOINT = '(max-width: 1024px)'
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(MOBILE_BREAKPOINT).matches
+  )
+  useEffect(() => {
+    const mql = window.matchMedia(MOBILE_BREAKPOINT)
+    const onChange = (e) => setIsMobile(e.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
 
   // ── Producto agotado ──
   const [outOfStockTarget, setOutOfStockTarget] = useState(null) // payload pendiente de agregar
@@ -346,7 +384,14 @@ const SaleScreen = () => {
     if (e.key !== 'Enter') return
     e.preventDefault()
     const q = search.trim()
-    if (!q || !branchId) return
+
+    // [NUEVO] Buscador vacío + carrito con items = abrir cobro inmediato
+    if (!q) {
+      if (cart.items.length > 0) setPaymentOpen(true)
+      return
+    }
+
+    if (!branchId) return
 
     clearTimeout(searchTimer.current)
     setIsSearching(true)
@@ -359,18 +404,42 @@ const SaleScreen = () => {
     const qLower = q.toLowerCase()
 
     const simpleMatch = raw.find(p => !p.is_variable && p.sku?.toLowerCase() === qLower)
-    if (simpleMatch) { handleAddSimple(simpleMatch); handleClearSearch(); return }
+    // [FIX] No llamamos handleClearSearch() acá después de agregar: eso ya
+    // lo decide tryAddItem (llamado dentro de handleAddSimple/handleAddVariant)
+    // según si el producto realmente se agregó. Si no hay stock, tryAddItem
+    // abre OutOfStockModal y no debe tocarse el buscador — si limpiábamos
+    // igual, el setTimeout(0) de focusSearch() le robaba el foco al input
+    // de cantidad del modal (que se enfoca de forma síncrona con autoFocus).
+    if (simpleMatch) { handleAddSimple(simpleMatch); return }
 
     for (const p of raw) {
       if (!p.is_variable) continue
       const v = (p.variants ?? []).find(v => v.sku?.toLowerCase() === qLower)
-      if (v) { handleAddVariant(p, v); handleClearSearch(); return }
+      if (v) { handleAddVariant(p, v); return }
     }
 
-    // [FIX] SKU del padre variable: nunca se agrega el padre — se muestran
-    // solo sus variantes (aplanadas) para que el cajero elija una.
+    // [FIX] SKU del padre variable: en escritorio debe abrir el modal de
+    // selección de variante directamente (Caso 1 del flujo de escaneo), no
+    // enterrarlo en el dropdown de resultados — antes esto último era lo
+    // único que pasaba y, si el dropdown no llegaba a mostrarse (foco,
+    // timing), el Enter no producía ninguna acción visible.
+    // [FIX-móvil] En móvil/tablet (mismo breakpoint que oculta el grid en
+    // pos.css) NO abrimos el modal: se deja caer al dropdown de abajo, que
+    // ya lista las variantes aplanadas para elegir ahí mismo.
+    // [FIX] No llamar handleClearSearch() acá: su focusSearch() (setTimeout)
+    // le ganaba la carrera al autoFocus del grid de variantes del modal y le
+    // devolvía el foco al buscador — por eso las flechas no navegaban nada
+    // cuando el picker se abría desde el buscador (sí funcionaba al abrirse
+    // desde un click en la grilla, porque ese flujo no toca el buscador). El
+    // propio onPick/onClose del modal ya se encargan de limpiar el buscador
+    // cuando corresponde.
     const parentMatch = raw.find(p => p.is_variable && p.sku?.toLowerCase() === qLower)
-    setDropdownItems(parentMatch ? flatten(parentMatch) : raw.flatMap(flatten))
+    if (parentMatch && !isMobile) {
+      setVariantTarget(parentMatch)
+      return
+    }
+
+    setDropdownItems(raw.flatMap(flatten))
     setShowDropdown(true)
   }
 
@@ -382,7 +451,16 @@ const SaleScreen = () => {
       return
     }
     addItem(payload)
-    focusSearch()
+    // [FIX] Limpiar siempre el buscador tras agregar al carrito — antes
+    // solo se limpiaba en los flujos de Enter/dropdown (que llaman
+    // handleClearSearch explícitamente), pero no al agregar desde el
+    // grid (handleProductClick) ni desde el modal de variantes: si el
+    // cajero había tecleado algo sin confirmarlo, quedaba pegado en la
+    // barra. Se centraliza acá, en el único punto por el que pasan todas
+    // las formas de agregar un producto. Si no hay texto tecleado, evita
+    // el refetch de página que hace handleClearSearch y solo enfoca.
+    if (search) handleClearSearch()
+    else focusSearch()
   }
 
   const handleAddSimple = (p) => {
@@ -419,9 +497,18 @@ const SaleScreen = () => {
   }
 
   const handleDropdownPick = (flatItem) => {
+    // [FIX] Mismo criterio que en handleSearchKeyDown: no forzar el clear/focus
+    // acá, tryAddItem ya decide correctamente según si hubo stock o no.
     if (flatItem.__variant) handleAddVariant(flatItem, flatItem.__variant)
     else handleAddSimple(flatItem)
-    handleClearSearch()
+  }
+
+  // [FIX] Al completar una venta (pago, apartado o crédito) el buscador
+  // debe quedar limpio para la siguiente venta — antes solo se refrescaba
+  // el grid (fetchGrid) y el texto tecleado previamente sobrevivía.
+  const handleSaleCompleted = () => {
+    if (search) handleClearSearch() // ya hace su propio fetchGrid(1) internamente
+    else fetchGrid(page)
   }
 
   const handleCategoryClick = (catId) => {
@@ -458,8 +545,30 @@ const SaleScreen = () => {
   // siempre se pintaba primero, lo que hacía "saltar" el orden visualmente.
   const allCartTabs = [cart, ...suspendedCarts].sort((a, b) => a.id - b.id)
 
+  // [NUEVO] Atajo global F10 para abrir cobro
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'F10') {
+        e.preventDefault()
+        if (cart.items.length > 0) setPaymentOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cart.items.length])
+
   return (
     <>
+      {/* [NUEVO-full-height-cart] pos-body ahora envuelve TODO lo que va
+          debajo del header (antes solo envolvía grid+carrito, y el buscador
+          vivía afuera como franja de ancho completo). pos-main-panel agrupa
+          buscador+grid en una columna angosta para que pos-cart-panel, como
+          hermano directo dentro de este mismo flex row, se estire por
+          stretch a todo el alto de pos-body — es decir, desde justo debajo
+          del header hasta abajo, sin quedar acotado por la altura de la
+          franja del buscador. */}
+      <div className="pos-body">
+        <div className="pos-main-panel">
       {/* ── Buscador (siempre visible, único modo de agregar en móvil) ── */}
       <div className="pos-search-wrap">
         <div className="pos-search">
@@ -509,27 +618,44 @@ const SaleScreen = () => {
         )}
       </div>
 
-      <div className="pos-body">
         {/* ── Grid (oculto en móvil) ── */}
         <div className="pos-grid-panel">
           {visibleCategories.length > 0 && (
-            <div className="pos-cat-chips">
+            <div className="pos-cat-chips-wrap">
               <button
-                className={`pos-cat-chip ${!categoryId ? 'pos-cat-chip--active' : ''}`}
-                onClick={() => handleCategoryClick('')}
+                type="button"
+                className="pos-cat-chips-arrow"
+                aria-label="Ver categorías anteriores"
+                onClick={() => catChipsRef.current?.scrollBy({ left: -180, behavior: 'smooth' })}
               >
-                Todas
+                <i className="bi bi-chevron-left" />
               </button>
-              {visibleCategories.map(c => (
+              <div className="pos-cat-chips" ref={catChipsRef}>
                 <button
-                  key={c.category_id}
-                  className={`pos-cat-chip ${categoryId === String(c.category_id) ? 'pos-cat-chip--active' : ''}`}
-                  onClick={() => handleCategoryClick(String(c.category_id))}
-                  style={categoryId === String(c.category_id) && c.color ? { background: c.color, borderColor: c.color, color: '#fff' } : undefined}
+                  className={`pos-cat-chip ${!categoryId ? 'pos-cat-chip--active' : ''}`}
+                  onClick={() => handleCategoryClick('')}
                 >
-                  {c.name}
+                  Todas
                 </button>
-              ))}
+                {visibleCategories.map(c => (
+                  <button
+                    key={c.category_id}
+                    className={`pos-cat-chip ${categoryId === String(c.category_id) ? 'pos-cat-chip--active' : ''}`}
+                    onClick={() => handleCategoryClick(String(c.category_id))}
+                    style={categoryId === String(c.category_id) && c.color ? { background: c.color, borderColor: c.color, color: '#fff' } : undefined}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="pos-cat-chips-arrow"
+                aria-label="Ver más categorías"
+                onClick={() => catChipsRef.current?.scrollBy({ left: 180, behavior: 'smooth' })}
+              >
+                <i className="bi bi-chevron-right" />
+              </button>
             </div>
           )}
 
@@ -584,51 +710,60 @@ const SaleScreen = () => {
             </>
           )}
         </div>
+        </div>
 
         {/* ── Carrito ── */}
         <div className="pos-cart-panel">
-          {/* Pestañas */}
-          <div className="pos-cart-tabs">
-            {allCartTabs.map(tab => {
-              const isActive = tab.id === cart.id
-              return (
-                <div
-                  key={tab.id}
-                  className={`pos-cart-tab ${isActive ? 'pos-cart-tab--active' : ''}`}
-                  onClick={() => {
-                    if (isActive) return
-                    const idx = suspendedCarts.findIndex(c => c.id === tab.id)
-                    if (idx !== -1) resumeCart(idx)
-                  }}
-                >
-                  <i className="bi bi-cart-fill" />
-                  <span>{tab.label}</span>
-                  {!isActive && (
-                    <button
-                      type="button"
-                      className="pos-cart-tab__x"
-                      onClick={e => {
-                        e.stopPropagation()
-                        const idx = suspendedCarts.findIndex(c => c.id === tab.id)
-                        if (idx !== -1) setConfirmDiscardIdx(idx)
-                      }}
-                    >
-                      <i className="bi bi-x" />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-            <button
-              type="button"
-              className="pos-cart-tab pos-cart-tab--new"
-              onClick={handleNewCartTab}
-              disabled={suspendedCarts.length >= 4}
-              title={suspendedCarts.length >= 4 ? 'Máximo 4 carritos en espera' : 'Nuevo carrito'}
-            >
-              <i className="bi bi-plus-lg" />
-            </button>
-          </div>
+          {/* [FIX-espacio] Pestañas: cuando no hay carritos suspendidos (solo
+              existe el activo) esta franja no aporta nada — no hay entre qué
+              cambiar — así que se oculta por completo para devolverle esa
+              altura a la lista de items. El botón "+" se movió a la fila de
+              Acciones para poder seguir creando un carrito nuevo aun con las
+              pestañas ocultas; en cuanto se crea uno, suspendedCarts pasa a
+              tener 1+ elementos y esta franja reaparece sola. */}
+          {suspendedCarts.length > 0 && (
+            <div className="pos-cart-tabs">
+              {allCartTabs.map(tab => {
+                const isActive = tab.id === cart.id
+                return (
+                  <div
+                    key={tab.id}
+                    className={`pos-cart-tab ${isActive ? 'pos-cart-tab--active' : ''}`}
+                    onClick={() => {
+                      if (isActive) return
+                      const idx = suspendedCarts.findIndex(c => c.id === tab.id)
+                      if (idx !== -1) resumeCart(idx)
+                    }}
+                  >
+                    <i className="bi bi-cart-fill" />
+                    <span>{tab.label}</span>
+                    {!isActive && (
+                      <button
+                        type="button"
+                        className="pos-cart-tab__x"
+                        onClick={e => {
+                          e.stopPropagation()
+                          const idx = suspendedCarts.findIndex(c => c.id === tab.id)
+                          if (idx !== -1) setConfirmDiscardIdx(idx)
+                        }}
+                      >
+                        <i className="bi bi-x" />
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+              <button
+                type="button"
+                className="pos-cart-tab pos-cart-tab--new"
+                onClick={handleNewCartTab}
+                disabled={suspendedCarts.length >= 4}
+                title={suspendedCarts.length >= 4 ? 'Máximo 4 carritos en espera' : 'Nuevo carrito'}
+              >
+                <i className="bi bi-plus-lg" />
+              </button>
+            </div>
+          )}
 
 
           {/* Cliente */}
@@ -782,7 +917,21 @@ const SaleScreen = () => {
               onClick={() => setDiscountOpen(o => !o)} disabled={cart.items.length === 0}>
               <i className="bi bi-percent" /><span>Descuento</span>
             </button>
+            {/* [FIX-espacio] Antes vivía solo en la franja de pestañas, que
+                ahora se oculta cuando no hay carritos suspendidos. Se
+                duplica acá para poder crear un carrito nuevo en todo
+                momento, con o sin pestañas visibles. */}
+            <button
+              type="button"
+              className="pos-cart-action-btn"
+              onClick={handleNewCartTab}
+              disabled={suspendedCarts.length >= 4}
+              title={suspendedCarts.length >= 4 ? 'Máximo 4 carritos en espera' : 'Nuevo carrito'}
+            >
+              <i className="bi bi-plus-square" /><span>Carrito</span>
+            </button>
           </div>
+
 
           <div className="pos-cart-checkout-row" style={{ display: 'flex', gap: 8 }}>
             <button
@@ -812,7 +961,7 @@ const SaleScreen = () => {
               onClick={() => setPaymentOpen(true)}
               disabled={cart.items.length === 0}
             >
-              <i className="bi bi-cash-coin" /> Cobrar {money(total)}
+              <i className="bi bi-cash-coin" /> Cobrar {money(total)+' [Enter o F10]'}
             </button>
           </div>
         </div>
@@ -822,18 +971,38 @@ const SaleScreen = () => {
       {variantTarget && (
         <VariantPickerModal
           product={variantTarget}
-          onPick={(v) => { handleAddVariant(variantTarget, v); setVariantTarget(null); focusSearch() }}
-          onClose={() => { setVariantTarget(null); focusSearch() }}
+          onPick={(v) => {
+            // [FIX] No forzamos focusSearch() acá: si la variante elegida no
+            // tiene stock, tryAddItem abre OutOfStockModal y necesita quedarse
+            // con el foco en su input de cantidad.
+            handleAddVariant(variantTarget, v)
+            setVariantTarget(null)
+          }}
+          onClose={() => {
+            setVariantTarget(null)
+            // Si el picker se abrió desde un SKU tecleado (parentMatch) y se
+            // cancela sin elegir variante, ese texto se queda pegado en el
+            // buscador si no lo limpiamos acá — al abrirse desde un click en
+            // la grilla, `search` ya está vacío y esto solo enfoca.
+            if (search) handleClearSearch()
+            else focusSearch()
+          }}
         />
       )}
       {customerOpen && <CustomerModal onClose={() => { setCustomerOpen(false); focusSearch() }} />}
-      {paymentOpen && <PaymentModal onClose={() => { setPaymentOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
-      {layawayOpen && <LayawayModal onClose={() => { setLayawayOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
-      {creditOpen && <CreditModal onClose={() => { setCreditOpen(false); focusSearch() }} onSaleCompleted={() => fetchGrid(page)} />}
+      {paymentOpen && <PaymentModal onClose={() => { setPaymentOpen(false); focusSearch() }} onSaleCompleted={handleSaleCompleted} />}
+      {layawayOpen && <LayawayModal onClose={() => { setLayawayOpen(false); focusSearch() }} onSaleCompleted={handleSaleCompleted} />}
+      {creditOpen && <CreditModal onClose={() => { setCreditOpen(false); focusSearch() }} onSaleCompleted={handleSaleCompleted} />}
       {outOfStockTarget && (
         <OutOfStockModal
           target={outOfStockTarget}
-          onClose={() => { setOutOfStockTarget(null); focusSearch() }}
+          onClose={() => {
+            setOutOfStockTarget(null)
+            // Mismo criterio que tryAddItem: si quedó texto tecleado en el
+            // buscador se limpia (y refetchea grid), si no solo se enfoca.
+            if (search) handleClearSearch()
+            else focusSearch()
+          }}
           onStockAdded={() => fetchGrid(page)}
         />
       )}

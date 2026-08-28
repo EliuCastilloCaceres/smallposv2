@@ -615,12 +615,21 @@ const getOrdersByBranchAndDateRange = async ({
 // permiso users:read, y cualquiera con acceso a Ventas debe poder filtrar
 // por cajero aunque no tenga permiso para administrar usuarios. Devuelve
 // solo lo necesario para poblar el <select>, no el registro completo.
-const getCashiers = async ({ branchId }) => {
+const getCashiers = async ({ branchId, seeAllBranches = false }) => {
   let where = 'WHERE is_active = true';
   const params = [];
 
-  if (branchId) {
-    where += ' AND branch_id = ?';
+  // FIX: la visión "todos los cajeros" ahora depende explícitamente del rol
+  // (seeAllBranches, resuelto en el controller con isCentralAdminOrAbove),
+  // no de que branchId simplemente sea null/undefined — así evitamos que
+  // cualquier fila con branch_id NULL por otra razón termine viendo todo.
+  //
+  // Cuando SÍ se filtra por sucursal: se incluyen también los usuarios sin
+  // sucursal asignada (branch_id IS NULL, típicamente admin central o
+  // superadmin) — no deben quedar excluidos del filtro de cualquier
+  // sucursal puntual, ya que no pertenecen a ninguna en particular.
+  if (!seeAllBranches && branchId) {
+    where += ' AND (branch_id = ? OR branch_id IS NULL)';
     params.push(branchId);
   }
 

@@ -592,6 +592,23 @@
   overflow: hidden;
 }
 
+/* [NUEVO-full-height-cart] Columna angosta que agrupa buscador+grid. Antes
+   el buscador (.pos-search-wrap) era hermano de .pos-body a lo ancho
+   completo de la pantalla, así que .pos-cart-panel (hermano de
+   .pos-grid-panel dentro de .pos-body) nunca alcanzaba esa franja. Ahora
+   .pos-main-panel es hermano directo de .pos-cart-panel dentro de
+   .pos-body — por el stretch por defecto de flex, .pos-cart-panel ocupa
+   TODO el alto de .pos-body (desde justo debajo del header) sin importar
+   cuánto mida el buscador arriba de .pos-grid-panel. */
+.pos-main-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* ── Panel de grid ── */
 .pos-grid-panel {
   flex: 1;
@@ -603,14 +620,51 @@
   padding: 12px 16px;
 }
 
+/* [FIX-estético] Franja de categorías con scroll horizontal explícito —
+   antes el overflow-x:auto existía pero la barra de scroll iba oculta
+   (scrollbar-width:none), así que en escritorio (sin gesto táctil) las
+   categorías que no cabían quedaban invisibles sin ninguna pista de que
+   había más. Ahora: wrapper con flechas + barra de scroll fina visible. */
+.pos-cat-chips-wrap {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
+}
+.pos-cat-chips-arrow {
+  flex-shrink: 0;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1.5px solid var(--pos-border);
+  background: var(--pos-surface);
+  color: var(--pos-text);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pos-cat-chips-arrow:hover { border-color: var(--pos-accent); color: var(--pos-accent); }
+.pos-cat-chips-arrow:disabled { opacity: .35; cursor: default; }
+.pos-cat-chips-arrow:disabled:hover { border-color: var(--pos-border); color: var(--pos-text); }
+
 .pos-cat-chips {
   display: flex; gap: 8px;
   overflow-x: auto;
+  flex-wrap: nowrap;
   padding-bottom: 10px;
-  flex-shrink: 0;
-  -ms-overflow-style: none; scrollbar-width: none;
+  flex: 1;
+  min-width: 0;
+  scroll-behavior: smooth;
 }
-.pos-cat-chips::-webkit-scrollbar { display: none; }
+/* Barra fina y visible en vez de ocultarla — le da al cajero la pista
+   visual de que hay más categorías a los lados. */
+.pos-cat-chips {
+  scrollbar-width: thin;
+  scrollbar-color: var(--pos-border) transparent;
+}
+.pos-cat-chips::-webkit-scrollbar { height: 6px; }
+.pos-cat-chips::-webkit-scrollbar-track { background: transparent; }
+.pos-cat-chips::-webkit-scrollbar-thumb {
+  background: var(--pos-border); border-radius: 999px;
+}
+.pos-cat-chips::-webkit-scrollbar-thumb:hover { background: var(--pos-muted); }
 .pos-cat-chip {
   flex-shrink: 0;
   padding: 7px 14px;
@@ -692,7 +746,8 @@
 
 /* ── Panel de carrito ── */
 .pos-cart-panel {
-  width: 440px;
+  width: 50%; /* [FIX-estético] antes 440px fijo — ahora ocupa la mitad de la pantalla */
+  min-width: 420px; /* evita que se comprima demasiado en pantallas angostas de escritorio */
   flex-shrink: 0;
   min-height: 0; /* [FIX] mismo problema de compresión que pos-grid-panel */
   background: var(--pos-surface);
@@ -704,7 +759,7 @@
 
 .pos-cart-tabs {
   display: flex; gap: 6px;
-  padding: 10px 12px;
+  padding: 6px 12px; /* [FIX-espacio] antes 10px 12px */
   overflow-x: auto;
   border-bottom: 1px solid var(--pos-border);
   flex-shrink: 0;
@@ -714,14 +769,14 @@
 .pos-cart-tab {
   flex-shrink: 0;
   display: flex; align-items: center; gap: 6px;
-  padding: 7px 10px;
+  padding: 6px 10px; /* [FIX-espacio] antes 7px 10px */
   border-radius: var(--pos-radius-sm);
   background: var(--pos-bg);
   color: var(--pos-muted);
   font-size: 12px; font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  min-height: 36px;
+  min-height: 32px; /* [FIX-espacio] antes 36px */
   border: none;
 }
 .pos-cart-tab--new { cursor: pointer; }
@@ -747,13 +802,14 @@
 
 .pos-cart-customer {
   display: flex; align-items: center; gap: 8px;
-  padding: 10px 14px;
+  padding: 8px 14px; /* [FIX-espacio] antes 10px 14px */
   border: none; border-bottom: 1px solid var(--pos-border);
   background: transparent;
   font-size: 13px; font-weight: 600; color: var(--pos-text);
   cursor: pointer;
   flex-shrink: 0;
-  min-height: var(--touch-min);
+  min-height: 40px; /* [FIX-espacio] antes var(--touch-min)=44px — sigue siendo
+                        un objetivo táctil cómodo, solo un poco más ajustado */
 }
 .pos-cart-customer:hover { background: var(--pos-bg); }
 .pos-cart-customer i:first-child { color: var(--pos-accent); }
@@ -762,8 +818,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 12px;
-  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 14px;
+  /* [FIX-estético] más aire entre filas para que el cajero distinga
+     mejor dónde termina un producto y empieza el siguiente */
+  display: flex; flex-direction: column; gap: 10px;
 }
 
 .pos-cart-empty {
@@ -775,8 +833,12 @@
 .pos-cart-empty i { font-size: 30px; opacity: .4; }
 
 .pos-cart-item {
-  display: flex; align-items: stretch; gap: 10px;
-  padding: 8px;
+  display: flex; align-items: stretch; gap: 14px;
+  padding: 12px;
+  /* [FIX-estético] filas más grandes y con borde propio: separa
+     visualmente cada línea del carrito, antes se confundían entre sí
+     al tener el mismo fondo que el panel y poco padding */
+  border: 1px solid var(--pos-border);
   border-radius: var(--pos-radius-sm);
   background: var(--pos-bg);
 }
@@ -786,21 +848,21 @@
    propia (no .pos-thumb-sm) para no afectar el thumbnail chico del
    dropdown de búsqueda, que sigue usando ese otro tamaño. */
 .pos-cart-item__thumb {
-  width: 56px;
+  width: 68px; /* [FIX-estético] antes 56px */
   flex-shrink: 0;
   border-radius: var(--pos-radius-sm);
   background: var(--pos-surface);
   border: 1px solid var(--pos-border);
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
-  color: var(--pos-muted); font-size: 22px;
+  color: var(--pos-muted); font-size: 26px; /* [FIX-estético] antes 22px, a juego con el thumb más grande */
 }
 .pos-cart-item__thumb img { width: 100%; height: 100%; object-fit: contain; }
 
 .pos-cart-item__body {
   flex: 1; min-width: 0;
   display: flex; flex-direction: column; justify-content: center;
-  gap: 6px;
+  gap: 8px; /* [FIX-estético] antes 6px */
 }
 .pos-cart-item__row1 { display: flex; align-items: center; gap: 8px; }
 .pos-cart-item__row2 {
@@ -811,7 +873,7 @@
 }
 .pos-cart-item__info { flex: 1; min-width: 0; }
 .pos-cart-item__name {
-  font-size: 12.5px; font-weight: 600; color: var(--pos-text);
+  font-size: 14.5px; font-weight: 600; color: var(--pos-text); /* [FIX-estético] antes 12.5px */
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   display: block;
 }
@@ -821,15 +883,15 @@
   display: flex; align-items: center; gap: 3px;
   flex-shrink: 0;
 }
-.pos-cart-item__price { font-size: 11px; color: var(--pos-muted); white-space: nowrap; }
-.pos-cart-item__price-currency { font-size: 11px; font-weight: 600; color: var(--pos-muted); }
+.pos-cart-item__price { font-size: 12.5px; color: var(--pos-muted); white-space: nowrap; } /* [FIX-estético] antes 11px */
+.pos-cart-item__price-currency { font-size: 12.5px; font-weight: 600; color: var(--pos-muted); } /* [FIX-estético] antes 11px */
 .pos-cart-item__price-input {
-  width: 56px;
+  width: 64px; /* [FIX-estético] antes 56px */
   border: 1px solid var(--pos-border);
   background: var(--pos-surface);
   border-radius: 6px;
-  font-size: 12px; font-weight: 600; color: var(--pos-text);
-  padding: 3px 4px;
+  font-size: 13.5px; font-weight: 600; color: var(--pos-text); /* [FIX-estético] antes 12px */
+  padding: 5px 6px; /* [FIX-estético] antes 3px 4px */
   text-align: center;
   -webkit-appearance: none;
   -moz-appearance: textfield; /* [FIX] Firefox: oculta flechas nativas */
@@ -860,21 +922,21 @@
   z-index: 5; pointer-events: none;
 }
 .pos-cart-item__qty button {
-  width: 26px; height: 26px;
+  width: 30px; height: 30px; /* [FIX-estético] antes 26x26 */
   border-radius: 6px;
   border: 1px solid var(--pos-border);
   background: var(--pos-surface);
   display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 12px;
+  cursor: pointer; font-size: 14px; /* [FIX-estético] antes 12px */
   flex-shrink: 0;
 }
 /* [NUEVO] Input de cantidad — soporta decimales para venta por kg/l/m */
 .pos-cart-item__qty-input {
-  width: 44px;
+  width: 50px; /* [FIX-estético] antes 44px */
   border: 1px solid var(--pos-border);
   border-radius: 6px;
-  font-size: 13px; font-weight: 700; text-align: center;
-  padding: 3px 2px;
+  font-size: 15px; font-weight: 700; text-align: center; /* [FIX-estético] antes 13px */
+  padding: 5px 2px; /* [FIX-estético] antes 3px 2px */
   -webkit-appearance: none;
   -moz-appearance: textfield; /* [FIX] Firefox: oculta flechas nativas */
 }
@@ -883,18 +945,18 @@
 .pos-cart-item__qty-input::-webkit-outer-spin-button,
 .pos-cart-item__qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
-.pos-cart-item__subtotal { font-size: 13px; flex-shrink: 0; min-width: 60px; text-align: right; }
+.pos-cart-item__subtotal { font-size: 15.5px; flex-shrink: 0; min-width: 72px; text-align: right; } /* [FIX-estético] antes 13px / 60px */
 .pos-cart-item__remove {
   border: none; background: transparent; color: var(--pos-red);
-  width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; flex-shrink: 0; border-radius: 6px;
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; /* [FIX-estético] antes 26x26 */
+  cursor: pointer; flex-shrink: 0; border-radius: 6px; font-size: 14px;
 }
 .pos-cart-item__remove:hover { background: var(--pos-red-bg); }
 
 
 /* Nota / descuento inline */
 .pos-cart-note, .pos-cart-discount {
-  padding: 10px 12px;
+  padding: 8px 12px; /* [FIX-espacio] antes 10px 12px */
   border-top: 1px solid var(--pos-border);
   flex-shrink: 0;
 }
@@ -937,18 +999,18 @@
 }
 
 .pos-cart-summary {
-  padding: 10px 14px;
+  padding: 8px 14px; /* [FIX-espacio] antes 10px 14px */
   border-top: 1px solid var(--pos-border);
   flex-shrink: 0;
 }
 .pos-cart-summary__row {
   display: flex; justify-content: space-between;
   font-size: 13px; color: var(--pos-muted);
-  padding: 3px 0;
+  padding: 2px 0; /* [FIX-espacio] antes 3px 0 */
 }
 .pos-cart-summary__row--total {
-  font-size: 18px; font-weight: 800; color: var(--pos-text);
-  padding-top: 6px;
+  font-size: 24px; font-weight: 800; color: var(--pos-text);
+  padding-top: 4px; /* [FIX-espacio] antes 8px */
 }
 
 .pos-cart-actions {
@@ -958,13 +1020,13 @@
 }
 .pos-cart-action-btn {
   flex: 1;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  padding: 8px 4px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; /* [FIX-espacio] antes 3px */
+  padding: 6px 4px; /* [FIX-espacio] antes 8px 4px */
   border: none; background: transparent;
   color: var(--pos-muted);
   font-size: 10px; font-weight: 600;
   cursor: pointer;
-  min-height: var(--touch-min);
+  min-height: 40px; /* [FIX-espacio] antes var(--touch-min)=44px */
 }
 .pos-cart-action-btn i { font-size: 16px; }
 .pos-cart-action-btn:hover:not(:disabled) { background: var(--pos-bg); color: var(--pos-text); }
@@ -972,6 +1034,21 @@
 .pos-cart-action-btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .pos-cart-pay-btn { flex-shrink: 0; border-radius: 0; }
+
+/* [FIX-espacio] Franja de checkout (Apartar / Crédito / Cobrar) — antes sin
+   clase propia, heredaba el padding por defecto de los botones .pos-btn--lg
+   (56px de alto + 14px vertical). Se define acá con un poco menos de aire
+   y se reduce ligeramente el alto mínimo de los botones grandes SOLO en
+   este contexto, sin afectar a pos-btn--lg en el resto de la app (ej.
+   modales de pago). */
+.pos-cart-checkout-row {
+  padding: 8px 12px 10px;
+  flex-shrink: 0;
+}
+.pos-cart-checkout-row .pos-btn--lg {
+  min-height: 48px;
+  padding: 10px 20px;
+}
 
 /* ── Responsive: desktop = solo grid (sin dropdown); tablet/móvil = solo
    buscador con dropdown (sin grid) ──────────────────────────────────────── */
@@ -984,8 +1061,18 @@
 @media (max-width: 1024px) {
   .pos-grid-panel { display: none; }
   .pos-body { flex-direction: column; }
+  /* [NUEVO-full-height-cart] En móvil pos-body pasa a columna: sin esto,
+     pos-main-panel (flex:1) pelearía por alto contra pos-cart-panel
+     (también flex:1) aunque adentro solo le quede el buscador (el grid
+     está oculto) — se vería medio vacío ocupando la mitad de la pantalla.
+     flex:0 0 auto lo achica a su contenido real (el buscador) y le deja
+     todo el resto de la altura al carrito, igual que antes de este cambio. */
+  .pos-main-panel { flex: 0 0 auto; }
+
   .pos-cart-panel {
     width: 100%;
+    min-width: 0; /* [FIX] anula el min-width:420px de escritorio — en columna
+                     (pantallas angostas) forzaría overflow horizontal */
     border-left: none;
     /* [FIX] En columna, sin flex:1 el panel se dimensiona por su
        contenido (auto) y crece más allá de la pantalla a medida que
@@ -998,6 +1085,48 @@
     flex: 1;
     min-height: 0;
   }
+
+  /* [FIX-dropdown] Regresión del cambio de "carrito a todo el alto":
+     .pos-search-wrap ahora vive DENTRO de .pos-main-panel, que a su vez
+     vive dentro de .pos-body — ambos con overflow:hidden (necesario en
+     desktop para el layout de dos columnas). En móvil eso recorta
+     .pos-search-dropdown (position:absolute, se sale del cuadro del
+     buscador) contra el borde de esos contenedores, quedando tapado por
+     el carrito que viene después en el flujo. Antes de este cambio el
+     buscador vivía afuera de cualquier overflow:hidden, por eso nunca se
+     había visto el problema. En móvil el grid está oculto (sin scroll
+     propio que proteger) y el carrito ya maneja su propio scroll interno
+     (.pos-cart-items), así que es seguro volver visible el overflow acá. */
+  .pos-body,
+  .pos-main-panel {
+    overflow: visible;
+  }
+
+  /* [FIX] Fila 2 del item (precio + cantidad + subtotal) no cabía en una
+     sola línea en pantallas angostas de teléfono: la suma de los anchos
+     mínimos (precio editable + controles de cantidad + subtotal) superaba
+     el ancho disponible del carrito y el subtotal quedaba empujado fuera
+     de su contenedor. Se envuelve a una segunda línea, con el subtotal
+     ocupando el ancho completo y alineado a la derecha. */
+  .pos-cart-item__row2 { flex-wrap: wrap; row-gap: 6px; }
+  .pos-cart-item__spacer { display: none; } /* ya no hace falta: el wrap separa las líneas */
+  .pos-cart-item__subtotal { flex-basis: 100%; min-width: 0; }
+
+  /* [NUEVO-filas-delgadas] Filas de carrito más compactas en móvil — menos
+     padding/gap y elementos un poco más chicos, para que quepan más items
+     sin scroll. Los controles táctiles (qty +/-, quitar) bajan de 30px a
+     28px: siguen arriba del mínimo usable, priorizando densidad ya que en
+     móvil el cajero normalmente usa una sola fila de items a la vez. */
+  .pos-cart-items { padding: 8px 12px; gap: 6px; }
+  .pos-cart-item { padding: 8px; gap: 10px; }
+  .pos-cart-item__thumb { width: 48px; font-size: 20px; }
+  .pos-cart-item__body { gap: 4px; }
+  .pos-cart-item__name { font-size: 13.5px; }
+  .pos-cart-item__qty button { width: 28px; height: 28px; }
+  .pos-cart-item__qty-input { width: 42px; padding: 3px 2px; font-size: 13.5px; }
+  .pos-cart-item__price-input { width: 54px; padding: 3px 5px; font-size: 12.5px; }
+  .pos-cart-item__subtotal { font-size: 14px; }
+  .pos-cart-item__remove { width: 28px; height: 28px; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1169,6 +1298,19 @@
 .pos-pay-quick-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
 }
+/* Los botones del grid no deben forzar su ancho mínimo por el texto/kbd
+   interno (white-space: nowrap de .pos-btn) — eso es lo que rompía el
+   grid en 3 columnas. min-width: 0 permite que la celda se respete y el
+   contenido se recorte en vez de desbordar. */
+.pos-pay-quick-grid .pos-btn {
+  min-width: 0;
+  padding: 8px 6px;
+}
+/* "Exacto ($X,XXX.XX)" es el texto más largo del grid: le damos toda la
+   fila para que quepa cómodo en vez de competir por 1/3 del ancho. */
+.pos-pay-quick-exact {
+  grid-column: 1 / -1;
+}
 .pos-pay-change-preview {
   text-align: center; font-size: 14px; color: var(--pos-green);
   padding: 8px; background: var(--pos-green-bg); border-radius: var(--pos-radius-sm);
@@ -1312,4 +1454,93 @@
 .pos-field__input[type="number"],
 .pos-pay-line__amount {
   -moz-appearance: textfield;
+}
+
+/* src/components/Pos/pos.css  — agrega al final del archivo */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEYBOARD-FIRST PAYMENT MODAL ENHANCEMENTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Focus visible en métodos de pago (navegación por flechas) */
+.pos-pay-method-btn:focus-visible,
+.pos-pay-method-btn--active {
+  outline: 3px solid var(--pos-accent);
+  outline-offset: 2px;
+  border-color: var(--pos-accent);
+  background: var(--pos-accent-bg);
+}
+
+/* Focus visible en el selector de variantes (mismo KeyboardNavGrid que
+   métodos de pago) */
+.pos-variant-card:focus-visible,
+.pos-variant-card--active {
+  outline: 3px solid var(--pos-accent);
+  outline-offset: 2px;
+  border-color: var(--pos-accent);
+  background: var(--pos-accent-bg);
+}
+
+/* Línea de pago activa (navegación/edición) */
+.pos-pay-line--active {
+  box-shadow: 0 0 0 2px var(--pos-accent);
+  border-radius: 6px;
+  padding: 2px;
+  margin: -2px;
+}
+
+/* Hint de tecla rápida */
+.pos-key-hint,
+.pos-key-hint-inline {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--pos-accent);
+  color: #fff;
+  padding: 2px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  border: none;
+  box-shadow: none;
+}
+.pos-key-hint {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.pos-key-hint-inline {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.pos-pay-method-btn { position: relative; }
+
+/* Input de efectivo: resaltar cuando tiene foco */
+.pos-pay-cash-panel .pos-field__input:focus {
+  border-color: var(--pos-accent);
+  box-shadow: 0 0 0 3px var(--pos-accent-bg);
+}
+
+/* Accesibilidad: solo lectores de pantalla */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Mejora de foco en botones de monto rápido */
+.pos-pay-quick-grid .pos-btn:focus-visible {
+  outline: 2px solid var(--pos-accent);
+  outline-offset: 2px;
+}
+
+/* Foco en botón de confirmar */
+.pos-modal__footer .pos-btn--primary:focus-visible {
+  outline: 3px solid var(--pos-accent);
+  outline-offset: 2px;
 }

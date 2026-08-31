@@ -7,6 +7,14 @@
 
 const db = require('../config/db');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
+// FIX: getOverdueCredits y markOverdueCredits comparaban due_date contra
+// CURDATE()/NOW() -el reloj del propio servidor MySQL, que se confirmó 2h
+// adelantado sobre México-. due_date es un día de calendario pensado en
+// México, así que entre las 10pm y medianoche México (cuando el servidor
+// ya "cree" que es el día siguiente) un crédito podía marcarse vencido un
+// día antes de tiempo. Se usa la fecha de México como parámetro en vez de
+// dejar que MySQL use su propio reloj para esto.
+const { todayInMexico } = require('../utils/timezone');
 
 // ─── Validar un arreglo de pagos (payment_method_id + amount) ────────────────
 const validatePayments = async (conn, payments) => {
@@ -123,14 +131,16 @@ const getCreditById = async (creditSaleId) => {
 };
 
 const getOverdueCredits = async () => {
+  const today = todayInMexico();
   const [rows] = await db.query(
     `SELECT cs.credit_sale_id, cs.total_amount, cs.balance, cs.due_date,
-            DATEDIFF(NOW(), cs.due_date) as days_overdue,
+            DATEDIFF(?, cs.due_date) as days_overdue,
             c.first_name, c.last_name, c.phone_number
      FROM credit_sales cs
      JOIN customers c ON cs.customer_id = c.customer_id
-     WHERE cs.status = 'active' AND cs.due_date < CURDATE()
-     ORDER BY days_overdue DESC`
+     WHERE cs.status = 'active' AND cs.due_date < ?
+     ORDER BY days_overdue DESC`,
+    [today, today]
   );
   return rows;
 };
@@ -448,7 +458,8 @@ const markOverdueCredits = async () => {
   const [result] = await db.query(
     `UPDATE credit_sales
      SET status = 'overdue'
-     WHERE status = 'active' AND due_date < CURDATE()`
+     WHERE status = 'active' AND due_date < ?`,
+    [todayInMexico()]
   );
   return { updated: result.affectedRows };
 };

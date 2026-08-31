@@ -1,7 +1,7 @@
 // src/components/Home/Home.jsx
 import { useState, useEffect } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import './home.css'
 
 const greetingWord = (hour) => {

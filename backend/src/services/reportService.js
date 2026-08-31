@@ -20,6 +20,12 @@
 
 const db = require('../config/db');
 const { NotFoundError } = require('../errors/AppError');
+// FIX: dateFrom/dateTo llegan del frontend como fecha "de pared" en México
+// (ej. "2026-08-24"), pero se comparaban directo contra s.opened_at /
+// s.closed_at, que son hora del SERVIDOR (2h adelantada sobre México) —
+// mismo bug que ya se corrigió en orderService.js. Se usa el mismo módulo
+// compartido para no volver a desincronizar el criterio.
+const { toServerDayStart, toServerDayEnd } = require('../utils/timezone');
 
 // ─── Sesiones de caja — listado ────────────────────────────────────────────
 
@@ -52,8 +58,20 @@ const getCashSessions = async ({
   // excluía CUALQUIER sesión abierta ese mismo día después de medianoche,
   // es decir prácticamente todas las de "hoy" (el filtro por defecto).
   // Se extiende al final del día para que sea inclusivo.
-  if (dateFrom !== null) { where.push('(s.closed_at IS NULL OR s.closed_at >= ?) AND s.opened_at >= ?'); params.push(dateFrom, dateFrom); }
-  if (dateTo   !== null) { where.push('s.opened_at <= ?');                                                params.push(`${dateTo} 23:59:59`); }
+  if (dateFrom !== null) {
+    // FIX: se traduce la fecha de México al límite equivalente en hora del
+    // servidor antes de compararla — antes una sesión abierta a las 11pm
+    // México (medianoche+ en el servidor) podía quedar fuera de "hoy", o
+    // colarse un día antes/después según el caso.
+    const serverDateFrom = await toServerDayStart(dateFrom);
+    where.push('(s.closed_at IS NULL OR s.closed_at >= ?) AND s.opened_at >= ?');
+    params.push(serverDateFrom, serverDateFrom);
+  }
+  if (dateTo !== null) {
+    const serverDateTo = await toServerDayEnd(dateTo);
+    where.push('s.opened_at <= ?');
+    params.push(serverDateTo);
+  }
 
   const whereSql = where.join(' AND ');
 

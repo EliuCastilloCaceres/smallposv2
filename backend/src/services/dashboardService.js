@@ -1,10 +1,17 @@
 // src/services/dashboardService.js
 const db = require('../config/db');
 const { ValidationError } = require('../errors/AppError');
+// FIX: la lógica de zona horaria (offset servidor->UTC->México, y el
+// fragmento SQL para convertir created_at) se movió a un módulo compartido
+// porque orderService.js necesitaba exactamente el mismo cálculo y tenerlo
+// duplicado en dos archivos es justo lo que causó que se desincronizaran
+// antes (ver src/utils/timezone.js para el porqué del offset).
+const { createdAtMx, toServerRange } = require('../utils/timezone');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-const toRange = (startDate, endDate) => [`${startDate} 00:00:00`, `${endDate} 23:59:59`];
+const CREATED_AT_MX = createdAtMx('o.created_at');
+const toRange = toServerRange;
 
 const validateDates = (startDate, endDate) => {
   if (!startDate || !endDate || !DATE_RE.test(startDate) || !DATE_RE.test(endDate)) {
@@ -106,7 +113,7 @@ const pctChange = (current, previous) => {
 // así que no hace falta excluir el status aparte — excluirlo tiraba a la
 // basura ese ingreso por tarifa de restock en vez de contarlo.
 const getKpis = async ({ startDate, endDate, branchId }) => {
-  const range = toRange(startDate, endDate);
+  const range = await toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
   const branchParam  = branchId ? [branchId] : [];
 
@@ -139,13 +146,16 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
     [...range, ...branchParam]
   );
 
+  // FIX: agrupaba por la hora cruda del servidor — se convierte a hora
+  // local de México antes de extraer la hora (mismo criterio en toda la
+  // hora pico y en getSalesByHour, para que ambos coincidan).
   const [peakRows] = await db.query(
-    `SELECT HOUR(o.created_at) AS hour, COUNT(*) AS cnt
+    `SELECT HOUR(${CREATED_AT_MX}) AS hour, COUNT(*) AS cnt
      FROM orders o
      WHERE o.created_at BETWEEN ? AND ?
        AND o.status IN ('completed', 'partial_refund', 'refunded')
        ${branchClause}
-     GROUP BY HOUR(o.created_at)
+     GROUP BY hour
      ORDER BY cnt DESC
      LIMIT 1`,
     [...range, ...branchParam]
@@ -222,7 +232,7 @@ const getKpisWithComparison = async ({ startDate, endDate, branchId, preset }) =
 // que usa getKpis, así que "Top productos" y los KPIs cuadran entre sí
 // incluso con tarifas de restock.
 const getTopProducts = async ({ startDate, endDate, branchId }) => {
-  const range = toRange(startDate, endDate);
+  const range = await toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
   const branchParam  = branchId ? [branchId] : [];
 
@@ -298,7 +308,7 @@ const getTopProducts = async ({ startDate, endDate, branchId }) => {
 // restock) — el pago original SÍ se cuenta y el reembolso SÍ se resta,
 // dando el neto correcto en cualquier combinación.
 const getPaymentBreakdown = async ({ startDate, endDate, branchId }) => {
-  const range = toRange(startDate, endDate);
+  const range = await toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
   const branchParam  = branchId ? [branchId] : [];
 
@@ -434,7 +444,7 @@ const getLowStock = async ({ branchId }) => {
 // ─── Ventas por hora ─────────────────────────────────────────────────────────
 
 const getSalesByHour = async ({ startDate, endDate, branchId }) => {
-  const range = toRange(startDate, endDate);
+  const range = await toRange(startDate, endDate);
 
   // FIX: incluye 'partial_refund' e ingreso neto de lo reembolsado
   // (returns.amount_refunded), mismo criterio que getKpis — sin esto una
@@ -453,9 +463,12 @@ const getSalesByHour = async ({ startDate, endDate, branchId }) => {
     ) rf ON rf.order_id = o.order_id`;
 
   // Modo sucursal: una fila por hora con datos
+  // FIX: agrupaba por la hora cruda del servidor — se convierte a hora
+  // local de México antes de agrupar (mismo criterio que peak_hour en
+  // getKpis, para que "hora pico" y esta gráfica siempre coincidan).
   if (branchId) {
     const [rows] = await db.query(
-      `SELECT HOUR(o.created_at) AS hour,
+      `SELECT HOUR(${CREATED_AT_MX}) AS hour,
               COUNT(o.order_id) AS orders_count,
               COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0) AS income
        FROM orders o
@@ -463,7 +476,7 @@ const getSalesByHour = async ({ startDate, endDate, branchId }) => {
        WHERE o.created_at BETWEEN ? AND ?
          AND o.status IN ('completed', 'partial_refund', 'refunded')
          AND o.branch_id = ?
-       GROUP BY HOUR(o.created_at)
+       GROUP BY hour
        ORDER BY hour ASC`,
       [...range, branchId]
     );
@@ -472,7 +485,7 @@ const getSalesByHour = async ({ startDate, endDate, branchId }) => {
 
   // Modo consolidado: una fila por combinación hora + sucursal
   const [rows] = await db.query(
-    `SELECT HOUR(o.created_at) AS hour, o.branch_id, b.name AS branch_name,
+    `SELECT HOUR(${CREATED_AT_MX}) AS hour, o.branch_id, b.name AS branch_name,
             COUNT(o.order_id) AS orders_count,
             COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0) AS income
      FROM orders o
@@ -480,7 +493,7 @@ const getSalesByHour = async ({ startDate, endDate, branchId }) => {
      ${refundsSubquery}
      WHERE o.created_at BETWEEN ? AND ?
        AND o.status IN ('completed', 'partial_refund', 'refunded')
-     GROUP BY HOUR(o.created_at), o.branch_id
+     GROUP BY hour, o.branch_id
      ORDER BY hour ASC, branch_name ASC`,
     range
   );

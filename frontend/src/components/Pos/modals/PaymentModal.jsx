@@ -2,7 +2,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { usePos } from '../../../Context/PosContext'
 import { useBranch } from '../../../Context/BranchContext'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { openReceiptWindow } from '../printReceipt'
 import KeyboardNavGrid from '../../common/KeyboardNavGrid'

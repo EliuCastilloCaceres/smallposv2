@@ -5,6 +5,10 @@
 const db           = require('../config/db');
 const stockService = require('./stockService');
 const { NotFoundError, ValidationError } = require('../errors/AppError');
+// FIX: getMovements comparaba fechas de pared (México) directo contra
+// m.created_at (hora del servidor) — mismo bug ya corregido en
+// orderService.js/reportService.js. Se usa el mismo módulo compartido.
+const { toServerRange, todayInMexico } = require('../utils/timezone');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -196,12 +200,22 @@ const getMovements = async ({ branchId, filters = {} }) => {
   const safePage  = Math.max(parseInt(page) || 1, 1);
   const offset    = (safePage - 1) * safeLimit;
 
-  const now      = new Date().toISOString().slice(0, 10);
+  // FIX: antes usaba new Date().toISOString().slice(0,10) para "hoy" — esa
+  // fecha sale en UTC, no en México, así que cerca de medianoche (México
+  // va 6h detrás de UTC) el default de "hoy" podía ser en realidad el día
+  // siguiente. todayInMexico() calcula la fecha de pared correcta.
+  const now      = todayInMexico();
   const fromDate = date_from || now;
   const toDate   = date_to   || now;
 
+  // FIX: fromDate/toDate son fechas de pared en México (las que manda el
+  // frontend o el default de arriba); se traducen al rango equivalente en
+  // hora del servidor antes de comparar contra m.created_at, o un
+  // movimiento cerca de medianoche quedaba en el día equivocado.
+  const [serverFrom, serverTo] = await toServerRange(fromDate, toDate);
+
   const conditions = ['m.branch_id = ?', 'm.created_at BETWEEN ? AND ?'];
-  const params     = [branchId, fromDate, `${toDate} 23:59:59`];
+  const params     = [branchId, serverFrom, serverTo];
 
   if (operation_type) {
     conditions.push('m.operation_type = ?');

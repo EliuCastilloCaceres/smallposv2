@@ -8,6 +8,13 @@ const db = require('../config/db');
 const stockService = require('./stockService');
 const creditService = require('./creditService');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
+// FIX: buildOrdersFilter y buildSoldProductsFilter comparaban startDate/
+// endDate (fecha "de pared" en México, lo que manda el frontend) directo
+// contra o.created_at (hora del SERVIDOR, 2h adelantada sobre México) —
+// dashboardService.js ya tenía el ajuste correcto para esto, pero era una
+// copia local que este archivo nunca compartió. Se usa el mismo módulo en
+// los dos para que no se vuelvan a desincronizar (ver src/utils/timezone.js).
+const { toServerRange } = require('../utils/timezone');
 
 // ─── Validar pagos ───────────────────────────────────────────────────────────
 
@@ -418,9 +425,14 @@ const getOrderById = async (orderId, branchId) => {
 // ahora necesitan builds de WHERE ligeramente distintos (los totales
 // siempre son sobre ventas completadas, sin importar el filtro de estado
 // de la tabla — ver comentario en getOrdersByBranchAndDateRange).
-const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, userId, forceCompleted = false }) => {
+const buildOrdersFilter = async ({ branchId, startDate, endDate, status, search, userId, forceCompleted = false }) => {
+  // FIX: antes comparaba el rango "de pared" (México) directo contra
+  // o.created_at (hora del servidor, 2h adelantada) — una venta de las
+  // 10pm México quedaba guardada ya en el día siguiente y "se colaba" en
+  // el filtro de "hoy". toServerRange traduce el rango de México al rango
+  // equivalente en hora del servidor antes de armar el BETWEEN.
   let where = 'WHERE o.created_at BETWEEN ? AND ?';
-  const params = [startDate, `${endDate} 23:59:59`];
+  const params = await toServerRange(startDate, endDate);
 
   // FIX: branchId ahora es opcional — null/undefined = todas las
   // sucursales (vista consolidada para el admin central)
@@ -478,7 +490,7 @@ const buildOrdersFilter = ({ branchId, startDate, endDate, status, search, userI
 // representa dinero cobrado, así que contarla en el total inflaría la
 // cifra. Los totales siempre son sobre completadas.
 const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, userId }) => {
-  const { where: totalsWhere, params: totalsParams } = buildOrdersFilter({
+  const { where: totalsWhere, params: totalsParams } = await buildOrdersFilter({
     branchId, startDate, endDate, search, userId, forceCompleted: true,
   });
 
@@ -549,7 +561,7 @@ const getOrdersByBranchAndDateRange = async ({
   const safePage = Math.max(parseInt(page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const { where, params } = buildOrdersFilter({ branchId, startDate, endDate, status, search, userId });
+  const { where, params } = await buildOrdersFilter({ branchId, startDate, endDate, status, search, userId });
 
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
@@ -650,7 +662,7 @@ const getCashiers = async ({ branchId, seeAllBranches = false }) => {
 // la orden completa que lo contiene (eso es lo que el filtro de categoría
 // en el listado de ventas hacía mal).
 
-const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, providerId, userId, search }) => {
+const buildSoldProductsFilter = async ({ branchId, startDate, endDate, categoryId, providerId, userId, search }) => {
   // FIX: incluye 'partial_refund' — una orden con devolución parcial sigue
   // aportando ingreso real por lo no devuelto; se resta lo devuelto más
   // abajo en getSoldProducts, no se excluye la orden entera.
@@ -659,8 +671,12 @@ const buildSoldProductsFilter = ({ branchId, startDate, endDate, categoryId, pro
   // producto (allReturned en returnService) no implica reembolsar el 100%
   // del dinero (tarifa de restock). El neteo de abajo ya da $0 cuando el
   // reembolso sí fue del 100% del dinero.
+  //
+  // FIX 3: mismo bug de zona horaria que buildOrdersFilter — el rango se
+  // traduce a hora del servidor con toServerRange antes de compararlo
+  // contra o.created_at.
   let where = "WHERE o.status IN ('completed', 'partial_refund', 'refunded') AND o.created_at BETWEEN ? AND ?";
-  const params = [startDate, `${endDate} 23:59:59`];
+  const params = await toServerRange(startDate, endDate);
 
   if (branchId) {
     where += ' AND o.branch_id = ?';
@@ -721,7 +737,7 @@ const getSoldProducts = async ({
   const safePage = Math.max(parseInt(page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const { where, params } = buildSoldProductsFilter({ branchId, startDate, endDate, categoryId, providerId, userId, search });
+  const { where, params } = await buildSoldProductsFilter({ branchId, startDate, endDate, categoryId, providerId, userId, search });
 
   // Conteo de productos DISTINTOS que califican (para paginar la tabla
   // agrupada) — no es lo mismo que sumar renglones de order_details.

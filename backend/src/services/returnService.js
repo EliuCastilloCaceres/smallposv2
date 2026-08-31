@@ -16,6 +16,11 @@
 const db           = require('../config/db');
 const stockService = require('./stockService');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
+// FIX: getReturnsByBranch comparaba startDate/endDate (fecha de pared en
+// México) directo contra r.created_at (hora del servidor) — mismo bug ya
+// corregido en orderService.js/reportService.js/inventoryService.js. Se
+// usa el mismo módulo compartido.
+const { toServerRange } = require('../utils/timezone');
 
 const keyOf = (productId, variantId) => `${productId}-${variantId ?? 0}`;
 
@@ -40,8 +45,11 @@ const getReturnsByBranch = async ({
   }
 
   if (startDate && endDate) {
+    // FIX: se traduce el rango de México al equivalente en hora del
+    // servidor antes de comparar contra r.created_at.
+    const [serverStart, serverEnd] = await toServerRange(startDate, endDate);
     conditions.push('r.created_at BETWEEN ? AND ?');
-    params.push(startDate, `${endDate} 23:59:59`);
+    params.push(serverStart, serverEnd);
   }
   if (status) {
     conditions.push('r.status = ?');

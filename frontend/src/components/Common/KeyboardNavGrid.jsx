@@ -1,4 +1,4 @@
-// src/components/common/KeyboardNavGrid.jsx
+// src/components/Common/KeyboardNavGrid.jsx
 // Grid de opciones navegable con flechas del teclado (patrón "roving
 // tabindex"). Extraído del selector de método de pago de PaymentModal para
 // reutilizarlo en cualquier grid de tarjetas/botones seleccionables

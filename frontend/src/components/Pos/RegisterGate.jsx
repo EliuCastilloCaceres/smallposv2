@@ -1,8 +1,8 @@
 // src/components/Pos/RegisterGate.jsx
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePos } from '../../Context/PosContext'
-import { useUser } from '../../Context/UserContext'
+import { usePos } from '../../context/PosContext'
+import { useUser } from '../../context/UserContext'
 
 const formatDateTime = (iso) => {
   if (!iso) return '—'

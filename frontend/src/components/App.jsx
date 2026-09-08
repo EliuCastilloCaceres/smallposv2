@@ -1,7 +1,7 @@
 // src/components/App.jsx
 import { useState } from 'react'
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
-import { useUser } from '../Context/UserContext'
+import { useUser } from '../context/UserContext'
 import { useBranch } from '../context/BranchContext'
 import './app.css'
 

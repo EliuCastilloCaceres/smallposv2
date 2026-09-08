@@ -10,7 +10,7 @@
 // diferencia sigue cuadrando correctamente.
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { usePos } from '../../../Context/PosContext'
+import { usePos } from '../../../context/PosContext'
 import { openCorteReportWindow } from '../printCorteReport'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })

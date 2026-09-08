@@ -1,6 +1,6 @@
 // src/components/Settings/tabs/BranchesTab.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import BranchModal from '../modals/BranchModal'
 import BranchCategoriesModal from '../modals/BranchCategoriesModal'

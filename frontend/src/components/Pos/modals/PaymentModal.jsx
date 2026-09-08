@@ -1,11 +1,11 @@
 // src/components/Pos/modals/PaymentModal.jsx
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { usePos } from '../../../Context/PosContext'
-import { useBranch } from '../../../Context/BranchContext'
+import { usePos } from '../../../context/PosContext'
+import { useBranch } from '../../../context/BranchContext'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { openReceiptWindow } from '../printReceipt'
-import KeyboardNavGrid from '../../common/KeyboardNavGrid'
+import KeyboardNavGrid from '../../Common/KeyboardNavGrid'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const QUICK_AMOUNTS = [20, 50, 100, 200, 500, 1000]

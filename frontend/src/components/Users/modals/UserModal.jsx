@@ -1,6 +1,6 @@
 // src/components/Users/modals/UserModal.jsx
 import { useState, useEffect, useMemo } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 
 const EMPTY = {

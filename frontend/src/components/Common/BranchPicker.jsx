@@ -1,5 +1,5 @@
 // src/components/Common/BranchPicker.jsx
-import { useBranch } from '../../Context/BranchContext'
+import { useBranch } from '../../context/BranchContext'
 import './branch-picker.css'
 
 // ── Initials helper ───────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-// src/Context/UserContext.jsx
+// src/context/UserContext.jsx
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import axios from 'axios'
 import api from '../services/api'

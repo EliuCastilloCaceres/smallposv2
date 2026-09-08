@@ -1,6 +1,6 @@
 // src/components/Pos/modals/CashMovementsModal.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { usePos } from '../../../Context/PosContext'
+import { usePos } from '../../../context/PosContext'
 import { fmtDateTime, fmtTime } from '../../../utils/dateFormatter'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })

@@ -18,9 +18,9 @@
 // el backend.
 
 import { useState, useEffect } from 'react'
-import { usePos } from '../../../Context/PosContext'
-import { useBranch } from '../../../Context/BranchContext'
-import { useUser } from '../../../Context/UserContext'
+import { usePos } from '../../../context/PosContext'
+import { useBranch } from '../../../context/BranchContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { openReceiptWindow } from '../printReceipt'
 

@@ -1,6 +1,6 @@
 // src/components/Inventory/tabs/TransfersTab.jsx
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '../../../Context/UserContext'
+import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import TransferModal from '../modals/TransferModal'
 import ConfirmDialog from '../../Common/ConfirmDialog'

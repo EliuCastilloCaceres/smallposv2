@@ -1,7 +1,7 @@
 // src/components/Layaways/Layaways.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../context/UserContext'
-import { useBranch } from '../../Context/BranchContext'
+import { useBranch } from '../../context/BranchContext'
 import api from '../../services/api'
 import LayawayDetailModal from './modals/LayawayDetailModal'
 import { fmtDate, fmtDateTime } from '../../utils/dateFormatter'

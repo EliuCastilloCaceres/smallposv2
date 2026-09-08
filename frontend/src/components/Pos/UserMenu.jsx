@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 
 const UserMenu = ({ onOpenMovements, onOpenClose }) => {
   const { user } = useUser()

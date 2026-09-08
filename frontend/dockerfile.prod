@@ -1,0 +1,27 @@
+# ---------- Etapa 1: build ----------
+FROM node:20-slim AS build
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+# Aquí SÍ se "hornean" las variables VITE_* dentro de los archivos compilados.
+# Por eso, si necesitas VITE_BACKEND_URL en producción, debe pasarse en este
+# momento del build (lo vemos abajo con --build-arg).
+RUN npm run build
+
+# ---------- Etapa 2: servir con nginx ----------
+FROM nginx:alpine
+
+# Copiamos SOLO los archivos compilados de la etapa anterior (carpeta dist/)
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Config de nginx para que las rutas de React Router funcionen al recargar la página
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

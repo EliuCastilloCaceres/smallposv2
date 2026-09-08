@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.17, for Win64 (x86_64)
 --
--- Host: localhost    Database: smallpos_fixed
+-- Host: localhost    Database: smpv2_demo
 -- ------------------------------------------------------
 -- Server version	8.0.17
 
@@ -98,7 +98,7 @@ CREATE TABLE `cash_movements` (
   KEY `fk_cm_user` (`user_id`),
   CONSTRAINT `fk_cm_session` FOREIGN KEY (`session_id`) REFERENCES `cash_register_sessions` (`session_id`),
   CONSTRAINT `fk_cm_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -121,7 +121,7 @@ CREATE TABLE `cash_register_sessions` (
   KEY `fk_crs_user` (`user_id`),
   CONSTRAINT `fk_crs_register` FOREIGN KEY (`cash_register_id`) REFERENCES `cash_registers` (`cash_register_id`),
   CONSTRAINT `fk_crs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -140,7 +140,7 @@ CREATE TABLE `cash_registers` (
   PRIMARY KEY (`cash_register_id`),
   KEY `fk_cr_branch` (`branch_id`),
   CONSTRAINT `fk_cr_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -160,7 +160,7 @@ CREATE TABLE `categories` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`category_id`),
   UNIQUE KEY `uq_category_name` (`name`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -184,7 +184,7 @@ CREATE TABLE `credit_payment_details` (
   KEY `fk_cpd_method` (`payment_method_id`),
   CONSTRAINT `fk_cpd_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`),
   CONSTRAINT `fk_cpd_payment` FOREIGN KEY (`payment_id`) REFERENCES `credit_payments` (`payment_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -213,7 +213,7 @@ CREATE TABLE `credit_payments` (
   CONSTRAINT `fk_cp_credit` FOREIGN KEY (`credit_sale_id`) REFERENCES `credit_sales` (`credit_sale_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_cp_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`),
   CONSTRAINT `fk_cp_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -241,7 +241,7 @@ CREATE TABLE `credit_sales` (
   CONSTRAINT `fk_cs_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`),
   CONSTRAINT `chk_credit_sales_balance` CHECK ((`balance` = (`total_amount` - `amount_paid`))),
   CONSTRAINT `chk_credit_sales_status` CHECK ((`status` in (_utf8mb4'active',_utf8mb4'paid',_utf8mb4'overdue',_utf8mb4'cancelled')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=20 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -268,7 +268,7 @@ CREATE TABLE `customers` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`customer_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -301,7 +301,7 @@ CREATE TABLE `inventory_movements` (
   CONSTRAINT `fk_invmov_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `fk_invmov_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `fk_invmov_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`variant_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=2998 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3246 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -327,7 +327,7 @@ CREATE TABLE `inventory_stock` (
   CONSTRAINT `fk_stock_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `fk_stock_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`variant_id`),
   CONSTRAINT `chk_stock_non_negative` CHECK ((`quantity` >= 0))
-) ENGINE=InnoDB AUTO_INCREMENT=2972 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3028 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -388,7 +388,7 @@ CREATE TABLE `layaway_details` (
   CONSTRAINT `fk_ld_layaway` FOREIGN KEY (`layaway_id`) REFERENCES `layaways` (`layaway_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_ld_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `fk_ld_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`variant_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -412,7 +412,7 @@ CREATE TABLE `layaway_payment_details` (
   KEY `fk_lpd_method` (`payment_method_id`),
   CONSTRAINT `fk_lpd_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`),
   CONSTRAINT `fk_lpd_payment` FOREIGN KEY (`payment_id`) REFERENCES `layaway_payments` (`payment_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -438,7 +438,7 @@ CREATE TABLE `layaway_payments` (
   CONSTRAINT `fk_lp_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`),
   CONSTRAINT `fk_lp_layaway` FOREIGN KEY (`layaway_id`) REFERENCES `layaways` (`layaway_id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_lp_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -470,7 +470,7 @@ CREATE TABLE `layaways` (
   CONSTRAINT `fk_lay_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `chk_layaways_balance` CHECK ((`balance` = (`total_amount` - `amount_paid`))),
   CONSTRAINT `chk_layaways_status` CHECK ((`status` in (_utf8mb4'active',_utf8mb4'completed',_utf8mb4'cancelled')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -497,7 +497,7 @@ CREATE TABLE `order_details` (
   CONSTRAINT `fk_od_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_od_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `fk_od_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`variant_id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=161 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -521,7 +521,7 @@ CREATE TABLE `order_payments` (
   KEY `fk_op_method` (`payment_method_id`),
   CONSTRAINT `fk_op_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`),
   CONSTRAINT `fk_op_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=120 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -536,6 +536,7 @@ CREATE TABLE `orders` (
   `branch_id` int(11) NOT NULL,
   `cash_register_id` int(11) NOT NULL,
   `customer_id` int(11) NOT NULL,
+  `layaway_id` int(11) DEFAULT NULL,
   `user_id` int(11) NOT NULL,
   `subtotal` decimal(12,2) NOT NULL DEFAULT '0.00',
   `discount` decimal(12,2) NOT NULL DEFAULT '0.00',
@@ -549,12 +550,48 @@ CREATE TABLE `orders` (
   KEY `fk_order_register` (`cash_register_id`),
   KEY `fk_order_customer` (`customer_id`),
   KEY `fk_order_user` (`user_id`),
+  KEY `fk_order_layaway` (`layaway_id`),
   CONSTRAINT `fk_order_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`),
   CONSTRAINT `fk_order_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
+  CONSTRAINT `fk_order_layaway` FOREIGN KEY (`layaway_id`) REFERENCES `layaways` (`layaway_id`),
   CONSTRAINT `fk_order_register` FOREIGN KEY (`cash_register_id`) REFERENCES `cash_registers` (`cash_register_id`),
   CONSTRAINT `fk_order_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `chk_orders_status` CHECK ((`status` in (_utf8mb4'completed',_utf8mb4'cancelled',_utf8mb4'pending',_utf8mb4'refunded',_utf8mb4'partial_refund')))
-) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=102 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `payment_events`
+--
+
+DROP TABLE IF EXISTS `payment_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `payment_events` (
+  `payment_event_id` int(11) NOT NULL AUTO_INCREMENT,
+  `source_type` varchar(20) NOT NULL,
+  `source_id` int(11) NOT NULL,
+  `branch_id` int(11) NOT NULL,
+  `cash_register_id` int(11) NOT NULL,
+  `session_id` int(11) NOT NULL,
+  `payment_method_id` int(11) NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`payment_event_id`),
+  KEY `idx_payment_events_session` (`session_id`),
+  KEY `idx_payment_events_register` (`cash_register_id`),
+  KEY `idx_payment_events_method` (`payment_method_id`),
+  KEY `idx_payment_events_source` (`source_type`,`source_id`),
+  KEY `fk_pe_branch` (`branch_id`),
+  KEY `fk_pe_user` (`user_id`),
+  CONSTRAINT `fk_pe_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`),
+  CONSTRAINT `fk_pe_method` FOREIGN KEY (`payment_method_id`) REFERENCES `payment_methods` (`payment_method_id`),
+  CONSTRAINT `fk_pe_register` FOREIGN KEY (`cash_register_id`) REFERENCES `cash_registers` (`cash_register_id`),
+  CONSTRAINT `fk_pe_session` FOREIGN KEY (`session_id`) REFERENCES `cash_register_sessions` (`session_id`),
+  CONSTRAINT `fk_pe_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `chk_pe_source_type` CHECK ((`source_type` in (_cp850'order',_cp850'layaway',_cp850'credit',_cp850'return')))
+) ENGINE=InnoDB AUTO_INCREMENT=63 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -571,7 +608,7 @@ CREATE TABLE `payment_methods` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   PRIMARY KEY (`payment_method_id`),
   UNIQUE KEY `uq_payment_method_code` (`code`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -588,7 +625,7 @@ CREATE TABLE `permissions` (
   `description` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`permission_id`),
   UNIQUE KEY `uq_module_action` (`module`,`action`)
-) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=79 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -641,7 +678,7 @@ CREATE TABLE `products` (
   KEY `idx_products_category` (`category_id`),
   CONSTRAINT `fk_product_category` FOREIGN KEY (`category_id`) REFERENCES `categories` (`category_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_product_provider` FOREIGN KEY (`provider_id`) REFERENCES `providers` (`provider_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2942 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2968 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -689,7 +726,7 @@ CREATE TABLE `refresh_tokens` (
   UNIQUE KEY `uq_token_hash` (`token_hash`),
   KEY `fk_rt_user` (`user_id`),
   CONSTRAINT `fk_rt_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1127 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1401 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -713,7 +750,7 @@ CREATE TABLE `return_details` (
   CONSTRAINT `fk_rd_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
   CONSTRAINT `fk_rd_return` FOREIGN KEY (`return_id`) REFERENCES `returns` (`return_id`) ON DELETE CASCADE,
   CONSTRAINT `fk_rd_variant` FOREIGN KEY (`variant_id`) REFERENCES `product_variants` (`variant_id`) ON DELETE SET NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -731,6 +768,7 @@ CREATE TABLE `returns` (
   `user_id` int(11) NOT NULL,
   `reason` varchar(255) DEFAULT NULL,
   `amount_refunded` decimal(12,2) NOT NULL DEFAULT '0.00',
+  `credit_adjustment_amount` decimal(12,2) NOT NULL DEFAULT '0.00',
   `refund_method` varchar(45) DEFAULT NULL,
   `payment_method_id` int(11) DEFAULT NULL,
   `status` varchar(20) NOT NULL DEFAULT 'completed',
@@ -747,7 +785,7 @@ CREATE TABLE `returns` (
   CONSTRAINT `fk_ret_order` FOREIGN KEY (`order_id`) REFERENCES `orders` (`order_id`),
   CONSTRAINT `fk_ret_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`),
   CONSTRAINT `chk_returns_status` CHECK ((`status` in (_utf8mb4'completed',_utf8mb4'pending',_utf8mb4'rejected')))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=28 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -809,7 +847,7 @@ CREATE TABLE `users` (
   `phone_number` varchar(15) DEFAULT NULL,
   `profile_image` varchar(255) DEFAULT NULL,
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
-  `superadmin_slot` tinyint(1) GENERATED ALWAYS AS (IF(`role_id` = 1, 1, NULL)) STORED COMMENT 'Constraint única: garantiza un solo superadmin',
+  `superadmin_slot` tinyint(1) GENERATED ALWAYS AS (if((`role_id` = 1),1,NULL)) STORED COMMENT 'Constraint única: garantiza un solo superadmin',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`user_id`),
@@ -819,7 +857,7 @@ CREATE TABLE `users` (
   KEY `fk_user_branch` (`branch_id`),
   CONSTRAINT `fk_user_branch` FOREIGN KEY (`branch_id`) REFERENCES `branches` (`branch_id`) ON DELETE SET NULL,
   CONSTRAINT `fk_user_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -831,4 +869,4 @@ CREATE TABLE `users` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-04 12:30:07
+-- Dump completed on 2026-08-24  0:02:24

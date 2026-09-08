@@ -10,7 +10,7 @@
 // > 0, en vez de ignorar el descuento en silencio y cobrar de más.
 
 import { useState } from 'react'
-import { usePos } from '../../../Context/PosContext'
+import { usePos } from '../../../context/PosContext'
 import api from '../../../services/api'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })

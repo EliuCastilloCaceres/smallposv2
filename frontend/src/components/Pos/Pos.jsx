@@ -1,6 +1,6 @@
 // src/components/Pos/Pos.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { PosContextProvider, usePos } from '../../Context/PosContext'
+import { PosContextProvider, usePos } from '../../context/PosContext'
 import { useUser } from '../../context/UserContext'
 import BranchGate from '../Common/BranchGate'
 import ConfirmDialog from '../Common/ConfirmDialog'

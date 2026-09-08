@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Nota: este archivo corre en Node (no en el navegador), así que
+// process.env está disponible directamente aquí.
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:3001'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -25,7 +29,7 @@ export default defineConfig({
       // 1. Detecta cualquier petición que empiece con /api
       '/api': {
         // 2. La redirige transparentemente a tu API local
-        target: 'http://127.0.0.1:3001', 
+        target: backendTarget, 
         changeOrigin: true,
         secure: false,
       }

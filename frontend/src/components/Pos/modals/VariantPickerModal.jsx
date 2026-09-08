@@ -8,7 +8,7 @@
 // picker es efímero — vive solo mientras el modal está abierto — así que
 // no hace falta que el padre recuerde qué variante estaba resaltada.
 
-import KeyboardNavGrid from '../../common/KeyboardNavGrid'
+import KeyboardNavGrid from '../../Common/KeyboardNavGrid'
 
 const VariantPickerModal = ({ product, onPick, onClose }) => {
   const variants = product.variants ?? []

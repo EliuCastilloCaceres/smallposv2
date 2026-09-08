@@ -267,6 +267,35 @@ const updateProduct = async ({ productId, updates, newImage, variants = [], user
       }
     }
 
+    // 1.b Desactivar las variantes que YA NO vienen en el payload (el usuario
+    //     las borró en el modal). El upsert de arriba solo actualiza/inserta,
+    //     nunca elimina — sin este paso, una variante borrada en el frontend
+    //     seguía activa en la BD y reaparecía al reabrir el modal.
+    //     No aplica si estamos convirtiendo a simple: ese caso ya desactiva
+    //     TODAS las variantes más abajo.
+    if (!reallyConvertingToSimple) {
+      const keepIds = variants
+        .map(v => v.variant_id)
+        .filter(Boolean);
+
+      if (keepIds.length > 0) {
+        await conn.query(
+          `UPDATE product_variants
+             SET is_active = 0
+           WHERE product_id = ? AND is_active = 1 AND variant_id NOT IN (?)`,
+          [productId, keepIds]
+        );
+      } else if (variants.length === 0 && !reallyConvertingToVariable) {
+        // No llegó ninguna variante (ni con id ni nueva) — no debería pasar
+        // en el flujo normal del modal (que exige al menos una), pero por
+        // si acaso: desactiva todas las que había.
+        await conn.query(
+          'UPDATE product_variants SET is_active = 0 WHERE product_id = ? AND is_active = 1',
+          [productId]
+        );
+      }
+    }
+
     // 2. Migrar stock ANTES de tocar is_variable en products.
     if (reallyConvertingToVariable) {
       const targetVariantId = variants[0]?.variant_id ?? firstNewVariantId;

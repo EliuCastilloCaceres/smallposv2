@@ -1,4 +1,4 @@
-// src/Context/PosContext.jsx
+// src/context/PosContext.jsx
 // Estado global del POS:
 //  · Sucursal activa (vía BranchContext) y sesión de caja (abrir/cerrar)
 //  · Catálogo de apoyo: métodos de pago, categorías visibles en esta sucursal

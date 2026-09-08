@@ -1,6 +1,6 @@
 // src/components/Users/Users.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useUser } from '../../Context/UserContext'
+import { useUser } from '../../context/UserContext'
 import api from '../../services/api'
 import UserModal           from './modals/UserModal'
 import TempPassModal       from './modals/TempPassModal'

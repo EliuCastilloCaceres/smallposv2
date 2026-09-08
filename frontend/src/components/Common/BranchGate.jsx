@@ -1,6 +1,6 @@
 // src/components/Common/BranchGate.jsx
-import { useUser }   from '../../Context/UserContext'
-import { useBranch } from '../../Context/BranchContext'
+import { useUser }   from '../../context/UserContext'
+import { useBranch } from '../../context/BranchContext'
 import BranchPicker  from './BranchPicker'
 
 /**

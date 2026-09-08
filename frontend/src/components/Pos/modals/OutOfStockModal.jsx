@@ -12,7 +12,7 @@
 //   { product_id, variant_id, name, sku, image, unit_price, purchase_price, stock }
 
 import { useState } from 'react'
-import { usePos } from '../../../Context/PosContext'
+import { usePos } from '../../../context/PosContext'
 import api from '../../../services/api'
 
 const REASONS = ['Conteo físico', 'Compra a proveedor', 'Otro']

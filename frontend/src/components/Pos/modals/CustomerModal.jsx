@@ -4,7 +4,7 @@
 // últimos abonos) usando /customers y /customers/:id/credits.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { usePos } from '../../../Context/PosContext'
+import { usePos } from '../../../context/PosContext'
 import api from '../../../services/api'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })

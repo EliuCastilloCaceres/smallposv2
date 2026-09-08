@@ -1,4 +1,4 @@
-// src/Context/BranchContext.jsx
+// src/context/BranchContext.jsx
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { useUser } from './UserContext'
 import api from '../services/api'

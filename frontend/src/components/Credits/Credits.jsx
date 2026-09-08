@@ -1,7 +1,7 @@
 // src/components/Credits/Credits.jsx
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../context/UserContext'
-import { useBranch } from '../../Context/BranchContext'
+import { useBranch } from '../../context/BranchContext'
 import api from '../../services/api'
 import CreditDetailModal from './modals/CreditDetailModal'
 import AdjustLimitModal from './modals/AdjustLimitModal'

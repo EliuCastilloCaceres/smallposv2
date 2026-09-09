@@ -1,0 +1,45 @@
+C:\Users\Eliu Castillo\Documents\Projects\smallposv2
+├── backend
+|  ├── arbol.txt
+|  ├── backend.zip
+|  ├── dockerfile
+|  ├── index.js
+|  ├── package-lock.json
+|  ├── package.json
+|  ├── public
+|  |  └── images
+|  ├── schema_decisions.md
+|  ├── sql-init
+|  |  ├── 01-schema.sql
+|  |  └── 02-seeds.sql
+|  └── src
+|     ├── config
+|     ├── controllers
+|     ├── errors
+|     ├── helpers
+|     ├── middlewares
+|     ├── routes
+|     ├── services
+|     └── utils
+├── docker-compose.prod.yml
+├── docker-compose.yml
+├── frontend
+|  ├── dist
+|  |  ├── assets
+|  |  ├── dist.zip
+|  |  ├── favicon.svg
+|  |  ├── icons.svg
+|  |  └── index.html
+|  ├── dockerfile
+|  ├── dockerfile.prod
+|  ├── eslint.config.js
+|  ├── index.html
+|  ├── nginx.conf
+|     ├── package.json
+|     └── README.md
+├── package-lock.json
+├── package.json
+└── smallposv2Notes.txt
+
+directory: 555 file: 222
+

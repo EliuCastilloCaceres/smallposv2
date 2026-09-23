@@ -9,7 +9,7 @@
 // categoryService, paymentMethodService y userService cada uno tenía
 // su propia versión (distinta) de "¿es admin?".
 
-const PROTECTED_ROLES = ['superadmin', 'admin'];
+const PROTECTED_ROLES = ['superadmin'];
 
 // ─── Preguntas básicas ──────────────────────────────────────────────────────
 
@@ -19,9 +19,15 @@ const isCentralAdmin = (user) => user.role_name === 'admin' && user.branch_id ==
 
 // Sin branchId → "¿es admin de alguna sucursal?"
 // Con branchId → "¿es admin de ESA sucursal específica?"
-const isBranchAdmin = (user, branchId = null) => {
+// OJO: se usa `undefined` (no `null`) como valor por default para poder
+// distinguir "no me pasaron branchId" de "me pasaron branchId = null"
+// (este segundo caso significa "el target es central" y NUNCA debe dar
+// true, porque un admin de sucursal, por definición, no tiene branch_id
+// null).
+const isBranchAdmin = (user, branchId = undefined) => {
   if (user.role_name !== 'admin' || user.branch_id === null) return false;
-  if (branchId === null) return true;
+  if (branchId === undefined) return true;
+  if (branchId === null) return false;
   return Number(user.branch_id) === Number(branchId);
 };
 

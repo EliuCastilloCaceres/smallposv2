@@ -7,6 +7,8 @@ const {
   PROTECTED_ROLES,
   canEditUser,
   canDeleteOrDeactivateUser,
+  isSuperadmin,
+  isCentralAdmin,
 } = require('../helpers/roleHelpers');
 
 const SALT_ROUNDS = 10;
@@ -318,10 +320,14 @@ const update = async ({ userId, data, requestingUser }) => {
     if (conflict) throw new ConflictError(`El username "${username.trim()}" ya está en uso`);
   }
 
+  if(targetUser.role_name ==='admnin' && !isCentralAdmin(requestingUser) && !isSuperadmin(requestingUser)){
+    throw new ForbiddenError('Solo el superadmin o un admin central puede modificar el rol');
+  }
+
   // No se puede cambiar el rol de un superadmin o admin (roles protegidos)
   if (role_id !== undefined && Number(role_id) !== targetUser.role_id) {
     if (PROTECTED_ROLES.includes(targetUser.role_name)) {
-      throw new ForbiddenError('No se puede cambiar el rol de un superadmin o admin');
+      throw new ForbiddenError('No se puede cambiar el rol de un superadmin');
     }
 
     validate.roleId(role_id);
@@ -349,13 +355,21 @@ const update = async ({ userId, data, requestingUser }) => {
   }
 
   // Nadie puede cambiar la sucursal del superadmin
-  if (branch_id !== undefined && targetUser.role_name === 'superadmin') {
+  if (
+    branch_id !== undefined &&
+    branch_id !== targetUser.branch_id &&
+    targetUser.role_name === 'superadmin'
+  ) {
     throw new ForbiddenError('No se puede cambiar la sucursal del superadmin');
   }
 
   // Solo superadmin y admin central puede cambiar la sucursal de un admin
-  if (branch_id !== undefined && targetUser.role_name === 'admin') {
-    if (requestingUser.role_name !== 'superadmin' && requestingUser.role_name !== 'admin') {
+  if (
+    branch_id !== undefined &&
+    branch_id !== targetUser.branch_id &&
+    targetUser.role_name === 'admin'
+  ) {
+    if (!isSuperadmin(requestingUser) && !isCentralAdmin(requestingUser)) {
       throw new ForbiddenError('Solo el superadmin o admin central puede cambiar la sucursal de un admin');
     }
   }

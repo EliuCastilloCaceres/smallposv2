@@ -66,8 +66,8 @@ const UserModal = ({ user, roles, branches, onSaved, onClose }) => {
     setError(null)
   }
 
-  // FIX: En edición, no se puede cambiar el rol de superadmin/admin
-  const isEditingProtectedUser = isEdit && ['superadmin', 'admin'].includes(user?.role_name)
+  // FIX: En edición, no se puede cambiar el rol de superadmin
+  const isEditingProtectedUser = isEdit && ['superadmin'].includes(user?.role_name)
 
   // FIX: Filtrar roles que el creador puede asignar
   const availableRoles = useMemo(() => {

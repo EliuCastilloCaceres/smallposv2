@@ -3,6 +3,7 @@ const jwt    = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const db     = require('../config/db');
+const { getPermissionsForRole } = require('../helpers/permissions');
 const { UnauthorizedError } = require('../errors/AppError');
 
 const ACCESS_TOKEN_EXPIRY     = '15m';
@@ -28,18 +29,9 @@ const generateAccessToken = (user) =>
 const generateRefreshToken = () => crypto.randomBytes(64).toString('hex');
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
-// ─── Query de permisos reutilizable ───────────────────────────────────────────
-
-const getPermissionsByRole = async (roleId) => {
-  const [rows] = await db.query(
-    `SELECT CONCAT(p.module, '.', p.action) AS permission
-     FROM role_permissions rp
-     JOIN permissions p ON rp.permission_id = p.permission_id
-     WHERE rp.role_id = ?`,
-    [roleId]
-  );
-  return rows.map(r => r.permission);
-};
+// getPermissionsForRole se importa de helpers/permissions.js (fuente única).
+// Antes había una copia local acá (getPermissionsByRole, con SQL distinto —
+// CONCAT en SQL vs. template string en JS) y otra en middlewares/auth.js.
 
 // ─── login ────────────────────────────────────────────────────────────────────
 
@@ -56,10 +48,18 @@ const login = async ({ username, password, userAgent, ipAddress }) => {
   if (users.length === 0) throw new UnauthorizedError('Credenciales incorrectas', 'INVALID_CREDENTIALS');
 
   const user = users[0];
-  if (!user.is_active) throw new UnauthorizedError('Usuario desactivado','INVALID_CREDENTIALS');
 
+  // [FIX] Antes se revisaba is_active ANTES de validar la contraseña: eso
+  // permitía confirmar, sin conocer la contraseña, que un username existe Y
+  // que está desactivado (bastaba mandar cualquier password). Ahora la
+  // contraseña se valida primero — con cuenta desactivada o inexistente el
+  // mensaje es el mismo "Credenciales incorrectas", y solo después de una
+  // contraseña correcta se distingue "Usuario desactivado" (en ese punto ya
+  // no es una fuga: quien la ve ya demostró conocer la contraseña real).
   const validPassword = await bcrypt.compare(password, user.password_hash);
   if (!validPassword) throw new UnauthorizedError('Credenciales incorrectas', 'INVALID_CREDENTIALS');
+
+  if (!user.is_active) throw new UnauthorizedError('Usuario desactivado', 'INVALID_CREDENTIALS');
 
   const accessToken   = generateAccessToken(user);
   const refreshToken  = generateRefreshToken();
@@ -72,7 +72,7 @@ const login = async ({ username, password, userAgent, ipAddress }) => {
     [user.user_id, tokenHash, expiresAt, userAgent ?? null, ipAddress ?? null]
   );
 
-  const permissions = await getPermissionsByRole(user.role_id);
+  const permissions = await getPermissionsForRole(user.role_id);
 
   return {
     accessToken,
@@ -170,7 +170,7 @@ const getMe = async (userId) => {
   if (users.length === 0) throw new UnauthorizedError('Usuario no encontrado', 'INVALID_CREDENTIALS');
 
   const user        = users[0];
-  const permissions = await getPermissionsByRole(user.role_id);
+  const permissions = await getPermissionsForRole(user.role_id);
 
   return {
     user_id:     user.user_id,

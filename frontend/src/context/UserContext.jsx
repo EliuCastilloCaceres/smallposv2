@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import axios from 'axios'
 import api from '../services/api'
+import * as access from '../helpers/userAccess'
 
 const UserContext = createContext()
 
@@ -31,12 +32,30 @@ export const UserContextProvider = ({ children }) => {
   // alcance de sucursal (ver/editar todas vs. solo la propia).
   const isCentralAdmin = user?.branch_id === null
 
+  // Valor derivado: el superadmin es intocable/inmortal en la UI de usuarios.
+  const isSuperadmin = user?.role_name === 'superadmin'
+
+  // ─── Gestión de usuarios (RBAC + alcance + anti-escalada) ──────────────────
+  // Versiones ya ligadas al usuario actual de helpers/userAccess.js (espejo
+  // de roleHelpers del backend). Los componentes NO deben reimplementar
+  // jerarquía: llaman a estas funciones.
+  //   canCreateUser({ role_name, branch_id })
+  //   canEditUser(target)          — editar datos / cambiar contraseña de otro
+  //   canDeactivateUser(target)    — activar / desactivar
+  //   canAssignRole(roleName)      — qué roles puede ofrecer en un selector
+  const canViewUsers      = useCallback(() => !!user && access.canViewUsers(user), [user])
+  const canCreateUser     = useCallback((newUser) => !!user && access.canCreateUser(user, newUser), [user])
+  const canEditUser       = useCallback((target)  => !!user && access.canEditUser(user, target), [user])
+  const canDeactivateUser = useCallback((target)  => !!user && access.canDeactivateUser(user, target), [user])
+  const canAssignRole     = useCallback((roleName) => !!user && access.canAssignRole(user, roleName), [user])
+
   // ─── Login ─────────────────────────────────────────────────────────────────
   const login = useCallback(async ({ username, password }) => {
     const { data } = await api.post('auth/login', { username, password })
     console.log('User Data: ', data)
     sessionStorage.setItem('accessToken', data.accessToken)
     setUser(data.user)
+    console.log(data.user);
     return data.user
   }, [])
 
@@ -112,7 +131,11 @@ export const UserContextProvider = ({ children }) => {
   }, [])
 
   return (
-    <UserContext.Provider value={{ user, isLoading, login, logout, hasPermission, isAdmin, isCentralAdmin }}>
+    <UserContext.Provider value={{
+      user, isLoading, login, logout, hasPermission,
+      isAdmin, isCentralAdmin, isSuperadmin,
+      canViewUsers, canCreateUser, canEditUser, canDeactivateUser, canAssignRole,
+    }}>
       {children}
     </UserContext.Provider>
   )

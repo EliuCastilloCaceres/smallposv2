@@ -5,15 +5,21 @@ const db     = require('../config/db');
 const { NotFoundError, ConflictError, ValidationError, ForbiddenError } = require('../errors/AppError');
 const {
   PROTECTED_ROLES,
+  BRANCH_BOUND_ROLES,
+  isSuperadmin,
+  isCentralAdminOrAbove,
+  canAssignRole,
+  canViewUsers,
+  canCreateUser,
   canEditUser,
   canDeleteOrDeactivateUser,
-  isSuperadmin,
-  isCentralAdmin,
 } = require('../helpers/roleHelpers');
 
 const SALT_ROUNDS = 10;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Ninguna decisión de jerarquía/permisos vive aquí: todo eso se delega a
+// roleHelpers. Lo de abajo es solo acceso a datos y validación de formato.
 
 const SAFE_COLUMNS = `
   u.user_id,
@@ -42,9 +48,13 @@ const BASE_JOIN = `
   LEFT JOIN branches b ON u.branch_id = b.branch_id
 `;
 
-const getUserWithRole = async (userId) => {
+// Uso INTERNO para decisiones de autorización. Nunca devolver este objeto
+// al cliente (con includeHash trae password_hash).
+const getUserWithRole = async (userId, { includeHash = false } = {}) => {
   const [[user]] = await db.query(
-    `SELECT u.user_id, u.role_id, u.branch_id, r.name AS role_name, r.is_system
+    `SELECT u.user_id, u.role_id, u.branch_id, u.is_active,
+            ${includeHash ? 'u.password_hash,' : ''}
+            r.name AS role_name
      FROM users u
      JOIN roles r ON u.role_id = r.role_id
      WHERE u.user_id = ?`,
@@ -53,16 +63,52 @@ const getUserWithRole = async (userId) => {
   return user || null;
 };
 
-// Concepto genérico "opera desde central" (branch_id null), independiente
-// del rol — se usa para decidir defaults de sucursal al crear/editar, no
-// para chequeos de jerarquía de gestión (eso vive en roleHelpers).
-const isCentral = (user) => user.branch_id === null;
+// Lectura sin scoping de sucursal. Reemplaza el patrón anterior de llamar
+// getById con un requestingUser falso `{ branch_id: null }` para saltarse
+// el scoping.
+const fetchUser = async (userId) => {
+  const [rows] = await db.query(
+    `SELECT ${SAFE_COLUMNS} ${BASE_JOIN} WHERE u.user_id = ?`,
+    [userId]
+  );
+  return rows[0] || null;
+};
+
+// Antes duplicado en create() y update().
+const getActiveRole = async (roleId) => {
+  const [[role]] = await db.query(
+    'SELECT role_id, name FROM roles WHERE role_id = ? AND is_active = 1',
+    [roleId]
+  );
+  if (!role) throw new ValidationError('El rol especificado no existe o está inactivo');
+  return role;
+};
+
+// Antes solo existía en create(); update() no validaba la sucursal destino.
+const assertBranchActive = async (branchId) => {
+  const [[branch]] = await db.query(
+    'SELECT branch_id FROM branches WHERE branch_id = ? AND is_active = 1',
+    [branchId]
+  );
+  if (!branch) throw new ValidationError('La sucursal especificada no existe o está inactiva');
+};
+
+// undefined/null → null (central). Cualquier otro valor debe ser entero > 0.
+// Normaliza también "3" vs 3, que antes hacía fallar comparaciones con !==.
+const parseBranchId = (v) => {
+  if (v === undefined || v === null) return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n <= 0) throw new ValidationError('El branch_id debe ser un entero positivo o null');
+  return n;
+};
+
+const clean = (v) => (typeof v === 'string' ? v.trim() : v);
 
 const generateTempPassword = () => {
   const words = ['Mango', 'Limon', 'Fresa', 'Melon', 'Uva', 'Pera', 'Kiwi', 'Mora'];
-  const word1  = words[Math.floor(Math.random() * words.length)];
-  const word2  = words[Math.floor(Math.random() * words.length)];
-  const num    = crypto.randomInt(100, 999);
+  const word1 = words[crypto.randomInt(0, words.length)];
+  const word2 = words[crypto.randomInt(0, words.length)];
+  const num   = crypto.randomInt(100, 999);
   return `${word1}${word2}${num}!`;
 };
 
@@ -84,8 +130,16 @@ const validate = {
 };
 
 // ─── getAll ───────────────────────────────────────────────────────────────────
+// canViewUsers exige el permiso users.read. El ALCANCE (a cuáles ve) sigue
+// basado en branch_id, no en roleHelpers: cualquier rol con el permiso ve su
+// propia sucursal; solo quien tiene branch_id null (central/superadmin) puede
+// pedir otra sucursal o el listado completo.
 
 const getAll = async ({ requestingUser, filters = {} }) => {
+  if (!canViewUsers(requestingUser)) {
+    throw new ForbiddenError('No tienes permiso para ver usuarios');
+  }
+
   const {
     branch_id,
     role_id,
@@ -95,8 +149,8 @@ const getAll = async ({ requestingUser, filters = {} }) => {
     limit = 20,
   } = filters;
 
-  const safeLimit  = Math.min(Math.max(parseInt(limit)  || 20,  1), 100);
-  const safePage   = Math.max(parseInt(page) || 1, 1);
+  const safeLimit  = Math.min(Math.max(parseInt(limit, 10)  || 20,  1), 100);
+  const safePage   = Math.max(parseInt(page, 10) || 1, 1);
   const offset     = (safePage - 1) * safeLimit;
 
   const conditions = [];
@@ -149,14 +203,12 @@ const getAll = async ({ requestingUser, filters = {} }) => {
 // ─── getById ──────────────────────────────────────────────────────────────────
 
 const getById = async ({ userId, requestingUser }) => {
-  const [rows] = await db.query(
-    `SELECT ${SAFE_COLUMNS} ${BASE_JOIN} WHERE u.user_id = ?`,
-    [userId]
-  );
+  if (!canViewUsers(requestingUser)) {
+    throw new ForbiddenError('No tienes permiso para ver usuarios');
+  }
 
-  if (rows.length === 0) throw new NotFoundError('Usuario no encontrado');
-
-  const user = rows[0];
+  const user = await fetchUser(userId);
+  if (!user) throw new NotFoundError('Usuario no encontrado');
 
   if (
     requestingUser.branch_id !== null &&
@@ -169,6 +221,13 @@ const getById = async ({ userId, requestingUser }) => {
 };
 
 // ─── create ───────────────────────────────────────────────────────────────────
+// canCreateUser (roleHelpers) decide TODO en una sola llamada:
+//  · permiso RBAC users.create (el rol por sí solo no autoriza nada);
+//  · canAssignRole: superadmin nunca; admin solo superadmin/admin central;
+//  · alcance: superadmin/admin central en cualquier sucursal (o central);
+//    cualquier otro con el permiso, solo en SU sucursal.
+// Cambio de comportamiento: quien manda un branch_id fuera de su alcance
+// ahora recibe 403 (antes se le ignoraba en silencio).
 
 const create = async ({ data, requestingUser }) => {
   const {
@@ -186,11 +245,12 @@ const create = async ({ data, requestingUser }) => {
     phone_number,
   } = data;
 
-  validate.username(username?.trim());
+  const cleanUsername = clean(username);
+  validate.username(cleanUsername);
   validate.roleId(role_id);
 
-  let tempPassword      = null;
-  let plainPassword     = password;
+  let tempPassword  = null;
+  let plainPassword = password;
 
   if (!plainPassword) {
     tempPassword  = generateTempPassword();
@@ -199,45 +259,31 @@ const create = async ({ data, requestingUser }) => {
     validate.password(plainPassword);
   }
 
-  const [[role]] = await db.query(
-    'SELECT role_id, name FROM roles WHERE role_id = ? AND is_active = 1',
-    [role_id]
+  const role = await getActiveRole(role_id);
+
+  // Sucursal destino: superadmin/admin central eligen libremente (null =
+  // central); los demás heredan la suya si no mandan ninguna.
+  const targetBranchId = parseBranchId(
+    isCentralAdminOrAbove(requestingUser)
+      ? branch_id
+      : (branch_id ?? requestingUser.branch_id)
   );
-  if (!role) throw new ValidationError('El rol especificado no existe o está inactivo');
 
-  if (role.name === 'superadmin') {
-    throw new ForbiddenError('El rol superadmin no puede asignarse a nuevos usuarios');
+  if (!canCreateUser(requestingUser, { role_name: role.name, branch_id: targetBranchId })) {
+    throw new ForbiddenError('No tienes permiso para crear este tipo de usuario en esa sucursal');
   }
 
-  if (role.name === 'admin' && !isCentral(requestingUser)) {
-    throw new ForbiddenError('Solo el administrador central puede crear usuarios con rol admin');
-  }
-
-  const effectiveBranchId = isCentral(requestingUser)
-    ? (branch_id ?? null)
-    : requestingUser.branch_id;
-
-  if (['cajero', 'almacenista'].includes(role.name) && effectiveBranchId === null) {
+  if (BRANCH_BOUND_ROLES.includes(role.name) && targetBranchId === null) {
     throw new ValidationError(`El rol ${role.name} requiere una sucursal asignada`);
   }
 
-  if (!isCentral(requestingUser) && effectiveBranchId === null) {
-    throw new ForbiddenError('No puedes crear usuarios sin sucursal');
-  }
-
-  if (effectiveBranchId !== null) {
-    const [[branch]] = await db.query(
-      'SELECT branch_id FROM branches WHERE branch_id = ? AND is_active = 1',
-      [effectiveBranchId]
-    );
-    if (!branch) throw new ValidationError('La sucursal especificada no existe o está inactiva');
-  }
+  if (targetBranchId !== null) await assertBranchActive(targetBranchId);
 
   const [[existing]] = await db.query(
     'SELECT user_id FROM users WHERE username = ?',
-    [username.trim()]
+    [cleanUsername]
   );
-  if (existing) throw new ConflictError(`El username "${username.trim()}" ya está en uso`);
+  if (existing) throw new ConflictError(`El username "${cleanUsername}" ya está en uso`);
 
   const passwordHash = await bcrypt.hash(plainPassword, SALT_ROUNDS);
 
@@ -249,10 +295,10 @@ const create = async ({ data, requestingUser }) => {
     [
       first_name   ?? null,
       last_name    ?? null,
-      username.trim(),
+      cleanUsername,
       passwordHash,
-      role_id,
-      effectiveBranchId,
+      role.role_id,
+      targetBranchId,
       position     ?? null,
       address      ?? null,
       zip_code     ?? null,
@@ -262,7 +308,7 @@ const create = async ({ data, requestingUser }) => {
     ]
   );
 
-  const newUser = await getById({ userId: result.insertId, requestingUser: { branch_id: null } });
+  const newUser = await fetchUser(result.insertId);
 
   return tempPassword
     ? { ...newUser, temp_password: tempPassword }
@@ -270,13 +316,16 @@ const create = async ({ data, requestingUser }) => {
 };
 
 // ─── update ───────────────────────────────────────────────────────────────────
-// FIX: antes solo se protegía al superadmin de forma ad-hoc y se aplicaba
-// scoping de sucursal genérico (sin verificar que quien edita sea admin).
-// Ahora se usa canEditUser, que implementa la jerarquía completa:
-//  · superadmin: solo él mismo se edita.
-//  · admin central: solo otro admin central o superadmin.
-//  · admin de sucursal / demás roles: superadmin, admin central, o el
-//    admin de esa misma sucursal.
+// Reglas (todas vienen de roleHelpers):
+//  · canEditUser: permiso RBAC users.update + alcance + anti-escalada
+//    (un rol no-admin con users.update NO puede editar a un admin).
+//  · canAssignRole: al cambiar de rol (superadmin nunca; admin solo central).
+//  · Cambiar sucursal: solo superadmin/admin central, y nunca la del
+//    superadmin. Quien no tenga alcance global y mande un branch_id distinto
+//    al actual recibe 403.
+//  · Nadie cambia su propio rol.
+//  · Roles ligados a sucursal (cajero/almacenista) nunca quedan con
+//    branch_id null: se valida UNA vez con el rol y la sucursal finales.
 
 const update = async ({ userId, data, requestingUser }) => {
   const targetUser = await getUserWithRole(userId);
@@ -287,11 +336,11 @@ const update = async ({ userId, data, requestingUser }) => {
   }
 
   const {
-    first_name,
-    last_name,
     username,
     role_id,
     branch_id,
+    first_name,
+    last_name,
     position,
     address,
     zip_code,
@@ -300,222 +349,168 @@ const update = async ({ userId, data, requestingUser }) => {
     phone_number,
     profile_image,
   } = data;
-  
-  // nadie puede cambiar su propio rol
-  if (
-    requestingUser.user_id === parseInt(userId) &&
-    role_id !== undefined &&
-    Number(role_id) !== targetUser.role_id
-  ) {
-    throw new ForbiddenError('No puedes cambiar tu propio rol');
-  }
 
+  const isSelf = requestingUser.user_id === targetUser.user_id;
+  const fields = {};
+
+  // ── username ──
   if (username !== undefined) {
-    validate.username(username.trim());
+    const cleanUsername = clean(username);
+    validate.username(cleanUsername);
 
     const [[conflict]] = await db.query(
       'SELECT user_id FROM users WHERE username = ? AND user_id != ?',
-      [username.trim(), userId]
+      [cleanUsername, targetUser.user_id]
     );
-    if (conflict) throw new ConflictError(`El username "${username.trim()}" ya está en uso`);
+    if (conflict) throw new ConflictError(`El username "${cleanUsername}" ya está en uso`);
+
+    fields.username = cleanUsername;
   }
 
-  if(targetUser.role_name ==='admnin' && !isCentralAdmin(requestingUser) && !isSuperadmin(requestingUser)){
-    throw new ForbiddenError('Solo el superadmin o un admin central puede modificar el rol');
-  }
+  // ── rol ──
+  let finalRoleName = targetUser.role_name;
 
-  // No se puede cambiar el rol de un superadmin o admin (roles protegidos)
-  if (role_id !== undefined && Number(role_id) !== targetUser.role_id) {
-    if (PROTECTED_ROLES.includes(targetUser.role_name)) {
-      throw new ForbiddenError('No se puede cambiar el rol de un superadmin');
-    }
-
+  if (role_id !== undefined) {
     validate.roleId(role_id);
-    const [[newRole]] = await db.query(
-      'SELECT name FROM roles WHERE role_id = ? AND is_active = 1',
-      [role_id]
-    );
-    if (!newRole) throw new ValidationError('El rol especificado no existe o está inactivo');
 
-    if (newRole.name === 'superadmin') {
-      throw new ForbiddenError('El rol superadmin no puede asignarse');
-    }
+    if (Number(role_id) !== targetUser.role_id) {
+      if (isSelf) {
+        throw new ForbiddenError('No puedes cambiar tu propio rol');
+      }
+      // Defensa en profundidad: hoy el superadmin solo es editable por sí
+      // mismo (y ya cayó arriba), pero PROTECTED_ROLES puede crecer.
+      if (PROTECTED_ROLES.includes(targetUser.role_name)) {
+        throw new ForbiddenError(`No se puede cambiar el rol de un usuario ${targetUser.role_name}`);
+      }
 
-    if (newRole.name === 'admin' && !isCentral(requestingUser)) {
-      throw new ForbiddenError('Solo el administrador central puede asignar el rol admin');
-    }
+      const newRole = await getActiveRole(role_id);
+      if (!canAssignRole(requestingUser, newRole.name)) {
+        throw new ForbiddenError(`No tienes permiso para asignar el rol ${newRole.name}`);
+      }
 
-    const effectiveBranchId = isCentral(requestingUser)
-      ? (branch_id ?? targetUser.branch_id)
-      : requestingUser.branch_id;
-
-    if (['cajero', 'almacenista'].includes(newRole.name) && effectiveBranchId === null) {
-      throw new ValidationError(`El rol ${newRole.name} requiere una sucursal asignada`);
+      finalRoleName = newRole.name;
+      fields.role_id = newRole.role_id;
     }
   }
 
-  // Nadie puede cambiar la sucursal del superadmin
-  if (
-    branch_id !== undefined &&
-    branch_id !== targetUser.branch_id &&
-    targetUser.role_name === 'superadmin'
-  ) {
-    throw new ForbiddenError('No se puede cambiar la sucursal del superadmin');
-  }
+  // ── sucursal ──
+  let finalBranchId = targetUser.branch_id;
 
-  // Solo superadmin y admin central puede cambiar la sucursal de un admin
-  if (
-    branch_id !== undefined &&
-    branch_id !== targetUser.branch_id &&
-    targetUser.role_name === 'admin'
-  ) {
-    if (!isSuperadmin(requestingUser) && !isCentralAdmin(requestingUser)) {
-      throw new ForbiddenError('Solo el superadmin o admin central puede cambiar la sucursal de un admin');
+  if (branch_id !== undefined) {
+    const newBranchId = parseBranchId(branch_id);
+
+    if (newBranchId !== targetUser.branch_id) {
+      if (isSuperadmin(targetUser)) {
+        throw new ForbiddenError('No se puede cambiar la sucursal del superadmin');
+      }
+      if (!isCentralAdminOrAbove(requestingUser)) {
+        throw new ForbiddenError('Solo el superadmin o un admin central puede cambiar la sucursal de un usuario');
+      }
+      if (newBranchId !== null) await assertBranchActive(newBranchId);
+
+      finalBranchId = newBranchId;
+      fields.branch_id = newBranchId;
     }
   }
 
-  // No-central no puede cambiar branch_id a null (central)
-  if (branch_id !== undefined && !isCentral(requestingUser) && branch_id === null) {
-    throw new ForbiddenError('No puedes asignar un usuario como central');
+  if (BRANCH_BOUND_ROLES.includes(finalRoleName) && finalBranchId === null) {
+    throw new ValidationError(`El rol ${finalRoleName} requiere una sucursal asignada`);
   }
 
-  // Un no-central no puede cambiar el branch_id
-  const effectiveBranchId = requestingUser.branch_id !== null
-    ? undefined
-    : branch_id;
-
-  const fields = {
-    ...(first_name       !== undefined && { first_name }),
-    ...(last_name        !== undefined && { last_name }),
-    ...(username         !== undefined && { username: username.trim() }),
-    ...(role_id          !== undefined && { role_id }),
-    ...(effectiveBranchId !== undefined && { branch_id: effectiveBranchId }),
-    ...(position         !== undefined && { position }),
-    ...(address          !== undefined && { address }),
-    ...(zip_code         !== undefined && { zip_code }),
-    ...(state            !== undefined && { state }),
-    ...(city             !== undefined && { city }),
-    ...(phone_number     !== undefined && { phone_number }),
-    ...(profile_image    !== undefined && { profile_image }),
-  };
-
-  // Cajero/Almacenista no pueden quedar sin sucursal
-  if (fields.branch_id === null) {
-    if (['cajero', 'almacenista'].includes(targetUser.role_name)) {
-      throw new ValidationError(`El rol ${targetUser.role_name} requiere una sucursal asignada`);
-    }
+  // ── campos simples ──
+  const simple = { first_name, last_name, position, address, zip_code, state, city, phone_number, profile_image };
+  for (const [key, value] of Object.entries(simple)) {
+    if (value !== undefined) fields[key] = value;
   }
 
   if (Object.keys(fields).length === 0) {
     throw new ValidationError('No se enviaron campos para actualizar');
   }
 
-  const setClauses = Object.keys(fields).map(k => `${k} = ?`).join(', ');
-  const values     = [...Object.values(fields), userId];
+  const setClauses = Object.keys(fields).map((k) => `${k} = ?`).join(', ');
+  const values     = [...Object.values(fields), targetUser.user_id];
 
   await db.query(`UPDATE users SET ${setClauses} WHERE user_id = ?`, values);
 
-  return getById({ userId, requestingUser: { branch_id: null } });
+  return fetchUser(targetUser.user_id);
 };
 
 // ─── changePassword ───────────────────────────────────────────────────────────
-// 🔴 FIX crítico: antes, si el target NO era superadmin, no había NINGÚN
-// chequeo de jerarquía — cualquier usuario autenticado podía cambiar la
-// contraseña de cualquier otro usuario no-superadmin (incluyendo un admin),
-// sin current_password, sin permiso RBAC, sin scoping de sucursal.
-// Ahora: si no es el propio usuario, se exige la misma jerarquía de edición
-// que en update() (canEditUser), que ya cubre correctamente al superadmin
-// (solo él mismo) y a los demás niveles.
+// Si no es el propio usuario, se exige lo mismo que en update() (canEditUser:
+// permiso users.update + alcance + anti-escalada). El propio usuario SIEMPRE
+// puede cambiar su contraseña sin necesitar users.update, pero debe dar su
+// contraseña actual (por eso el bypass explícito por isSelf).
 
 const changePassword = async ({ userId, data, requestingUser }) => {
   const { current_password, new_password } = data;
 
   validate.password(new_password);
 
-  const targetUser = await getUserWithRole(userId);
-  if (!targetUser) throw new NotFoundError('Usuario no encontrado');
+  // Una sola query (antes eran dos: getUserWithRole + SELECT password_hash).
+  const targetUser = await getUserWithRole(userId, { includeHash: true });
+  if (!targetUser || !targetUser.is_active) throw new NotFoundError('Usuario no encontrado');
 
-  const isSelf = requestingUser.user_id === parseInt(userId);
+  const isSelf = requestingUser.user_id === targetUser.user_id;
 
   if (!isSelf && !canEditUser(requestingUser, targetUser)) {
     throw new ForbiddenError('No tienes permiso para cambiar la contraseña de este usuario');
   }
 
-  const [[user]] = await db.query(
-    'SELECT user_id, password_hash FROM users WHERE user_id = ? AND is_active = 1',
-    [userId]
-  );
-  if (!user) throw new NotFoundError('Usuario no encontrado');
-
   if (isSelf) {
     if (!current_password) throw new ValidationError('La contraseña actual es requerida');
-    const valid = await bcrypt.compare(current_password, user.password_hash);
+    const valid = await bcrypt.compare(current_password, targetUser.password_hash);
     if (!valid) throw new ValidationError('La contraseña actual es incorrecta');
   }
 
-  const sameAsOld = await bcrypt.compare(new_password, user.password_hash);
+  const sameAsOld = await bcrypt.compare(new_password, targetUser.password_hash);
   if (sameAsOld) throw new ValidationError('La nueva contraseña no puede ser igual a la actual');
 
   const newHash = await bcrypt.hash(new_password, SALT_ROUNDS);
 
   await db.query(
     'UPDATE users SET password_hash = ? WHERE user_id = ?',
-    [newHash, userId]
+    [newHash, targetUser.user_id]
   );
 
   await db.query(
     'UPDATE refresh_tokens SET revoked = 1, revoked_at = NOW() WHERE user_id = ? AND revoked = 0',
-    [userId]
+    [targetUser.user_id]
   );
 
   return { message: 'Contraseña actualizada correctamente. Se cerraron todas las sesiones activas.' };
 };
 
 // ─── toggleStatus ─────────────────────────────────────────────────────────────
-// FIX: antes la jerarquía de 3 niveles (superadmin/admin central/admin de
-// sucursal) solo se aplicaba cuando el target era 'admin', y el scoping de
-// sucursal genérico (sin verificar rol) era la única barrera para los demás
-// roles. Ahora canDeleteOrDeactivateUser aplica la jerarquía completa a
-// CUALQUIER rol de destino, y ya no hace falta la query extra a
-// getUserWithRole(requestingUser.user_id) — requestingUser ya trae
-// role_name/branch_id del JWT.
+// canDeleteOrDeactivateUser ya cubre: superadmin inmortal, nadie se
+// desactiva a sí mismo, y la jerarquía completa para el resto. Aquí solo se
+// conserva el mensaje específico de auto-desactivación (mejor UX); se
+// eliminó el chequeo propio de superadmin, que duplicaba al helper.
 
 const toggleStatus = async ({ userId, is_active, requestingUser }) => {
   const targetUser = await getUserWithRole(userId);
   if (!targetUser) throw new NotFoundError('Usuario no encontrado');
 
-  // Nadie puede desactivar su propia cuenta desde este endpoint (aplica a
-  // cualquier rol, incluido superadmin y admin central).
-  if (requestingUser.user_id === parseInt(userId) && !is_active) {
+  if (requestingUser.user_id === targetUser.user_id && !is_active) {
     throw new ValidationError('No puedes desactivar tu propia cuenta');
   }
 
-  // Mensaje explícito y claro para el caso más importante: el superadmin
-  // nunca puede ser desactivado/reactivado por nadie (inmortal).
-  if (targetUser.role_name === 'superadmin') {
-    throw new ForbiddenError('El superadmin no puede ser desactivado');
-  }
-
-  // Jerarquía completa para el resto: admin central (nadie se autogestiona,
-  // solo otro admin central/superadmin), admin de sucursal y demás roles
-  // (superadmin, admin central, o admin de esa misma sucursal).
   if (!canDeleteOrDeactivateUser(requestingUser, targetUser)) {
     throw new ForbiddenError('No tienes permiso para cambiar el estado de este usuario');
   }
 
   await db.query(
     'UPDATE users SET is_active = ? WHERE user_id = ?',
-    [is_active ? 1 : 0, userId]
+    [is_active ? 1 : 0, targetUser.user_id]
   );
 
   if (!is_active) {
     await db.query(
       'UPDATE refresh_tokens SET revoked = 1, revoked_at = NOW() WHERE user_id = ? AND revoked = 0',
-      [userId]
+      [targetUser.user_id]
     );
   }
 
-  return getById({ userId, requestingUser: { branch_id: null } });
+  return fetchUser(targetUser.user_id);
 };
 
 module.exports = { getAll, getById, create, update, changePassword, toggleStatus };

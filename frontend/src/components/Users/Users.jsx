@@ -57,52 +57,26 @@ const Avatar = ({ user }) => {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 const Users = () => {
-  // FIX: se añade isCentralAdmin del contexto. Antes `isAdmin` (role_name
-  // === 'admin', SIN importar branch_id) se usaba para decidir si mostrar
-  // el selector "Todas las sucursales" y cargar el catálogo completo de
-  // sucursales — eso incluía por error a un admin DE SUCURSAL (no central),
-  // que según la regla de negocio solo opera con su propia sucursal. El
-  // backend igual ignora cualquier branch_id que un no-central mande
-  // (userService.getAll fuerza su propio branch_id), así que no era un
-  // hueco de seguridad, pero sí una UI incongruente con la regla.
-  const { user: me, isAdmin, isCentralAdmin, hasPermission } = useUser()
-  const canEdit = hasPermission('users', 'create') || hasPermission('users', 'update')
+  // Gestión de usuarios basada en RBAC. El permiso (users.create /
+  // users.update) es el interruptor; el alcance por sucursal y las reglas
+  // anti-escalada viven en helpers/userAccess.js (espejo de roleHelpers del
+  // backend) y llegan ya resueltas desde el contexto. Este componente NO
+  // replica jerarquía.
+  const {
+    user: me, isSuperadmin, isCentralAdmin, hasPermission,
+    canViewUsers, canEditUser, canDeactivateUser, canAssignRole,
+  } = useUser()
 
-  const isSuperadmin = me?.role_name === 'superadmin'
+  // Página completa gateada por users.read — si no lo tiene, ni se piden
+  // catálogos ni la lista (evita 403 innecesarios y un flash de skeleton).
+  const canView = canViewUsers()
 
-  // FIX: canActOnUser antes solo cubría el caso superadmin y para todo lo
-  // demás devolvía el permiso RBAC plano (canEdit), sin replicar la
-  // jerarquía real (admin central solo gestionable por otro admin
-  // central/superadmin; admin de sucursal y demás roles por superadmin/
-  // admin central/admin de su misma sucursal). Esto no era explotable
-  // porque el backend (roleHelpers.canEditUser/canDeleteOrDeactivateUser)
-  // sigue siendo quien autoriza de verdad — pero es la misma dispersión
-  // de lógica de jerarquía que ya eliminamos del backend, ahora
-  // reapareciendo en el frontend. Se replica aquí la misma estructura,
-  // y se separa "editar" de "desactivar/borrar" igual que en el backend.
-  const isCentralAdminUser = (u) => u.role_name === 'admin' && u.branch_id === null
-  const isBranchAdminOf    = (u, branchId) =>
-    u.role_name === 'admin' && u.branch_id !== null && Number(u.branch_id) === Number(branchId)
-
-  const canEditThisUser = (target) => {
-    if (!canEdit) return false
-    if (target.role_name === 'superadmin') return me?.user_id === target.user_id
-    if (isCentralAdminUser(target)) return isSuperadmin || isCentralAdminUser(me)
-    return isSuperadmin || isCentralAdminUser(me) || isBranchAdminOf(me, target.branch_id)
-  }
-
-  const canDeactivateThisUser = (target) => {
-    if (!canEdit) return false
-    if (target.role_name === 'superadmin') return false
-    if (isCentralAdminUser(target)) {
-      if (me?.user_id === target.user_id) return false
-      return isSuperadmin || isCentralAdminUser(me)
-    }
-    return isSuperadmin || isCentralAdminUser(me) || isBranchAdminOf(me, target.branch_id)
-  }
+  // Botón "Nuevo usuario": solo el permiso. El rol y la sucursal permitidos
+  // se restringen en el selector del modal (assignableRoles).
+  const canCreate = hasPermission('users', 'create')
 
   // Si puede hacer CUALQUIERA de las dos, se muestra el bloque de acciones
-  const canActOnUser = (user) => canEditThisUser(user) || canDeactivateThisUser(user)
+  const canActOnUser = (target) => canEditUser(target) || canDeactivateUser(target)
 
   // ── Estado ──
   const [users,        setUsers]        = useState([])
@@ -139,7 +113,15 @@ const Users = () => {
   // FIX: antes usaba `isAdmin || isSuperadmin` — ahora `isCentralAdmin`
   // (que ya cubre superadmin, cuyo branch_id también es null), para no
   // cargar el catálogo completo de sucursales a un admin de sucursal.
+  //
+  // OJO: GET /roles exige su propio permiso 'roles.read' (módulo distinto
+  // de 'users'). Si le das a un rol no-admin 'users.create'/'users.update'
+  // SIN 'roles.read', este fetch falla en silencio (catch vacío), `roles`
+  // queda [] y el selector de rol del modal aparece sin opciones — parece
+  // un bug pero es un permiso RBAC faltante. Si quieres que ese rol pueda
+  // crear/editar usuarios, dale también 'roles.read'.
   useEffect(() => {
+    if (!canView) return
     api.get('roles?is_active=true')
       .then(({ data }) => setRoles(data.data))
       .catch(() => {})
@@ -148,7 +130,7 @@ const Users = () => {
         .then(({ data }) => setBranches(data.data))
         .catch(() => {})
     }
-  }, [isCentralAdmin])
+  }, [isCentralAdmin, canView])
 
   // ── Fetch usuarios ──
   const fetchUsers = useCallback(async (currentPage = 1) => {
@@ -171,7 +153,10 @@ const Users = () => {
     }
   }, [])
 
-  useEffect(() => { fetchUsers(page) }, [page, fetchUsers])
+  useEffect(() => {
+    if (!canView) { setIsLoading(false); return }
+    fetchUsers(page)
+  }, [page, fetchUsers, canView])
 
   // ── Búsqueda con debounce ──
   const handleSearch = (val) => {
@@ -225,6 +210,25 @@ const Users = () => {
 
   const isSelf = (user) => user.user_id === me?.user_id
 
+  // Roles que se pueden ofrecer en el modal: solo los asignables por quien
+  // opera (p. ej. 'admin' solo para superadmin/admin central; 'superadmin'
+  // nunca). Al editar se conserva el rol actual del target para que el
+  // selector no quede en blanco si no se cambia.
+  const assignableRoles = roles.filter(
+    r => canAssignRole(r.name) || r.role_id === userModal.user?.role_id
+  )
+
+  if (!canView) {
+    return (
+      <div className="usr-root">
+        <div className="usr-empty">
+          <i className="bi bi-shield-lock" />
+          <span>No tienes permiso para ver usuarios</span>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="usr-root">
       {/* ── Header ── */}
@@ -235,7 +239,7 @@ const Users = () => {
             {pagination.total} usuario{pagination.total !== 1 ? 's' : ''} encontrado{pagination.total !== 1 ? 's' : ''}
           </span>
         </div>
-        {canEdit && (
+        {canCreate && (
           <button
             className="usr-btn usr-btn--primary"
             onClick={() => setUserModal({ open: true, user: null })}
@@ -366,7 +370,7 @@ const Users = () => {
                     <td>
                       {canActOnUser(user) && (
                         <div className="usr-actions">
-                          {canEditThisUser(user) && (
+                          {canEditUser(user) && (
                             <>
                               <button
                                 className="usr-action-btn"
@@ -384,7 +388,7 @@ const Users = () => {
                               </button>
                             </>
                           )}
-                          {canDeactivateThisUser(user) && (
+                          {canDeactivateUser(user) && (
                             <button
                               className={`usr-action-btn ${user.is_active ? 'usr-action-btn--danger' : ''}`}
                               title={user.is_active ? 'Desactivar' : 'Activar'}
@@ -453,7 +457,7 @@ const Users = () => {
 
                 {canActOnUser(user) && (
                   <div className="usr-card__actions">
-                    {canEditThisUser(user) && (
+                    {canEditUser(user) && (
                       <>
                         <button
                           className="usr-btn usr-btn--ghost"
@@ -469,7 +473,7 @@ const Users = () => {
                         </button>
                       </>
                     )}
-                    {canDeactivateThisUser(user) && (
+                    {canDeactivateUser(user) && (
                       <button
                         className={`usr-btn ${user.is_active ? 'usr-btn--danger-ghost' : 'usr-btn--ghost'}`}
                         onClick={() => handleToggleStatus(user)}
@@ -524,7 +528,7 @@ const Users = () => {
       {userModal.open && (
         <UserModal
           user={userModal.user}
-          roles={roles}
+          roles={assignableRoles}
           branches={branches}
           onSaved={handleSaved}
           onClose={() => setUserModal({ open: false, user: null })}
@@ -536,7 +540,7 @@ const Users = () => {
         // Fallback conservador si el usuario no está en la página actual
         // (p. ej. se abrió desde otra vista): sin datos para evaluar la
         // jerarquía, no se muestran acciones — más seguro que asumir que sí.
-        const canManage = targetUser ? canEditThisUser(targetUser) : false
+        const canManage = targetUser ? canEditUser(targetUser) : false
         return (
           <UserDetailModal
             userId={detailUserId}

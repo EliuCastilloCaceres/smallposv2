@@ -231,3 +231,8 @@
 .rpt-detail-list__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .rpt-detail-list__name { color: var(--rpt-text); font-weight: 500; }
 .rpt-detail-list__amt { font-weight: 600; color: var(--rpt-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* Movimientos de caja: entradas (ingreso manual, abonos) en verde, salidas
+   (retiros/gastos, devoluciones) en rojo. "Venta" no lleva clase, se queda
+   con el color por defecto de arriba. */
+.rpt-detail-list__amt--in  { color: var(--rpt-green); }
+.rpt-detail-list__amt--out { color: var(--rpt-red); }

@@ -15,6 +15,17 @@ const MOVEMENT_LABELS = {
   return:          'Devolución / reversa',
 }
 
+// Solo entradas y salidas de efectivo llevan color; "sale" se queda con el
+// color por defecto de rpt-detail-list__amt (no es un "movimiento" manual,
+// ya se refleja aparte en Ventas por método de pago).
+const MOVEMENT_AMOUNT_CLASS = {
+  income:          'rpt-detail-list__amt--in',
+  credit_payment:  'rpt-detail-list__amt--in',
+  layaway_payment: 'rpt-detail-list__amt--in',
+  expense:         'rpt-detail-list__amt--out',
+  return:          'rpt-detail-list__amt--out',
+}
+
 const DiffRow = ({ diff }) => {
   if (diff === null) return <span className="rpt-muted">Sesión abierta — aún sin cerrar</span>
   const isZero = Math.abs(diff) < 0.01
@@ -120,9 +131,15 @@ const CashSessionDetailModal = ({ sessionId, onClose }) => {
                       <div key={idx} className="rpt-detail-list__row">
                         <span className="rpt-detail-list__name">
                           {MOVEMENT_LABELS[m.movement_type] ?? m.movement_type}
-                          {m.description && <span className="rpt-muted"> — {m.description}</span>}
+                          {m.description && (
+                            <span className={`rpt-muted ${MOVEMENT_AMOUNT_CLASS[m.movement_type] ?? ''}`}>
+                              {' '}— {m.description}
+                            </span>
+                          )}
                         </span>
-                        <span className="rpt-detail-list__amt">{money(m.amount)}</span>
+                        <span className={`rpt-detail-list__amt ${MOVEMENT_AMOUNT_CLASS[m.movement_type] ?? ''}`}>
+                          {money(m.amount)}
+                        </span>
                       </div>
                     ))}
                   </div>

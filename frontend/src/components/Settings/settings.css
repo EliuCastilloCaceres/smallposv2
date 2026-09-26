@@ -361,16 +361,70 @@ select.set-field__input { cursor: pointer; padding-right: 32px; }
   padding-top: 4px;
 }
 
+/* ── File picker (subida de imagen: logo de recibo, etc.) ─── */
+/* El <input type="file"> real queda oculto dentro del <label>; lo que se ve
+   es esta caja con borde punteado, clicable en toda su superficie. */
+.set-file-picker {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--touch-min);
+  padding: 10px 14px;
+  border: 1.5px dashed var(--set-border);
+  border-radius: var(--set-radius-sm);
+  background: #f8fafc;
+  color: var(--set-text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.set-file-picker:hover {
+  border-color: var(--set-accent);
+  background: var(--set-accent-bg);
+}
+.set-file-picker i {
+  font-size: 20px;
+  color: var(--set-accent);
+  flex-shrink: 0;
+}
+.set-file-picker input[type="file"] {
+  /* Oculto pero accesible: el label ya cubre el click y el foco por teclado */
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+.set-file-picker__hint {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--set-muted);
+  margin-top: 2px;
+}
+
+/* ── Muted text (leyendas secundarias, ej. "Logo actual") ─── */
+.set-muted {
+  font-size: 12px;
+  color: var(--set-muted);
+}
+
 /* ── Logo preview ────────────────────────────────────────── */
 .set-logo-preview {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
   align-items: center;
   justify-content: center;
   padding: 12px;
+  margin-top: 10px;
   background: var(--set-bg);
   border: 1px dashed var(--set-border);
   border-radius: var(--set-radius-sm);
-  max-height: 100px;
   overflow: hidden;
 }
 .set-logo-preview img {
@@ -378,6 +432,19 @@ select.set-field__input { cursor: pointer; padding-right: 32px; }
   max-width: 100%;
   object-fit: contain;
 }
+.set-logo-preview__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.set-logo-preview__info .set-btn {
+  min-height: unset;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.set-logo-preview__info .set-btn i { font-size: 13px; }
 
 /* ── Alerts ──────────────────────────────────────────────── */
 .set-alert {

@@ -26,6 +26,10 @@ services:
     build: ./backend
     container_name: smallpos_backend
     restart: unless-stopped
+    # Usa el script "dev" que ya existe en package.json (nodemon index.js),
+    # solo le agrega --legacy-watch (polling) para que detecte cambios de
+    # forma confiable a través del bind mount en Docker Desktop.
+    command: npm run dev -- --legacy-watch
     depends_on:
       mysql:
         condition: service_healthy
@@ -41,19 +45,33 @@ services:
     networks:
       - pos_network
     volumes:
-      - ./backend/public/images/products:/app/public/images/products
-      - ./backend/public/images/receipts:/app/public/images/receipts
+      # Todo el código fuente, para que nodemon vea los cambios al vuelo.
+      # Esto ya incluye backend/public/images/{products,receipts}, así que
+      # los dos mounts sueltos que apuntaban solo a esas subcarpetas quedaron
+      # redundantes y se quitaron.
+      - ./backend:/app
+      # Volumen anónimo: protege node_modules (instalado DENTRO de la imagen
+      # durante el build) de ser tapado por el mount de arriba. Sin esto, si
+      # no existe (o está incompleto/desactualizado) un node_modules en tu
+      # backend local, el contenedor se queda sin dependencias.
+      - /app/node_modules
 
   frontend:
     build: ./frontend
     container_name: smallpos_frontend
     restart: unless-stopped
+    # Sin "command:" — el CMD del dockerfile ya arranca en modo dev:
+    # ["npm","run","dev","--","--host","0.0.0.0"]. No hace falta duplicarlo aquí.
     depends_on:
       - backend
     env_file:
       - ./frontend/.env
     environment:
       VITE_BACKEND_URL: http://backend:3001
+      # Mismo motivo que --legacy-watch en el backend: el watcher de Vite
+      # (chokidar) puede no detectar cambios de archivos montados vía bind
+      # mount en Docker Desktop sin polling.
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "5371:5371"
     volumes:

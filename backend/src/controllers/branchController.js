@@ -1,5 +1,14 @@
 // src/controllers/branchController.js
-const branchService = require('../services/branchService');
+const path            = require('path');
+const branchService   = require('../services/branchService');
+const { removeFile }  = require('../middlewares/uploadImage');
+
+// Carpeta pública donde uploadImage.js guarda las imágenes de recibo.
+// A diferencia del proyecto multi-tenant, aquí es una sola carpeta fija
+// (no hay subdomain de por medio) — coincide con el destino configurado en
+// uploadReceiptImage (uploadImage.js) y con el mount de express.static en
+// index.js (/api/receipt/images -> public/images/receipts).
+const RECEIPTS_IMAGE_DIR = path.join(__dirname, '../../public/images/receipts');
 
 // GET /branches
 const getAll = async (req, res, next) => {
@@ -63,15 +72,53 @@ const toggleStatus = async (req, res, next) => {
 };
 
 // PUT /branches/:id/receipt
+// multipart/form-data: campo "logo_image" (archivo, opcional) + resto de
+// campos como texto. req.file lo agrega uploadReceiptImage.single('logo_image')
+// si vino un archivo válido (ver branch_routes.js).
 const upsertReceipt = async (req, res, next) => {
+  // Ruta del archivo viejo en disco, si hay que borrarlo al final — mismo
+  // patrón que oldImageDiskPath en productController.update.
+  let oldImageDiskPath = null;
+
   try {
-    const branch = await branchService.upsertReceipt({
+    // upsertReceipt en branchService sobrescribe TODA la fila (ON DUPLICATE
+    // KEY UPDATE con VALUES() en cada columna), así que si no reenviamos
+    // logo_image explícitamente aquí, un guardado sin archivo nuevo lo
+    // pondría en NULL. Por eso siempre resolvemos su valor final antes de
+    // llamar al service, en vez de dejar que branchService decida.
+    const current = await branchService.getById({
       branchId:       req.params.id,
-      data:           req.body,
       requestingUser: req.user,
     });
+    const currentLogo = current.receipt?.logo_image ?? null;
+
+    let logoImage = currentLogo; // por default: conservar el logo actual
+    if (req.file) {
+      if (currentLogo) {
+        const filename = path.basename(currentLogo);
+        oldImageDiskPath = path.join(RECEIPTS_IMAGE_DIR, filename);
+      }
+      logoImage = `/api/receipt/images/${req.file.filename}`;
+    }
+
+    const branch = await branchService.upsertReceipt({
+      branchId:       req.params.id,
+      data:           { ...req.body, logo_image: logoImage },
+      requestingUser: req.user,
+    });
+
+    // Recién ahora que el upsert fue exitoso borramos el logo anterior —
+    // mismo orden que productController.update, para no quedarnos sin
+    // ninguna de las dos imágenes si algo falla.
+    if (oldImageDiskPath) removeFile(oldImageDiskPath);
+
     res.json({ status: 'success', data: branch });
-  } catch (err) { next(err); }
+  } catch (err) {
+    // El upsert falló: limpiamos el archivo NUEVO que multer ya guardó,
+    // pero dejamos intacto el logo viejo.
+    if (req.file) removeFile(req.file.path);
+    next(err);
+  }
 };
 
 // GET /branches/list

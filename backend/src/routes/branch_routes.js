@@ -3,6 +3,7 @@ const express      = require('express');
 const router       = express.Router();
 const branchCtrl   = require('../controllers/branchController');
 const { verifyToken, requirePermission } = require('../middlewares/auth');
+const { uploadReceiptImage, verifyRealFileType } = require('../middlewares/uploadImage');
 
 // Todas las rutas requieren token válido
 router.use(verifyToken);
@@ -35,6 +36,14 @@ router.put('/:id', requirePermission('branches', 'update'), branchCtrl.update);
 router.patch('/:id/status',  requirePermission('branches', 'update'), branchCtrl.toggleStatus);
 
 // ── Datos del recibo de la sucursal ───────────────────────────────────────────
-router.put('/:id/receipt',   requirePermission('branches', 'update'), branchCtrl.upsertReceipt);
+// uploadReceiptImage.single('logo_image'): el campo del form-data debe llamarse
+// "logo_image", igual que en products el campo se llama "image".
+// verifyRealFileType(): mismo chequeo de magic bytes que en productos.
+router.put('/:id/receipt',
+  requirePermission('branches', 'update'),
+  uploadReceiptImage.single('logo_image'),
+  verifyRealFileType(),
+  branchCtrl.upsertReceipt
+);
 
 module.exports = router;

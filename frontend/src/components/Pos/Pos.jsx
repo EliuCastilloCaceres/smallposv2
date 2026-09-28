@@ -961,7 +961,8 @@ const SaleScreen = () => {
               onClick={() => setPaymentOpen(true)}
               disabled={cart.items.length === 0}
             >
-              <i className="bi bi-cash-coin" /> Cobrar {money(total)+' [Enter o F10]'}
+              <i className="bi bi-cash-coin" /> Cobrar {money(total)}
+              <span className="hide-on-mobile">[Enter / F10]</span>
             </button>
           </div>
         </div>

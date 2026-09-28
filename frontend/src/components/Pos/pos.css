@@ -1059,6 +1059,7 @@
 }
 
 @media (max-width: 1024px) {
+  .hide-on-mobile { display: none; }
   .pos-grid-panel { display: none; }
   .pos-body { flex-direction: column; }
   /* [NUEVO-full-height-cart] En móvil pos-body pasa a columna: sin esto,

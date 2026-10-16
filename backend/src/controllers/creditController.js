@@ -10,9 +10,20 @@ const getByBranch = async (req, res, next) => {
     // resolver estricto: el abono necesita saber en qué sucursal se
     // recibió el efectivo físicamente, eso no cambia.
     const branchId = resolveUnrestrictedBranchId(req)
-    const { status, search, page, limit } = req.query;
-    const result = await creditService.getActiveCreditsByBranch({ branchId, status, search, page, limit });
+    const { status, search, customer_id, page, limit } = req.query;
+    const customerId = customer_id ? parseInt(customer_id) : null;
+    const result = await creditService.getActiveCreditsByBranch({ branchId, customerId, status, search, page, limit });
     res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
+// Clientes con créditos, para el filtro del listado — mismo resolver sin
+// restricción de sucursal propia que getByBranch
+const getCustomers = async (req, res, next) => {
+  try {
+    const branchId = resolveUnrestrictedBranchId(req)
+    const data = await creditService.getCustomersWithCredits({ branchId });
+    res.json({ status: 'success', data });
   } catch (err) { next(err); }
 };
 
@@ -73,4 +84,4 @@ const markOverdue = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getByBranch, getByCustomer, getById, getOverdue, addPayment, updateCreditLimit, markOverdue };
+module.exports = { getByBranch, getCustomers, getByCustomer, getById, getOverdue, addPayment, updateCreditLimit, markOverdue };

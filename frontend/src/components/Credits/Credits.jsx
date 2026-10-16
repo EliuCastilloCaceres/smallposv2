@@ -20,6 +20,8 @@ const STATUS_META = {
   cancelled: { label: 'Cancelado', cls: 'crd-status--neutral' },
 }
 
+const EMPTY_TOTALS = { total_amount: 0, amount_paid: 0, balance: 0 }
+
 const Credits = () => {
   const { hasPermission } = useUser()
   // FIX: selectedBranch ya NO se usa para filtrar el listado (eso ahora es
@@ -34,6 +36,8 @@ const Credits = () => {
 
   const [credits,    setCredits]    = useState([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
+  // Totales de todo el filtro (no solo la página) — vienen del mismo fetch
+  const [totals,     setTotals]     = useState(EMPTY_TOTALS)
   const [isLoading,  setIsLoading]  = useState(true)
   const [error,      setError]      = useState(null)
   const [search,       setSearch]       = useState('')
@@ -46,6 +50,12 @@ const Credits = () => {
   const [branches,         setBranches]         = useState([])
   const [selectedBranchId, setSelectedBranchId] = useState('')
   const isConsolidated = !selectedBranchId
+
+  // Filtro de cliente — solo clientes con créditos (credits/customers, bajo
+  // credit:read; customers/ exige customers:read). Se re-fetchea al cambiar
+  // de sucursal, igual que los cajeros en Ventas.
+  const [customers,          setCustomers]          = useState([])
+  const [selectedCustomerId, setSelectedCustomerId] = useState('')
 
   const [detailId,    setDetailId]    = useState(null)
   const [adjustOpen,  setAdjustOpen]  = useState(false)
@@ -64,6 +74,14 @@ const Credits = () => {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedBranchId) params.set('branch_id', selectedBranchId)
+    api.get(`credits/customers?${params}`)
+      .then(({ data }) => setCustomers(data.data))
+      .catch(() => {})
+  }, [selectedBranchId])
+
   const fetchCredits = useCallback(async (currentPage = 1) => {
     setIsLoading(true)
     setError(null)
@@ -72,18 +90,20 @@ const Credits = () => {
         page: currentPage, limit: PAGE_SIZE,
       })
       if (selectedBranchId)   params.set('branch_id', selectedBranchId)
+      if (selectedCustomerId) params.set('customer_id', selectedCustomerId)
       if (statusFilter)       params.set('status', statusFilter)
       if (searchRef.current)  params.set('search', searchRef.current)
 
       const { data } = await api.get(`credits?${params}`)
       setCredits(data.data)
       setPagination(data.pagination)
+      setTotals(data.totals ?? EMPTY_TOTALS)
     } catch (err) {
       setError(err.response?.data?.message ?? 'Error al cargar los créditos')
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, selectedBranchId])
+  }, [statusFilter, selectedBranchId, selectedCustomerId])
 
   useEffect(() => { fetchCredits(page) }, [page, fetchCredits])
 
@@ -103,15 +123,20 @@ const Credits = () => {
   }
   const handleBranchChange = (e) => {
     setSelectedBranchId(e.target.value)
+    setSelectedCustomerId('') // el cliente puede no tener créditos en la nueva sucursal
     setPage(1)
   }
-  // statusFilter/selectedBranchId cambian la identidad de fetchCredits —
-  // si page ya estaba en 1, el useEffect de [page, fetchCredits] no se
-  // re-dispara solo por eso.
+  const handleCustomerChange = (e) => {
+    setSelectedCustomerId(e.target.value)
+    setPage(1)
+  }
+  // statusFilter/selectedBranchId/selectedCustomerId cambian la identidad
+  // de fetchCredits — si page ya estaba en 1, el useEffect de
+  // [page, fetchCredits] no se re-dispara solo por eso.
   useEffect(() => {
     if (page === 1) fetchCredits(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, selectedBranchId])
+  }, [statusFilter, selectedBranchId, selectedCustomerId])
 
   const handleMarkOverdue = async () => {
     setIsMarking(true)
@@ -169,6 +194,13 @@ const Credits = () => {
           <option value="">Todas las sucursales</option>
           {branches.map(b => (
             <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+          ))}
+        </select>
+
+        <select className="crd-select" value={selectedCustomerId} onChange={handleCustomerChange}>
+          <option value="">Todos los clientes</option>
+          {customers.map(c => (
+            <option key={c.customer_id} value={c.customer_id}>{c.first_name} {c.last_name}</option>
           ))}
         </select>
       </div>
@@ -256,6 +288,26 @@ const Credits = () => {
                 </button>
               )
             })}
+          </div>
+
+          {/* Totales de todo el filtro, no solo la página actual. Un solo
+              bloque compartido entre tabla y tarjetas (como en Ventas). El
+              saldo no incluye cancelados (ver getActiveCreditsByBranch) */}
+          <div className="crd-totals">
+            <div className="crd-totals__rows">
+              <div className="crd-totals__row">
+                <span>Total</span>
+                <span className="crd-totals__amt">{money(totals.total_amount)}</span>
+              </div>
+              <div className="crd-totals__row">
+                <span>Pagado</span>
+                <span className="crd-totals__amt">{money(totals.amount_paid)}</span>
+              </div>
+            </div>
+            <div className="crd-totals__grand">
+              <span>Saldo pendiente</span>
+              <strong>{money(totals.balance)}</strong>
+            </div>
           </div>
 
           {pagination.totalPages > 1 && (

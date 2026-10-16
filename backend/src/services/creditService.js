@@ -145,7 +145,7 @@ const getOverdueCredits = async () => {
   return rows;
 };
 
-const getActiveCreditsByBranch = async ({ branchId = null, status, search, page = 1, limit = 20 }) => {
+const getActiveCreditsByBranch = async ({ branchId = null, customerId = null, status, search, page = 1, limit = 20 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage  = Math.max(parseInt(page) || 1, 1);
   const offset    = (safePage - 1) * safeLimit;
@@ -160,6 +160,11 @@ const getActiveCreditsByBranch = async ({ branchId = null, status, search, page 
   if (branchId) {
     conditions.push('o.branch_id = ?');
     params.push(branchId);
+  }
+
+  if (customerId) {
+    conditions.push('cs.customer_id = ?');
+    params.push(customerId);
   }
 
   // Sin status explícito, mantiene el comportamiento original: solo
@@ -181,14 +186,21 @@ const getActiveCreditsByBranch = async ({ branchId = null, status, search, page 
 
   const where = `WHERE ${conditions.join(' AND ')}`;
 
-  const [[{ total }]] = await db.query(
-    `SELECT COUNT(*) AS total
+  // Totales de TODO el filtro (no solo la página) en la misma query del
+  // COUNT — comparten el where. El saldo excluye cancelados: cancelCreditSale
+  // deja balance = total_amount por el CHECK, pero ya no es deuda real.
+  const [[summary]] = await db.query(
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(cs.total_amount), 0) AS total_amount,
+            COALESCE(SUM(cs.amount_paid), 0)  AS amount_paid,
+            COALESCE(SUM(CASE WHEN cs.status <> 'cancelled' THEN cs.balance ELSE 0 END), 0) AS balance
      FROM credit_sales cs
      JOIN orders    o ON cs.order_id    = o.order_id
      JOIN customers c ON cs.customer_id = c.customer_id
      ${where}`,
     params
   );
+  const { total } = summary;
 
   // FIX: en vista consolidada (branchId nulo) se agrega el nombre de la
   // sucursal donde se originó cada crédito — sin esto, en esa vista es
@@ -216,7 +228,28 @@ const getActiveCreditsByBranch = async ({ branchId = null, status, search, page 
       limit:      safeLimit,
       totalPages: Math.ceil(total / safeLimit),
     },
+    totals: {
+      total_amount: Number(summary.total_amount),
+      amount_paid:  Number(summary.amount_paid),
+      balance:      Number(summary.balance),
+    },
   };
+};
+
+// Clientes con al menos un crédito — para el dropdown de filtro del
+// listado. Respeta la sucursal seleccionada (misma regla que el listado:
+// sucursal = la de la orden que originó el crédito).
+const getCustomersWithCredits = async ({ branchId = null }) => {
+  const [rows] = await db.query(
+    `SELECT DISTINCT c.customer_id, c.first_name, c.last_name
+     FROM credit_sales cs
+     JOIN orders    o ON cs.order_id    = o.order_id
+     JOIN customers c ON cs.customer_id = c.customer_id
+     ${branchId ? 'WHERE o.branch_id = ?' : ''}
+     ORDER BY c.first_name, c.last_name`,
+    branchId ? [branchId] : []
+  );
+  return rows;
 };
 
 // ─── Crear crédito (se llama desde orderService cuando payment_method = 'credit') ──
@@ -559,7 +592,7 @@ const cancelCreditSale = async (conn, { orderId }) => {
 
 module.exports = {
   getCreditsByCustomer, getCreditById,
-  getOverdueCredits, getActiveCreditsByBranch,
+  getOverdueCredits, getActiveCreditsByBranch, getCustomersWithCredits,
   createCreditSale, cancelCreditSale, addPayment,
   markOverdueCredits, updateCreditLimit,
 };

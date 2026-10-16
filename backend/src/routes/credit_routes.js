@@ -8,6 +8,8 @@ router.use(verifyToken);
 
 router.get('/',                                    requirePermission('credit', 'read'),    ctrl.getByBranch);
 router.get('/overdue',                             requirePermission('credit', 'read'),    ctrl.getOverdue);
+// Antes de /:creditSaleId — si no, Express lo toma como id
+router.get('/customers',                           requirePermission('credit', 'read'),    ctrl.getCustomers);
 router.get('/customer/:customerId',                requirePermission('credit', 'read'),    ctrl.getByCustomer);
 router.get('/:creditSaleId',                       requirePermission('credit', 'read'),    ctrl.getById);
 router.post('/:creditSaleId/payments',             requirePermission('credit', 'create'),  ctrl.addPayment);

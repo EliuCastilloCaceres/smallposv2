@@ -105,6 +105,20 @@
 .crd-btn--primary:hover:not(:disabled) { filter: brightness(.94); }
 .crd-btn--icon { padding: 0; width: var(--touch-min); justify-content: center; }
 
+/* Totales del filtro — mismo bloque que .sls-totals de Ventas (orders.css) */
+.crd-totals {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px 16px;
+  background: var(--crd-surface); border: 1px solid var(--crd-border); border-radius: var(--crd-radius);
+}
+.crd-totals__rows { display: flex; flex-direction: column; gap: 4px; }
+.crd-totals__row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: var(--crd-muted); }
+.crd-totals__amt { font-variant-numeric: tabular-nums; color: var(--crd-text); font-weight: 500; }
+.crd-totals__grand {
+  display: flex; align-items: center; justify-content: space-between; padding-top: 10px;
+  border-top: 1px dashed var(--crd-border); font-size: 14px; color: var(--crd-text);
+}
+.crd-totals__grand strong { font-size: 17px; font-variant-numeric: tabular-nums; color: var(--crd-accent); }
+
 .crd-pagination { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 4px 0; }
 .crd-pagination__info { font-size: 13px; color: var(--crd-muted); }
 .crd-pagination__info strong { color: var(--crd-text); }

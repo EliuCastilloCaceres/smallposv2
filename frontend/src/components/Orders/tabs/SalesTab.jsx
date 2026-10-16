@@ -76,6 +76,11 @@ const SalesTab = () => {
   const [users,          setUsers]          = useState([])
   const [selectedUserId, setSelectedUserId] = useState('')
 
+  // Filtro por método de pago — lista sin is_active=true para poder
+  // filtrar ventas históricas cobradas con un método ya desactivado
+  const [paymentMethods,          setPaymentMethods]          = useState([])
+  const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState('')
+
   const [detailId, setDetailId] = useState(null)
 
   const searchTimer = useRef(null)
@@ -96,6 +101,12 @@ const SalesTab = () => {
       .catch(() => {})
   }, [isCentralAdmin, selectedBranchId])
 
+  useEffect(() => {
+    api.get('payment-methods')
+      .then(({ data }) => setPaymentMethods(data.data))
+      .catch(() => {})
+  }, [])
+
   // ── Fetch ──
   const fetchOrders = useCallback(async (currentPage = 1) => {
     setIsLoading(true)
@@ -107,6 +118,7 @@ const SalesTab = () => {
       })
       if (isCentralAdmin && selectedBranchId) params.set('branch_id', selectedBranchId)
       if (selectedUserId)    params.set('user_id', selectedUserId)
+      if (selectedPaymentMethodId) params.set('payment_method_id', selectedPaymentMethodId)
       if (status)            params.set('status', status)
       if (searchRef.current) params.set('search', searchRef.current)
 
@@ -119,7 +131,7 @@ const SalesTab = () => {
     } finally {
       setIsLoading(false)
     }
-  }, [startDate, endDate, status, isCentralAdmin, selectedBranchId, selectedUserId])
+  }, [startDate, endDate, status, isCentralAdmin, selectedBranchId, selectedUserId, selectedPaymentMethodId])
 
   useEffect(() => { fetchOrders(page) }, [page, fetchOrders])
 
@@ -150,7 +162,7 @@ const SalesTab = () => {
   useEffect(() => {
     if (page === 1) fetchOrders(1)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, status, selectedBranchId, selectedUserId])
+  }, [startDate, endDate, status, selectedBranchId, selectedUserId, selectedPaymentMethodId])
 
   const handleBranchChange = (e) => {
     setSelectedBranchId(e.target.value)
@@ -160,6 +172,11 @@ const SalesTab = () => {
 
   const handleUserChange = (e) => {
     setSelectedUserId(e.target.value)
+    setPage(1)
+  }
+
+  const handlePaymentMethodChange = (e) => {
+    setSelectedPaymentMethodId(e.target.value)
     setPage(1)
   }
 
@@ -224,6 +241,13 @@ const SalesTab = () => {
           <option value="">Todos los cajeros</option>
           {users.map(u => (
             <option key={u.user_id} value={u.user_id}>{u.first_name} {u.last_name}</option>
+          ))}
+        </select>
+
+        <select className="sls-select" value={selectedPaymentMethodId} onChange={handlePaymentMethodChange}>
+          <option value="">Todos los métodos</option>
+          {paymentMethods.map(m => (
+            <option key={m.payment_method_id} value={m.payment_method_id}>{m.name}</option>
           ))}
         </select>
       </div>
@@ -355,7 +379,8 @@ const SalesTab = () => {
               (en vez de duplicar markup por breakpoint) — siempre sobre
               ventas completadas, se recalcula solo al cambiar filtros de
               fecha/sucursal/búsqueda (no al paginar, ya que agrega todo
-              el rango, no solo la página actual) */}
+              el rango, no solo la página actual). Con filtro de método de
+              pago, suma solo lo cobrado con ese método */}
           <div className="sls-totals">
             <div className="sls-totals__methods">
               {totals.by_method.length === 0 ? (

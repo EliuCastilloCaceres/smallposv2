@@ -21,18 +21,19 @@ const getOrderById = async (req, res, next) => {
 
 const getOrdersByDateRange = async (req, res, next) => {
   try {
-    const { startDate, endDate, status, search, user_id, page, limit } = req.query;
+    const { startDate, endDate, status, search, user_id, payment_method_id, page, limit } = req.query;
 
     // FIX: opcional — "todas las sucursales" es un filtro válido para el
     // admin central, no un error de validación
     const branchId = resolveOptionalBranchId(req)
     const userId   = user_id ? parseInt(user_id) : null;
+    const paymentMethodId = payment_method_id ? parseInt(payment_method_id) : null;
 
     const result = await orderService.getOrdersByBranchAndDateRange({
       branchId,
       startDate: startDate ?? '1970-01-01',
       endDate:   endDate   ?? new Date().toISOString().split('T')[0],
-      status, search, userId, page, limit,
+      status, search, userId, paymentMethodId, page, limit,
     });
     res.json({ status: 'success', ...result });
   } catch (err) {

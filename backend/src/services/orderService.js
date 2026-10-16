@@ -425,7 +425,7 @@ const getOrderById = async (orderId, branchId) => {
 // ahora necesitan builds de WHERE ligeramente distintos (los totales
 // siempre son sobre ventas completadas, sin importar el filtro de estado
 // de la tabla — ver comentario en getOrdersByBranchAndDateRange).
-const buildOrdersFilter = async ({ branchId, startDate, endDate, status, search, userId, forceCompleted = false }) => {
+const buildOrdersFilter = async ({ branchId, startDate, endDate, status, search, userId, paymentMethodId, forceCompleted = false }) => {
   // FIX: antes comparaba el rango "de pared" (México) directo contra
   // o.created_at (hora del servidor, 2h adelantada) — una venta de las
   // 10pm México quedaba guardada ya en el día siguiente y "se colaba" en
@@ -445,6 +445,17 @@ const buildOrdersFilter = async ({ branchId, startDate, endDate, status, search,
   if (userId) {
     where += ' AND o.user_id = ?';
     params.push(userId);
+  }
+
+  // Filtro por método de pago — EXISTS en vez de JOIN: una venta puede
+  // tener varios pagos (efectivo + tarjeta), un JOIN duplicaría la orden y
+  // el COUNT(*). Alias opf para no chocar con el op de getPaymentMethodTotals.
+  if (paymentMethodId) {
+    where += ` AND EXISTS (
+      SELECT 1 FROM order_payments opf
+      WHERE opf.order_id = o.order_id AND opf.payment_method_id = ?
+    )`;
+    params.push(paymentMethodId);
   }
 
   if (forceCompleted) {
@@ -489,10 +500,16 @@ const buildOrdersFilter = async ({ branchId, startDate, endDate, status, search,
 // revisar/auditar (incluidas canceladas), pero una "Cancelada" ya no
 // representa dinero cobrado, así que contarla en el total inflaría la
 // cifra. Los totales siempre son sobre completadas.
-const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, userId }) => {
+const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, userId, paymentMethodId }) => {
   const { where: totalsWhere, params: totalsParams } = await buildOrdersFilter({
-    branchId, startDate, endDate, search, userId, forceCompleted: true,
+    branchId, startDate, endDate, search, userId, paymentMethodId, forceCompleted: true,
   });
+
+  // Con filtro de método, buildOrdersFilter ya limita a las órdenes que
+  // tienen ese método; además se suma SOLO la porción cobrada con él (de
+  // una venta efectivo + tarjeta filtrada por tarjeta, el efectivo no
+  // cuenta). Lo mismo para lo reembolsado.
+  const methodParams = paymentMethodId ? [paymentMethodId] : [];
 
   const [totalsRows] = await db.query(
     `SELECT pm.payment_method_id, pm.name, pm.code,
@@ -502,9 +519,10 @@ const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, us
      JOIN orders o ON op.order_id = o.order_id
      JOIN customers c ON o.customer_id = c.customer_id
      ${totalsWhere}
+     ${paymentMethodId ? 'AND op.payment_method_id = ?' : ''}
      GROUP BY pm.payment_method_id
      ORDER BY total DESC`,
-    totalsParams
+    [...totalsParams, ...methodParams]
   );
 
   // FIX: resta lo reembolsado por cada método (returns.payment_method_id /
@@ -520,8 +538,9 @@ const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, us
      ${totalsWhere}
      AND r.status = 'completed'
      AND r.payment_method_id IS NOT NULL
+     ${paymentMethodId ? 'AND r.payment_method_id = ?' : ''}
      GROUP BY r.payment_method_id`,
-    totalsParams
+    [...totalsParams, ...methodParams]
   );
 
   // FIX: cuando una devolución sobre venta a crédito se absorbe total o
@@ -555,13 +574,13 @@ const getPaymentMethodTotals = async ({ branchId, startDate, endDate, search, us
 };
 
 const getOrdersByBranchAndDateRange = async ({
-  branchId, startDate, endDate, status = null, search, userId = null, page = 1, limit = 20,
+  branchId, startDate, endDate, status = null, search, userId = null, paymentMethodId = null, page = 1, limit = 20,
 }) => {
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage = Math.max(parseInt(page) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
-  const { where, params } = await buildOrdersFilter({ branchId, startDate, endDate, status, search, userId });
+  const { where, params } = await buildOrdersFilter({ branchId, startDate, endDate, status, search, userId, paymentMethodId });
 
   const [[{ total }]] = await db.query(
     `SELECT COUNT(*) AS total
@@ -608,7 +627,7 @@ const getOrdersByBranchAndDateRange = async ({
     [...params, safeLimit, offset]
   );
 
-  const totals = await getPaymentMethodTotals({ branchId, startDate, endDate, search, userId });
+  const totals = await getPaymentMethodTotals({ branchId, startDate, endDate, search, userId, paymentMethodId });
 
   return {
     data: rows,

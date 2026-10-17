@@ -17,7 +17,7 @@ El agente **pregunta y espera respuesta** antes de continuar. No asume, no elige
 - **Lista**: aprobada explícitamente por el usuario y sin dudas abiertas. Se puede implementar.
 - **Bloqueada**: depende de algo externo o de una decisión pendiente. No se escribe código.
 - **Terminada**: implementada, con todas sus tareas cerradas, sus criterios de aceptación cumplidos con evidencia y los tests en verde.
-- Solo el usuario cambia una spec a **Lista** o a **Terminada**.
+- Solo el usuario cambia una spec a **Lista** o a **Terminada**, o el agente con petición o aprobación explícita del usuario.
 
 ## 3. Avance secuencial
 - No se genera código si la spec no está en estado **Lista**.

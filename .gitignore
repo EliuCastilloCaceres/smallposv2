@@ -5,6 +5,8 @@
 #archivos publicos
 public/
 backend.zip
+01_categories.sql
+02_products.sql
 
 # Dependencias
 node_modules/
@@ -75,3 +77,12 @@ frontend/.parcel-cache
 # ============================================
 *.bak
 *.tmp
+# ============================================
+# DOCUMENTOS DE PLANEACION (PROXIMAS FUNCIONES)
+# ============================================
+comming-soon/
+
+# ============================================
+# DOCKER LOCAL (override para correr junto a smallpos-saas)
+# ============================================
+docker-compose.alt.yml

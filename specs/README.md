@@ -21,7 +21,7 @@ Este proceso lo rige [`docs/constitution.md`](../docs/constitution.md). Si algo 
 | **Bloqueada** | Depende de algo externo o de una decisión pendiente. No se escribe código. |
 | **Terminada** | Implementada, con todas sus tareas cerradas, sus criterios de aceptación cumplidos con evidencia y los tests en verde. |
 
-Solo el usuario cambia una spec a **Lista** o a **Terminada**.
+Solo el usuario cambia una spec a **Lista** o a **Terminada** o el agente con petición o aprobación explícita del usuario..
 
 ## Reglas clave
 

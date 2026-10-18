@@ -37,5 +37,13 @@ export default defineConfig({
       // (ver express.static en index.js), así que ya quedan cubiertas por este
       // mismo proxy de /api — no hace falta una regla aparte para /images.
     }
-  }
+  },
+  // Vitest (npm test) usa esta misma config, así que los tests resuelven
+  // JSX e imports con el mismo plugin de React que la app. Ver docs/tests.md.
+  test: {
+    environment: 'jsdom',
+    setupFiles:  './vitest.setup.js',
+    // Fija la zona horaria de la app para que los tests no dependan de .env.
+    env: { VITE_TIMEZONE: 'America/Mexico_City' },
+  },
 })

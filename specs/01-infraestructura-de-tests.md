@@ -92,7 +92,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
   — tests: el candado rechaza una base cuyo nombre no termina en `_test`; tras crear la base existe el usuario `superadmin` de los seeds; un registro creado en un archivo de tests no aparece en el siguiente; con la base en `-04:00`, `toServerDayStart` devuelve el límite esperado.
 - [x] **T4. Helpers del backend** (requisitos 18–20).
   — tests: el inicio de sesión del `superadmin` devuelve un token; una ruta protegida responde 401 sin token y 200 con token; un usuario de prueba con rol cajero recibe 403 en una ruta que pide un permiso que ese rol no tiene.
-- [ ] **T5. Runner del frontend** (requisitos 2–6).
+- [x] **T5. Runner del frontend** (requisitos 2–6).
   — tests: `fmtDate` (`src/utils/dateFormatter.js`) devuelve el valor por defecto con fechas nulas o inválidas y formatea en hora de México; `hasUserPermission` (`src/helpers/userAccess.js`) responde según la lista de permisos; `ConfirmDialog` (`components/Common`) muestra su título y mensaje, y llama a `onConfirm` y `onClose` con sus botones.
 - [ ] **T6. Documentación** (requisitos 21–25).
   — tests: no lleva tests de código; se verifica con el criterio 7.
@@ -125,3 +125,4 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 | 2026-10-17 | T2 terminada. | Usuario |
 | 2026-10-17 | T3 terminada. El helper de reinicio (requisito 20) se adelantó a T3 porque lo necesita el requisito 12; recarga esquema y seeds completos en vez de `TRUNCATE`, porque el esquema trae valores de `AUTO_INCREMENT` propios. Se agrega `backend/tests/setup/` al requisito 21. | Usuario |
 | 2026-10-18 | T4 terminada. `tests/integration/test-db/` se renombra a `tests/integration/test-infra/`. | Usuario |
+| 2026-10-18 | T5 terminada. `jsdom` 26 y `@testing-library/jest-dom` 6.9 por compatibilidad con Node 20; la config de Vitest vive en `vite.config.js` y el setup en `frontend/vitest.setup.js`. | Usuario |

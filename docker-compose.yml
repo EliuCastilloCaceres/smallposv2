@@ -22,6 +22,34 @@ services:
       retries: 10
       start_period: 20s
 
+  # Base de pruebas (spec 01). Solo se levanta con el perfil "test":
+  #   docker compose --profile test up -d --wait mysql_test
+  # Los datos viven en memoria (tmpfs) y se pierden al apagarla; los tests
+  # cargan el esquema y los seeds por su cuenta, así que no monta sql-init.
+  # Corre en UTC-4, como el MySQL de producción (ver utils/timezone.js).
+  # Sin container_name fijo, para no chocar con otros proyectos.
+  mysql_test:
+    image: mysql:8.0
+    profiles: ["test"]
+    command: --default-time-zone=-04:00
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: smallposv2_test
+      MYSQL_USER: pos_user
+      MYSQL_PASSWORD: pos_password
+    ports:
+      - "3308:3306"
+    tmpfs:
+      - /var/lib/mysql
+    networks:
+      - pos_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   backend:
     build: ./backend
     container_name: smallpos_backend

@@ -74,7 +74,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 20. Un helper reinicia la base al estado de los seeds. Es el que se usa para cumplir el requisito 12.
 
 ### Convenciones
-21. **Backend:** los tests unitarios van en `backend/tests/unit/`, los de integración en `backend/tests/integration/` y los helpers en `backend/tests/helpers/`. Los archivos de test se llaman `*.test.js`.
+21. **Backend:** los tests unitarios van en `backend/tests/unit/`, los de integración en `backend/tests/integration/` los helpers en `backend/tests/helpers/` y la configuración de Jest (setup) en `backend/tests/setup/`. Los archivos de test se llaman `*.test.js`.
 22. **Frontend:** el test va junto al archivo que prueba y se llama `<archivo>.test.js` o `<archivo>.test.jsx`.
 23. Los nombres de `describe` e `it` van en inglés, como el resto del código (constitución §6).
 
@@ -88,7 +88,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
   — tests: unitario de `todayInMexico` (`src/utils/timezone.js`) con el reloj fijado poco después de la medianoche UTC; debe devolver el día de México, no el de UTC.
 - [x] **T2. Separar la app del arranque** (requisitos 15–17).
   — tests: `GET /` responde 200 con `status: 'ok'`; una ruta inexistente responde 404 con el mensaje "Ruta no encontrada".
-- [ ] **T3. Base de pruebas** (requisitos 7–14).
+- [x] **T3. Base de pruebas** (requisitos 7–14).
   — tests: el candado rechaza una base cuyo nombre no termina en `_test`; tras crear la base existe el usuario `superadmin` de los seeds; un registro creado en un archivo de tests no aparece en el siguiente; con la base en `-04:00`, `toServerDayStart` devuelve el límite esperado.
 - [ ] **T4. Helpers del backend** (requisitos 18–20).
   — tests: el inicio de sesión del `superadmin` devuelve un token; una ruta protegida responde 401 sin token y 200 con token; un usuario de prueba con rol cajero recibe 403 en una ruta que pide un permiso que ese rol no tiene.
@@ -123,3 +123,4 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 | 2026-10-17 | Pasa a **Lista**. | Usuario |
 | 2026-10-17 | Requisito 6: la imagen de producción incluye las `devDependencies` porque `backend/dockerfile` usa `npm install` simple; se acepta y se aclara el texto. T1 terminada. | Usuario |
 | 2026-10-17 | T2 terminada. | Usuario |
+| 2026-10-17 | T3 terminada. El helper de reinicio (requisito 20) se adelantó a T3 porque lo necesita el requisito 12; recarga esquema y seeds completos en vez de `TRUNCATE`, porque el esquema trae valores de `AUTO_INCREMENT` propios. Se agrega `backend/tests/setup/` al requisito 21. | Usuario |

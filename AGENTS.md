@@ -16,12 +16,15 @@ Stack:
 
 
 ## Estilo y convenciones
--Identificadores en inglés; mensajes de usuario en español.
+- Identificadores en inglés; mensajes de usuario en español.
 
 ## Reglas
 - Lee docs/constitution.md y la spec en progreso antes de tocar código.
 - No modifiques archivos dentro de `specs/` salvo petición explícita.
-- Documenta cada feat/fix en `shared-features/` como `feat-<tema>.md` o `fix-<tema>.md`, siguiendo la estructura de `shared-features/sf-index.md`, y agrégalo a la tabla del índice.
+- **`shared-features/` solo con confirmación del usuario.** No toda feat/fix se porta a smallpos-saas:
+  - Al redactar la spec de cada feat/fix, pregunta al usuario si se documenta en `shared-features/` y registra la respuesta en el alcance de la spec.
+  - Si no lo preguntaste o no hubo respuesta, pregunta antes de cerrar la tarea. Nunca lo documentes por tu cuenta.
+  - Si la respuesta es sí, créalo como `feat-<tema>.md` o `fix-<tema>.md`, siguiendo la estructura de `shared-features/sf-index.md`, y agrégalo a la tabla del índice.
 
 ## Al terminar cualquier tarea
 - Ejecuta los test y confirma en tu respuesta que todo pasa.

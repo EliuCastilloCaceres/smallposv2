@@ -86,7 +86,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 
 - [x] **T1. Runner del backend** (requisitos 1 y 4–6). Instalar Jest y supertest, y agregar `npm test`.
   — tests: unitario de `todayInMexico` (`src/utils/timezone.js`) con el reloj fijado poco después de la medianoche UTC; debe devolver el día de México, no el de UTC.
-- [ ] **T2. Separar la app del arranque** (requisitos 15–17).
+- [x] **T2. Separar la app del arranque** (requisitos 15–17).
   — tests: `GET /` responde 200 con `status: 'ok'`; una ruta inexistente responde 404 con el mensaje "Ruta no encontrada".
 - [ ] **T3. Base de pruebas** (requisitos 7–14).
   — tests: el candado rechaza una base cuyo nombre no termina en `_test`; tras crear la base existe el usuario `superadmin` de los seeds; un registro creado en un archivo de tests no aparece en el siguiente; con la base en `-04:00`, `toServerDayStart` devuelve el límite esperado.
@@ -122,3 +122,4 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 | 2026-10-17 | Se resuelven las 7 dudas: Jest en el backend; Vitest 0.34 en el frontend sin actualizar Vite; servicio `mysql_test` con perfil `test`, datos en memoria y puerto 3308; zona horaria `-04:00`; el runner de migraciones va en la spec del fix de costos; sin integración continua; sin documentación en `shared-features/`. | Usuario |
 | 2026-10-17 | Pasa a **Lista**. | Usuario |
 | 2026-10-17 | Requisito 6: la imagen de producción incluye las `devDependencies` porque `backend/dockerfile` usa `npm install` simple; se acepta y se aclara el texto. T1 terminada. | Usuario |
+| 2026-10-17 | T2 terminada. | Usuario |

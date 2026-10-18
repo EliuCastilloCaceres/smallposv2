@@ -18,15 +18,8 @@ const pool = mysql.createPool({
   decimalNumbers:  true,   // ← devuelve DECIMAL como number nativo, no string
 });
 
-// Verificación al arrancar
-pool.getConnection()
-  .then(conn => {
-    console.log('✅  Conexión a la BD exitosa');
-    conn.release();
-  })
-  .catch(err => {
-    console.error('❌  Error al conectar a MySQL:', err.message);
-    process.exit(1); // En shared hosting conviene fallar fuerte al arrancar
-  });
+// La verificación de conexión al arrancar vive en index.js: aquí no se
+// termina el proceso, para que importar el pool (p. ej. en los tests) no
+// mate el proceso si la BD no está disponible.
 
 module.exports = pool;

@@ -48,7 +48,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 ### Comandos
 4. `npm test` en `backend/` corre todos los tests del backend, y `npm test` en `frontend/` corre todos los del frontend.
 5. Los dos terminan con código de salida 0 si todo pasa y con un código distinto de 0 si falla algún test.
-6. Las dependencias de pruebas van en `devDependencies`. `docker-compose.prod.yml` y las imágenes de producción no cambian.
+6. Las dependencias de pruebas van en `devDependencies`. `docker-compose.prod.yml` y los Dockerfiles no cambian, y el comportamiento en producción tampoco. Como `backend/dockerfile` usa un `npm install` simple, la imagen de producción incluye las `devDependencies` (igual que hoy con nodemon); quitarlas requiere un Dockerfile de producción aparte y queda para otra spec.
 
 ### Base de datos de pruebas
 7. La base de pruebas vive en un servicio `mysql_test` aparte en `docker-compose.yml`:
@@ -84,7 +84,7 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 
 ## Tareas
 
-- [ ] **T1. Runner del backend** (requisitos 1 y 4–6). Instalar Jest y supertest, y agregar `npm test`.
+- [x] **T1. Runner del backend** (requisitos 1 y 4–6). Instalar Jest y supertest, y agregar `npm test`.
   — tests: unitario de `todayInMexico` (`src/utils/timezone.js`) con el reloj fijado poco después de la medianoche UTC; debe devolver el día de México, no el de UTC.
 - [ ] **T2. Separar la app del arranque** (requisitos 15–17).
   — tests: `GET /` responde 200 con `status: 'ok'`; una ruta inexistente responde 404 con el mensaje "Ruta no encontrada".
@@ -121,3 +121,4 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 | 2026-10-17 | Creación de la spec. | — |
 | 2026-10-17 | Se resuelven las 7 dudas: Jest en el backend; Vitest 0.34 en el frontend sin actualizar Vite; servicio `mysql_test` con perfil `test`, datos en memoria y puerto 3308; zona horaria `-04:00`; el runner de migraciones va en la spec del fix de costos; sin integración continua; sin documentación en `shared-features/`. | Usuario |
 | 2026-10-17 | Pasa a **Lista**. | Usuario |
+| 2026-10-17 | Requisito 6: la imagen de producción incluye las `devDependencies` porque `backend/dockerfile` usa `npm install` simple; se acepta y se aclara el texto. T1 terminada. | Usuario |

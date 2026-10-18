@@ -1,4 +1,4 @@
-// tests/integration/test-db/isolationCase.js
+// tests/integration/test-infra/isolationCase.js
 // Caso compartido por isolation-a e isolation-b: cada archivo comprueba que
 // no ve el registro que creó el otro y luego lo crea. Si el reinicio entre
 // archivos fallara, el que corra segundo fallaría sin importar el orden.

@@ -1,4 +1,4 @@
-// tests/integration/test-db/seeds.test.js
+// tests/integration/test-infra/seeds.test.js
 const db = require('../../../src/config/db');
 const { toServerDayStart, toServerDayEnd } = require('../../../src/utils/timezone');
 

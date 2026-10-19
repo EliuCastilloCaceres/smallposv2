@@ -67,7 +67,7 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 
 ## Tareas
 
-- [ ] **T1. Refresh compartido** (requisitos 1 y 4).
+- [x] **T1. Refresh compartido** (requisitos 1 y 4).
   — tests: dos llamadas simultáneas hacen una sola petición y reciben el mismo token; si la petición falla, las dos reciben el error; terminada la primera, una llamada nueva hace otra petición.
 - [ ] **T2. `UserContext` usa el refresh compartido** (requisitos 2, 3 y 5).
   — tests: montar `UserContextProvider` dentro de `React.StrictMode` hace un solo `POST /api/auth/refresh` y deja al usuario cargado; si el refresh falla, `user` queda en `null`.
@@ -100,3 +100,4 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 | 2026-10-18 | Creación de la spec. | — |
 | 2026-10-18 | Se resuelven las 2 dudas: sin margen en el backend para refresh casi simultáneos (la detección de reutilización queda tan estricta como hoy); la revocación masiva agrega `AND revoked = 0` para no sobrescribir `revoked_at`. | Usuario |
 | 2026-10-18 | Pasa a **Lista**. | Usuario |
+| 2026-10-18 | T1 terminada: `refreshSession()` en `frontend/src/services/session.js`; también guarda el token nuevo en `sessionStorage`. | Usuario |

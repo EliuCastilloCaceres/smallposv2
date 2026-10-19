@@ -1,7 +1,7 @@
 // src/context/UserContext.jsx
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import axios from 'axios'
 import api from '../services/api'
+import { refreshSession } from '../services/session'
 import * as access from '../helpers/userAccess'
 
 const UserContext = createContext()
@@ -81,31 +81,17 @@ export const UserContextProvider = ({ children }) => {
   }, [])
 
   // ─── Verificar sesión al montar (refresh silencioso) ───────────────────────
+  // [FIX] refreshSession comparte el refresh en curso. En desarrollo,
+  // React.StrictMode corre este efecto dos veces; antes salían dos refresh
+  // con la misma cookie, el backend tomaba el segundo como reutilización de
+  // token y revocaba todas las sesiones (ver services/session.js).
+  // refreshSession no pasa por los interceptores de api.js: si el refresh
+  // devuelve 401, lo maneja este catch sin que se dispare auth:logout.
   useEffect(() => {
     const verifySession = async () => {
       try {
-        // Usar axios DIRECTO — no la instancia api con interceptores.
-        // Si usamos api.js y el refresh devuelve 401, el interceptor de
-        // respuesta intenta otro refresh, falla y dispara auth:logout,
-        // limpiando el usuario antes de que este try/catch pueda manejarlo.
-        //
-        // IMPORTANTE: usar ruta RELATIVA ('/api/auth/refresh'), no la URL
-        // absoluta de VITE_URL_BASE. Con ruta absoluta, el navegador pega
-        // directo a esa URL sin pasar por el proxy de Vite — funciona en tu
-        // máquina porque VITE_URL_BASE apunta a tu propio localhost, pero
-        // se rompe para cualquiera que acceda por LAN o túnel (Cloudflare/
-        // ngrok), porque esa URL absoluta apunta al localhost de CADA
-        // quien la ejecuta, no al servidor real. La ruta relativa sí pasa
-        // por el proxy configurado en vite.config.js y funciona igual
-        // sin importar desde dónde se acceda al frontend.
-        const { data } = await axios.post(
-          '/api/auth/refresh',
-          {},
-          { withCredentials: true }
-        )
-        sessionStorage.setItem('accessToken', data.accessToken)
-
-        // Con el nuevo token ya en sessionStorage, api.js lo adjuntará
+        // refreshSession deja el token nuevo en sessionStorage, y api.js lo adjuntará
+        await refreshSession()
         const me = await api.get('auth/me')
         setUser(me.data.data)
       } catch (_) {

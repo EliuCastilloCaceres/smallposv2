@@ -69,7 +69,7 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 
 - [x] **T1. Refresh compartido** (requisitos 1 y 4).
   — tests: dos llamadas simultáneas hacen una sola petición y reciben el mismo token; si la petición falla, las dos reciben el error; terminada la primera, una llamada nueva hace otra petición.
-- [ ] **T2. `UserContext` usa el refresh compartido** (requisitos 2, 3 y 5).
+- [x] **T2. `UserContext` usa el refresh compartido** (requisitos 2, 3 y 5).
   — tests: montar `UserContextProvider` dentro de `React.StrictMode` hace un solo `POST /api/auth/refresh` y deja al usuario cargado; si el refresh falla, `user` queda en `null`.
 - [ ] **T3. El interceptor de `api.js` usa el refresh compartido** (requisitos 2 y 5).
   — tests: un request con 401 provoca un refresh y se reintenta con el token nuevo; dos requests con 401 al mismo tiempo provocan un solo refresh y los dos se reintentan; si el refresh falla, se dispara `auth:logout` y los requests fallan; un 401 con `INVALID_CREDENTIALS` no dispara refresh.
@@ -101,3 +101,4 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 | 2026-10-18 | Se resuelven las 2 dudas: sin margen en el backend para refresh casi simultáneos (la detección de reutilización queda tan estricta como hoy); la revocación masiva agrega `AND revoked = 0` para no sobrescribir `revoked_at`. | Usuario |
 | 2026-10-18 | Pasa a **Lista**. | Usuario |
 | 2026-10-18 | T1 terminada: `refreshSession()` en `frontend/src/services/session.js`; también guarda el token nuevo en `sessionStorage`. | Usuario |
+| 2026-10-18 | T2 terminada. El test con `React.StrictMode` falla contra el `UserContext` anterior (2 refresh) y pasa con el nuevo (1). | Usuario |

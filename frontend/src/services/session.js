@@ -17,8 +17,12 @@ let inFlight = null
 // refresh en curso, devuelve esa misma promesa (mismo token o mismo error).
 export const refreshSession = () => {
   if (!inFlight) {
-    // Ruta RELATIVA a propósito: pasa por el proxy de Vite (o Nginx) y
-    // funciona igual desde LAN o túneles (ver comentario en UserContext).
+    // IMPORTANTE: ruta RELATIVA, no la URL absoluta de VITE_URL_BASE. Con
+    // ruta absoluta, el navegador pega directo a esa URL sin pasar por el
+    // proxy de Vite: funciona en tu máquina porque VITE_URL_BASE apunta a
+    // tu propio localhost, pero se rompe para cualquiera que entre por LAN
+    // o túnel (Cloudflare/ngrok), porque esa URL apunta al localhost de
+    // CADA quien. La ruta relativa pasa por el proxy (o Nginx) siempre.
     inFlight = axios
       .post('/api/auth/refresh', {}, { withCredentials: true })
       .then(({ data }) => {

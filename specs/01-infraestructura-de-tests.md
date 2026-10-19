@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-17 | 2026-10-17 |
+| **Terminada** | 2026-10-17 | 2026-10-18 |
 
 ## Objetivo
 
@@ -94,21 +94,21 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
   — tests: el inicio de sesión del `superadmin` devuelve un token; una ruta protegida responde 401 sin token y 200 con token; un usuario de prueba con rol cajero recibe 403 en una ruta que pide un permiso que ese rol no tiene.
 - [x] **T5. Runner del frontend** (requisitos 2–6).
   — tests: `fmtDate` (`src/utils/dateFormatter.js`) devuelve el valor por defecto con fechas nulas o inválidas y formatea en hora de México; `hasUserPermission` (`src/helpers/userAccess.js`) responde según la lista de permisos; `ConfirmDialog` (`components/Common`) muestra su título y mensaje, y llama a `onConfirm` y `onClose` con sus botones.
-- [ ] **T6. Documentación** (requisitos 21–25).
+- [x] **T6. Documentación** (requisitos 21–25).
   — tests: no lleva tests de código; se verifica con el criterio 7.
 
 ## Criterios de aceptación
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | `npm test` en `backend/` pasa con la base de pruebas levantada. | _(se llena al cerrar)_ |
-| 2 | `npm test` en `frontend/` pasa. | _(se llena al cerrar)_ |
-| 3 | Un test que falla a propósito hace que `npm test` salga con un código distinto de 0. El test se quita después. | _(se llena al cerrar)_ |
-| 4 | Correr los tests del backend no cambia la base de desarrollo: los conteos de `orders`, `products` y `users` son iguales antes y después. | _(se llena al cerrar)_ |
-| 5 | Con una base cuyo nombre no termina en `_test`, los tests se niegan a correr. | _(se llena al cerrar)_ |
-| 6 | `docker compose up` levanta los mismos tres servicios de hoy y el POS funciona igual. `docker-compose.prod.yml` no cambia. | _(se llena al cerrar)_ |
-| 7 | Siguiendo solo `docs/tests.md` se levanta la base de pruebas y se corren los tests de los dos lados. | _(se llena al cerrar)_ |
-| 8 | Si MySQL no está disponible, `npm start` muestra el error y sale, igual que hoy. | _(se llena al cerrar)_ |
+| 1 | `npm test` en `backend/` pasa con la base de pruebas levantada. | 2026-10-18: 29/29 tests (7 archivos), desde el host y dentro de Docker. |
+| 2 | `npm test` en `frontend/` pasa. | 2026-10-18: 14/14 tests (3 archivos), desde el host y dentro de Docker. |
+| 3 | Un test que falla a propósito hace que `npm test` salga con un código distinto de 0. El test se quita después. | Backend: código 1 (T1). Frontend: código 1 (T5). Los dos tests temporales se borraron. |
+| 4 | Correr los tests del backend no cambia la base de desarrollo: los conteos de `orders`, `products` y `users` son iguales antes y después. | 2026-10-18: `orders` 2, `products` 3, `users` 4, `categories` 8, `refresh_tokens` 41 y último token 1441, iguales antes y después de los 29 tests. |
+| 5 | Con una base cuyo nombre no termina en `_test`, los tests se niegan a correr. | Con `TEST_DB_NAME=smallposv2_prueba1`, los tests se negaron a correr con el mensaje del candado (T3). Además lo cubre `tests/unit/test-infra/database-guard.test.js`. |
+| 6 | `docker compose up` levanta los mismos tres servicios de hoy y el POS funciona igual. `docker-compose.prod.yml` no cambia. | Sin el perfil `test`, `docker compose config --services` lista solo `mysql`, `backend` y `frontend`, y así corre el stack de desarrollo. `docker-compose.prod.yml` y los Dockerfiles sin cambios desde `0b78dc4`. El cierre de sesión al recargar es previo a esta spec y se trata aparte. |
+| 7 | Siguiendo solo `docs/tests.md` se levanta la base de pruebas y se corren los tests de los dos lados. | 2026-10-18: se siguieron todos los comandos de la guía (host, Docker, un archivo, `--selectProjects unit` e `integration`) y pasaron. |
+| 8 | Si MySQL no está disponible, `npm start` muestra el error y sale, igual que hoy. | `node index.js` con la base inaccesible mostró "Error al conectar a MySQL" y salió con código 1 (T2). |
 
 ## Dudas abiertas
 
@@ -126,3 +126,4 @@ Es para quien desarrolla el proyecto, sea persona o agente. No cambia nada visib
 | 2026-10-17 | T3 terminada. El helper de reinicio (requisito 20) se adelantó a T3 porque lo necesita el requisito 12; recarga esquema y seeds completos en vez de `TRUNCATE`, porque el esquema trae valores de `AUTO_INCREMENT` propios. Se agrega `backend/tests/setup/` al requisito 21. | Usuario |
 | 2026-10-18 | T4 terminada. `tests/integration/test-db/` se renombra a `tests/integration/test-infra/`. | Usuario |
 | 2026-10-18 | T5 terminada. `jsdom` 26 y `@testing-library/jest-dom` 6.9 por compatibilidad con Node 20; la config de Vitest vive en `vite.config.js` y el setup en `frontend/vitest.setup.js`. | Usuario |
+| 2026-10-18 | T6 terminada. Se llena la evidencia de los criterios de aceptación y la spec pasa a **Terminada**. | Usuario |

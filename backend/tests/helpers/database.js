@@ -44,7 +44,9 @@ const readInitSql = () => {
 // migraciones de backend/migrations, igual que el backend al arrancar. No
 // basta con TRUNCATE: el esquema trae valores de AUTO_INCREMENT propios (p. ej.
 // permissions empieza en 79) y los seeds dependen de ellos.
-const resetDatabase = async () => {
+// Con { migrate: false } deja la base como antes de cualquier migración, para
+// probar una migración sobre datos con la forma vieja.
+const resetDatabase = async ({ migrate = true } = {}) => {
   assertTestDatabase(TEST_DB.database);
   const [schemaSql, seedsSql] = readInitSql();
 
@@ -59,7 +61,7 @@ const resetDatabase = async () => {
     }
     await conn.query(schemaSql);
     await conn.query(seedsSql);
-    await runMigrations(conn);
+    if (migrate) await runMigrations(conn);
   } finally {
     await conn.end();
   }

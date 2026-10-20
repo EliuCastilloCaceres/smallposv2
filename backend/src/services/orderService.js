@@ -7,6 +7,7 @@
 const db = require('../config/db');
 const stockService = require('./stockService');
 const creditService = require('./creditService');
+const { getCatalogCosts } = require('../helpers/catalogCosts');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
 // FIX: buildOrdersFilter y buildSoldProductsFilter comparaban startDate/
 // endDate (fecha "de pared" en México, lo que manda el frontend) directo
@@ -46,29 +47,6 @@ const validatePayments = async (conn, payments, total) => {
     throw new ValidationError('Uno o más métodos de pago están inactivos');
 
   return found;
-};
-
-// ─── Costo de las líneas ─────────────────────────────────────────────────────
-// [FIX] El costo de cada línea se toma SIEMPRE del catálogo, nunca del que
-// manda el cliente: antes se guardaba item.purchase_price tal cual, y el POS
-// lo mandaba con un respaldo `?? 0`, así que una venta podía quedar con costo
-// 0 e inflar la utilidad. Las variantes no tienen costo propio: usan el del
-// producto base. Devuelve Map(product_id → costo). Spec 03, requisitos 8–9.
-
-const getCatalogCosts = async (conn, items) => {
-  const ids = [...new Set(items.map(i => Number(i.product_id)))];
-  if (ids.length === 0) return new Map();
-
-  const [rows] = await conn.query(
-    'SELECT product_id, purchase_price FROM products WHERE product_id IN (?)',
-    [ids]
-  );
-  const costs   = new Map(rows.map(r => [r.product_id, r.purchase_price]));
-  const missing = ids.filter(id => !costs.has(id));
-  if (missing.length > 0)
-    throw new ValidationError(`Producto no encontrado (ID ${missing.join(', ')})`);
-
-  return costs;
 };
 
 // ─── Crear venta ──────────────────────────────────────────────────────────────

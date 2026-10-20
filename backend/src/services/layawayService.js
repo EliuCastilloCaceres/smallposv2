@@ -7,6 +7,7 @@
 
 const db           = require('../config/db');
 const stockService = require('./stockService');
+const { getCatalogCosts } = require('../helpers/catalogCosts');
 const { NotFoundError, ValidationError, ConflictError, ForbiddenError } = require('../errors/AppError');
 
 // ─── Validar un arreglo de pagos (payment_method_id + amount) ────────────────
@@ -260,6 +261,10 @@ const createLayaway = async ({
       }
     }
 
+    // [FIX] Costo de cada línea, congelado al apartar: al liquidarse, la venta
+    // usa este costo y no el del catálogo de ese día (spec 03).
+    const costs = await getCatalogCosts(conn, items);
+
     // Crear cabecera
     const [result] = await conn.query(
       `INSERT INTO layaways
@@ -273,9 +278,10 @@ const createLayaway = async ({
     for (const item of items) {
       await conn.query(
         `INSERT INTO layaway_details
-           (layaway_id, product_id, variant_id, quantity, unit_price)
-         VALUES (?, ?, ?, ?, ?)`,
-        [layawayId, item.product_id, item.variant_id ?? null, item.quantity, item.unit_price]
+           (layaway_id, product_id, variant_id, quantity, unit_price, purchase_price)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [layawayId, item.product_id, item.variant_id ?? null, item.quantity, item.unit_price,
+          costs.get(Number(item.product_id))]
       );
 
       // Reservar stock: descontamos de inventory_stock con tipo 'layaway_reserve'
@@ -498,19 +504,16 @@ const addPayment = async ({ layawayId, branchId, userId, payments, notes = null,
 // (orders/order_details/order_payments) para dashboard, módulo de ventas y
 // reportes de productos vendidos.
 //
-// NOTA: purchase_price no se guarda en layaway_details al crear el apartado
-// (solo product_id, variant_id, quantity, unit_price), así que se toma el
-// purchase_price ACTUAL de products (las variantes no tienen costo propio,
-// siempre vive en el producto base) al momento de completar, no el que
-// tenía cuando se apartó. Si tu negocio necesita el costo histórico
-// exacto, habría que agregar esa columna a layaway_details desde la creación.
+// [FIX] El costo es el que se guardó en layaway_details al crear el apartado
+// (ver createLayaway), no el purchase_price ACTUAL de products: antes se
+// tomaba el del día en que se liquidaba, así que la utilidad del apartado
+// cambiaba si el costo subía o bajaba en medio (spec 03). Los apartados
+// anteriores a ese cambio tienen el costo que tenía el producto al migrar.
 const convertLayawayToOrder = async (conn, { layawayId, customerId, totalAmount, branchId, cashRegisterId, userId }) => {
   const [details] = await conn.query(
-    `SELECT ld.product_id, ld.variant_id, ld.quantity, ld.unit_price,
-            p.purchase_price
-     FROM layaway_details ld
-     JOIN products p ON ld.product_id = p.product_id
-     WHERE ld.layaway_id = ?`,
+    `SELECT product_id, variant_id, quantity, unit_price, purchase_price
+     FROM layaway_details
+     WHERE layaway_id = ?`,
     [layawayId]
   );
 

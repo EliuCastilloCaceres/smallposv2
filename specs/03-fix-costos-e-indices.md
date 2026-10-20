@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-20 | 2026-10-20 |
+| **Terminada** | 2026-10-20 | 2026-10-20 |
 
 ## Objetivo
 
@@ -112,15 +112,15 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | En la base de desarrollo, el primer arranque del backend aplica todas las migraciones, `schema_migrations` las lista, y un segundo arranque no aplica nada. | _(se llena al cerrar)_ |
-| 2 | Una base creada desde cero (`sql-init/` más las migraciones) tiene las mismas columnas e índices, en las tablas que toca esta spec, que la base de desarrollo migrada. | _(se llena al cerrar)_ |
-| 3 | Una venta que manda un costo falso por la API queda guardada con el costo del catálogo. | _(se llena al cerrar)_ |
-| 4 | Un apartado creado con un costo, cuyo producto cambia de costo antes de liquidarse, genera una venta con el costo original. | _(se llena al cerrar)_ |
-| 5 | Los 7 índices existen en la base de desarrollo, y `EXPLAIN` de las consultas de rango de fechas del Dashboard y de Ventas los muestra en `possible_keys`. | _(se llena al cerrar)_ |
-| 6 | En el POS se puede vender (contado, mixto y crédito), apartar y liquidar un apartado igual que hoy. | _(se llena al cerrar)_ |
-| 7 | `docs/migraciones.md` existe, y siguiéndolo se escribe y aplica una migración de prueba (que se borra después). | _(se llena al cerrar)_ |
-| 8 | `shared-features/fix-costos-e-indices.md` existe y está en el índice. | _(se llena al cerrar)_ |
-| 9 | Los tests del backend y del frontend pasan. | _(se llena al cerrar)_ |
+| 1 | En la base de desarrollo, el primer arranque del backend aplica todas las migraciones, `schema_migrations` las lista, y un segundo arranque no aplica nada. | 2026-10-20: las dos migraciones se crearon en momentos distintos, y cada una se aplicó en el primer arranque después de crearse (`001` a las 16:59:31, `002` a las 17:19:28). Los otros 14 arranques, y un reinicio hecho al cerrar, dicen "Migraciones al día". `schema_migrations` lista las dos. |
+| 2 | Una base creada desde cero (`sql-init/` más las migraciones) tiene las mismas columnas e índices, en las tablas que toca esta spec, que la base de desarrollo migrada. | 2026-10-20: la base de pruebas recreada desde cero y la de desarrollo migrada tienen idénticas las 78 líneas de columnas, índices y migraciones de `orders`, `inventory_movements`, `returns`, `layaway_details` y `schema_migrations`. |
+| 3 | Una venta que manda un costo falso por la API queda guardada con el costo del catálogo. | Test `stores the catalog cost and ignores the cost sent by the client` (`create-order-cost.test.js`): el cliente manda 999 y se guarda 12.5. En la prueba del usuario, las ventas #129, #130 y #131 guardaron 18, el costo de Mandarina en ese momento. |
+| 4 | Un apartado creado con un costo, cuyo producto cambia de costo antes de liquidarse, genera una venta con el costo original. | Prueba del usuario (2026-10-20): el apartado #12 guardó costo 18; el costo de Mandarina pasó a 25 y la venta #132 quedó con 18. Otra prueba con Pitahaya quedó igual: 45 guardado, costo cambiado a 65, venta #128 con 45. Test `uses the stored cost, not the current one, when the layaway is paid off`. |
+| 5 | Los 7 índices existen en la base de desarrollo, y `EXPLAIN` de las consultas de rango de fechas del Dashboard y de Ventas los muestra en `possible_keys`. | 2026-10-20: los 7 índices existen. En 4 consultas de rango de fechas (Dashboard y Ventas, consolidadas y por sucursal), `EXPLAIN` los muestra en `possible_keys`. Con 31 ventas, MySQL usa `idx_orders_branch_created` en una y lee la tabla completa en las otras tres, lo normal en una tabla tan chica. |
+| 6 | En el POS se puede vender (contado, mixto y crédito), apartar y liquidar un apartado igual que hoy. | Prueba del usuario (2026-10-20): contado (#129), mixta con efectivo y tarjeta (#130), crédito (#131, crédito activo de $300) y apartado #12 liquidado como venta #132. Sin errores en el backend; stock de 91 a 57, sin descontar de nuevo al liquidar. |
+| 7 | `docs/migraciones.md` existe, y siguiéndolo se escribe y aplica una migración de prueba (que se borra después). | 2026-10-20 (T5): se aplicó `003-add-docs-check-table.sql` con `docker compose exec backend npm run migrate`; la segunda corrida dijo "al día". La tabla, su registro y el archivo se borraron después. |
+| 8 | `shared-features/fix-costos-e-indices.md` existe y está en el índice. | Commit `01e7778`. |
+| 9 | Los tests del backend y del frontend pasan. | 2026-10-20: backend 51/51 (13 archivos), frontend 30/30 (7 archivos). |
 
 ## Dudas abiertas
 
@@ -139,3 +139,5 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
 | 2026-10-20 | T4 terminada: `backend/migrations/002-add-layaway-details-purchase-price.sql`, que al final quita el DEFAULT para que una línea sin costo falle en vez de guardar 0. La consulta de costos de T3 pasa a `backend/src/helpers/catalogCosts.js` y la usan ventas y apartados. Con la forma anterior de liquidar, la venta quedaba con el costo del día de liquidación (55 en vez de 40). `resetDatabase({ migrate: false })` deja la base sin migrar. Hallazgo para portar: el código anterior no puede crear apartados con la columna nueva, así que la migración y el código van juntos. | Usuario |
 | 2026-10-20 | T5 terminada: `docs/migraciones.md`, la regla de migraciones en `AGENTS.md` y la sección de costos en `backend/schema_decisions.md`, que también fija la regla de "sin costo" (requisito 16). Además, `docs/tests.md` dice dónde van los tests de cada migración. | Usuario |
 | 2026-10-20 | T6 terminada: `shared-features/fix-costos-e-indices.md`, agregado al índice. Sus notas para portar se revisaron contra el código de smallpos-saas (mismo problema de costos, orden de despliegue y migraciones por tenant). | Usuario |
+| 2026-10-20 | Evidencia de los 9 criterios de aceptación: 4 y 6 con la prueba del usuario en el POS; 1, 2, 5 y 7 contra la base de desarrollo y una base nueva; 3 con su test y las ventas de la prueba. | Usuario |
+| 2026-10-20 | Pasa a **Terminada**. | Usuario |

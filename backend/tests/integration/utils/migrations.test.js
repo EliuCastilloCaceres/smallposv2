@@ -102,6 +102,27 @@ describe('runMigrations', () => {
     expect(await recorded()).toEqual([]);
   });
 
+  it('commits migrations and their records even if the connection has autocommit off', async () => {
+    writeMigrations({
+      '001-create-items.sql': CREATE_ITEMS,
+      '002-insert-items.sql': "INSERT INTO mig_test_items (name) VALUES ('a');",
+    });
+    await conn.query('SET autocommit = 0');
+
+    await runMigrations(conn, { dir });
+
+    // Se lee desde otra conexión: lo que no se confirmó no se vería
+    const other = await mysql.createConnection(TEST_DB);
+    try {
+      const [records] = await other.query('SELECT name FROM schema_migrations ORDER BY name');
+      const [items]   = await other.query('SELECT name FROM mig_test_items');
+      expect(records.map(r => r.name)).toEqual(['001-create-items.sql', '002-insert-items.sql']);
+      expect(items.map(r => r.name)).toEqual(['a']);
+    } finally {
+      await other.end();
+    }
+  });
+
   it('does nothing when the migrations folder does not exist', async () => {
     expect(await runMigrations(conn, { dir: path.join(dir, 'missing') })).toEqual([]);
     expect(await recorded()).toEqual([]);

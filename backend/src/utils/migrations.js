@@ -41,6 +41,10 @@ const listMigrations = (dir = MIGRATIONS_DIR) => {
 // conn: conexión de mysql2/promise con multipleStatements, porque cada
 // archivo se ejecuta tal cual. Devuelve los nombres que aplicó.
 const runMigrations = async (conn, { dir = MIGRATIONS_DIR } = {}) => {
+  // Cada migración y su registro se confirman al momento, aunque la conexión
+  // llegue con autocommit apagado: 02-seeds.sql lo apaga y no lo restaura, y
+  // resetDatabase aplica las migraciones en esa misma conexión.
+  await conn.query('SET autocommit = 1');
   await conn.query(CREATE_TABLE_SQL);
 
   const [rows]  = await conn.query('SELECT name FROM schema_migrations');

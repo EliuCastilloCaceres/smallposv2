@@ -21,6 +21,7 @@ Stack:
 ## Reglas
 - Lee docs/constitution.md y la spec en progreso antes de tocar código.
 - No modifiques archivos dentro de `specs/` salvo petición explícita.
+- Todo cambio de esquema o de datos de la base va en una migración de `backend/migrations/`, con su test. `backend/sql-init/` no se edita para eso (detalles en `docs/migraciones.md`).
 - **`shared-features/` solo con confirmación del usuario.** No toda feat/fix se porta a smallpos-saas:
   - Al redactar la spec de cada feat/fix, pregunta al usuario si se documenta en `shared-features/` y registra la respuesta en el alcance de la spec.
   - Si no lo preguntaste o no hubo respuesta, pregunta antes de cerrar la tarea. Nunca lo documentes por tu cuenta.

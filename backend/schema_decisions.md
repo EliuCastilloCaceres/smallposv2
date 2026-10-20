@@ -57,6 +57,15 @@ Reemplaza `open_close_details`. Ahora una sesión de caja tiene relación direct
 
 `unit_price` y `purchase_price` se guardan en el momento de la venta, no como FK al catálogo. Esto garantiza que los reportes históricos de margen sean correctos aunque el producto cambie de precio después.
 
+Desde la spec 03 (`specs/03-fix-costos-e-indices.md`):
+- El servidor toma `purchase_price` de `products.purchase_price` al vender; el que mande el cliente se ignora. Las variantes usan el costo del producto base.
+- Los apartados congelan el costo al crearse, en `layaway_details.purchase_price`, y la venta que generan al liquidarse usa ese costo.
+- Una línea con `purchase_price = 0` es una venta **"sin costo"**: el producto no tenía costo capturado al venderse. Los reportes de utilidad la marcan y permiten excluirla.
+
+## Cambios al esquema: migraciones
+
+`sql-init/01-schema.sql` es la base fija de una instalación nueva. Los cambios posteriores viven en `backend/migrations/` y se registran en `schema_migrations` (ver `docs/migraciones.md`).
+
 ## Campos corregidos
 
 | Antes | Ahora |

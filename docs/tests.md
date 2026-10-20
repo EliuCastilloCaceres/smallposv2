@@ -84,6 +84,7 @@ backend/
 - **`integration`:** antes de **cada archivo**, la base vuelve al estado de una instalación nueva: se borran todas las tablas, se cargan otra vez `sql-init/01-schema.sql` y `02-seeds.sql`, y se aplican las migraciones de `backend/migrations/`, igual que hace el backend al arrancar. Lo que crea un archivo no lo ve el siguiente. Dentro de un mismo archivo los datos sí se comparten entre tests.
 - Los archivos corren **en serie**, porque todos comparten la misma base.
 - Dentro de `unit/` e `integration/`, las subcarpetas reflejan `src/` (por ejemplo, `tests/unit/utils/` para `src/utils/`). Los tests de la propia infraestructura van en `test-infra/`.
+- Cada migración de `backend/migrations/` tiene su test en `tests/integration/migrations/`, con el mismo nombre y terminación `.test.js` (ver `docs/migraciones.md`).
 
 ### Frontend
 

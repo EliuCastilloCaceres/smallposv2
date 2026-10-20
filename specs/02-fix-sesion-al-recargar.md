@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-18 | 2026-10-19 |
+| **Terminada** | 2026-10-18 | 2026-10-20 |
 
 ## Objetivo
 
@@ -82,12 +82,12 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | En desarrollo, recargar la página 10 veces seguidas no cierra la sesión, y DevTools muestra un solo `POST /api/auth/refresh` por recarga. | _(se llena al cerrar)_ |
-| 2 | Reenviar a propósito un refresh token ya rotado responde 401 y revoca las sesiones del usuario. | _(se llena al cerrar)_ |
-| 3 | Con una cookie de refresh inválida, cargar la app manda al login, igual que hoy. | _(se llena al cerrar)_ |
-| 4 | Con el token de acceso vencido, la app lo renueva sola al hacer cualquier petición y sigue funcionando. | _(se llena al cerrar)_ |
-| 5 | `shared-features/fix-sesion-al-recargar.md` existe y está en el índice. | _(se llena al cerrar)_ |
-| 6 | Los tests del backend y del frontend pasan. | _(se llena al cerrar)_ |
+| 1 | En desarrollo, recargar la página 10 veces seguidas no cierra la sesión, y DevTools muestra un solo `POST /api/auth/refresh` por recarga. | Prueba manual del usuario (2026-10-20): un solo `POST /api/auth/refresh` por recarga y la sesión no se cierra. Test `sends a single refresh under StrictMode and loads the user` (`UserContext.test.jsx`). |
+| 2 | Reenviar a propósito un refresh token ya rotado responde 401 y revoca las sesiones del usuario. | Contra el backend de desarrollo (2026-10-20), con un usuario temporal que después se borró: se inicia sesión en A y B y se rota el token de A. Reenviar el token viejo de A → 401 "Alerta de seguridad: Intento de reutilización de token. Sesión cerrada."; después, el token nuevo de A y el de B → 401. Las 3 sesiones quedan revocadas; el token rotado conserva su `revoked_at` (16:17:22) y las otras dos se revocan al reenviar (16:17:24). Tests en `backend/tests/integration/auth/refresh.test.js`. |
+| 3 | Con una cookie de refresh inválida, cargar la app manda al login, igual que hoy. | Contra el backend de desarrollo (2026-10-20): refresh con cookie inválida → 401 "Refresh token inválido o expirado"; sin cookie → 401 "Refresh token no proporcionado". Con el refresh fallido, `UserContext` deja `user` en `null` (test `leaves no user when the refresh fails`) y `App.jsx` manda a `/login`. No se probó en el navegador. |
+| 4 | Con el token de acceso vencido, la app lo renueva sola al hacer cualquier petición y sigue funcionando. | Prueba manual del usuario (2026-10-20), con el token de acceso a 1 minuto de forma temporal (sin commit; se regresó a 15 min): las peticiones responden 401, sale un refresh y se repiten con éxito (304, por caché). La pantalla carga sin mandar al login. Test `refreshes on 401 and retries the request with the new token` (`api.test.js`). |
+| 5 | `shared-features/fix-sesion-al-recargar.md` existe y está en el índice. | Commit `90036b8`. |
+| 6 | Los tests del backend y del frontend pasan. | 2026-10-20: backend 33/33 (8 suites), frontend 28/28 (6 archivos). |
 
 ## Dudas abiertas
 
@@ -105,3 +105,5 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 | 2026-10-19 | T3 terminada: el interceptor de `api.js` usa `refreshSession()` y se quita su cola propia. El test de un 401 durante la verificación de `UserContext` falla contra el interceptor anterior (2 refresh) y pasa con el nuevo (1). Si el refresh falla, ahora cada request en espera dispara `auth:logout` (antes, uno solo); el manejador es idempotente. | Usuario |
 | 2026-10-19 | T4 terminada: la revocación masiva de `authService.refresh` agrega `AND revoked = 0`. Tests en `backend/tests/integration/auth/refresh.test.js`; el de `revoked_at` falla contra el código anterior y pasa con el nuevo. Se agrega un test que no pedía la spec: la revocación no toca las sesiones de otros usuarios. | Usuario |
 | 2026-10-19 | T5 terminada: `shared-features/fix-sesion-al-recargar.md`, agregado al índice. Sus notas para portar se revisaron contra el código de smallpos-saas. | Usuario |
+| 2026-10-20 | Evidencia de los 6 criterios de aceptación: 1 y 4 los probó el usuario en el navegador; 2 y 3, contra el backend de desarrollo. | Usuario |
+| 2026-10-20 | Pasa a **Terminada**. | Usuario |

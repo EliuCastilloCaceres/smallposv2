@@ -114,8 +114,11 @@ const refresh = async ({ refreshToken, userAgent, ipAddress }) => {
 
   if (stored.revoked === 1 || isExpired) {
     if (stored.revoked === 1) {
+      // [FIX] Solo los tokens activos: los que ya estaban revocados conservan
+      // su revoked_at original, que dice cuándo se rotó o cerró cada sesión.
       await db.query(
-        `UPDATE refresh_tokens SET revoked = 1, revoked_at = NOW() WHERE user_id = ?`,
+        `UPDATE refresh_tokens SET revoked = 1, revoked_at = NOW()
+         WHERE user_id = ? AND revoked = 0`,
         [stored.user_id]
       );
       throw new UnauthorizedError('Alerta de seguridad: Intento de reutilización de token. Sesión cerrada.');

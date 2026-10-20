@@ -75,7 +75,7 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
   — tests: un request con 401 provoca un refresh y se reintenta con el token nuevo; dos requests con 401 al mismo tiempo provocan un solo refresh y los dos se reintentan; si el refresh falla, se dispara `auth:logout` y los requests fallan; un 401 con `INVALID_CREDENTIALS` no dispara refresh.
 - [x] **T4. Detección de reutilización en el backend** (requisitos 6 y 7).
   — tests: refresh con un token válido responde 200 y rota el token; reenviar el token ya rotado responde 401 y revoca todas las sesiones del usuario, incluida la nueva; los tokens que ya estaban revocados conservan su `revoked_at`.
-- [ ] **T5. Documentación en `shared-features/`.** Crear `fix-sesion-al-recargar.md` con la estructura de `sf-index.md` y agregarlo al índice.
+- [x] **T5. Documentación en `shared-features/`.** Crear `fix-sesion-al-recargar.md` con la estructura de `sf-index.md` y agregarlo al índice.
   — tests: no lleva tests de código.
 
 ## Criterios de aceptación
@@ -104,3 +104,4 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 | 2026-10-18 | T2 terminada. El test con `React.StrictMode` falla contra el `UserContext` anterior (2 refresh) y pasa con el nuevo (1). | Usuario |
 | 2026-10-19 | T3 terminada: el interceptor de `api.js` usa `refreshSession()` y se quita su cola propia. El test de un 401 durante la verificación de `UserContext` falla contra el interceptor anterior (2 refresh) y pasa con el nuevo (1). Si el refresh falla, ahora cada request en espera dispara `auth:logout` (antes, uno solo); el manejador es idempotente. | Usuario |
 | 2026-10-19 | T4 terminada: la revocación masiva de `authService.refresh` agrega `AND revoked = 0`. Tests en `backend/tests/integration/auth/refresh.test.js`; el de `revoked_at` falla contra el código anterior y pasa con el nuevo. Se agrega un test que no pedía la spec: la revocación no toca las sesiones de otros usuarios. | Usuario |
+| 2026-10-19 | T5 terminada: `shared-features/fix-sesion-al-recargar.md`, agregado al índice. Sus notas para portar se revisaron contra el código de smallpos-saas. | Usuario |

@@ -45,3 +45,4 @@ Si se decide **no** implementarla, se anota en el resumen del archivo y se deja 
 | [feat-totales-credito.md](feat-totales-credito.md) | feat | Borrador | smallposv2 · `60aa180` | Pie de totales (Total, Pagado, Saldo pendiente) en Créditos. |
 | [feat-filtro-cliente-credito.md](feat-filtro-cliente-credito.md) | feat | Borrador | smallposv2 · `60aa180` | Dropdown de clientes con crédito para filtrar el listado de Créditos. |
 | [fix-sesion-al-recargar.md](fix-sesion-al-recargar.md) | fix | Borrador | smallposv2 · `c4c34d5`–`265e89f` | Un solo refresh en curso por pestaña para que recargar no cierre la sesión; la revocación por reutilización conserva `revoked_at`. |
+| [fix-costos-e-indices.md](fix-costos-e-indices.md) | fix | Borrador | smallposv2 · `deb907d`–`5e756ea` | El servidor toma el costo de venta del catálogo, los apartados lo congelan al crearse, índices de fecha y runner de migraciones SQL. |

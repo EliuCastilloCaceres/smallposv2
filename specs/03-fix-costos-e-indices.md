@@ -105,7 +105,7 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
   — tests: crear un apartado guarda el costo del catálogo en sus detalles; si el costo del producto cambia antes de liquidar, la venta generada usa el costo guardado; con la base sin migrar, el detalle de un apartado existente queda con el costo actual del producto después de migrar.
 - [x] **T5. Documentación** (requisitos 16 y 19–21).
   — tests: no lleva tests de código; se verifica con el criterio 7.
-- [ ] **T6. Documentación en `shared-features/`** (requisito 22).
+- [x] **T6. Documentación en `shared-features/`** (requisito 22).
   — tests: no lleva tests de código.
 
 ## Criterios de aceptación
@@ -138,3 +138,4 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
 | 2026-10-20 | T3 terminada. Los 5 tests del backend fallan contra el código anterior (guardaba el costo del cliente y respondía 500 sin costo o con un producto inexistente) y pasan con el nuevo. En el frontend, `PaymentModal` y `CreditModal` arman las líneas con `components/Pos/orderItems.js`, y el test de "se mandan sin `purchase_price`" se hace sobre esa función. Helpers nuevos en `backend/tests/helpers/sales.js`. Hallazgo para portar: el POS nuevo no puede llegar antes que el backend nuevo, porque el anterior responde 500 a una venta sin costo. | Usuario |
 | 2026-10-20 | T4 terminada: `backend/migrations/002-add-layaway-details-purchase-price.sql`, que al final quita el DEFAULT para que una línea sin costo falle en vez de guardar 0. La consulta de costos de T3 pasa a `backend/src/helpers/catalogCosts.js` y la usan ventas y apartados. Con la forma anterior de liquidar, la venta quedaba con el costo del día de liquidación (55 en vez de 40). `resetDatabase({ migrate: false })` deja la base sin migrar. Hallazgo para portar: el código anterior no puede crear apartados con la columna nueva, así que la migración y el código van juntos. | Usuario |
 | 2026-10-20 | T5 terminada: `docs/migraciones.md`, la regla de migraciones en `AGENTS.md` y la sección de costos en `backend/schema_decisions.md`, que también fija la regla de "sin costo" (requisito 16). Además, `docs/tests.md` dice dónde van los tests de cada migración. | Usuario |
+| 2026-10-20 | T6 terminada: `shared-features/fix-costos-e-indices.md`, agregado al índice. Sus notas para portar se revisaron contra el código de smallpos-saas (mismo problema de costos, orden de despliegue y migraciones por tenant). | Usuario |

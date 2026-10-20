@@ -20,7 +20,7 @@ import api from '../services/api'
 const newCart = (id) => ({
   id,
   label:      `Carrito ${id}`,
-  items:      [],       // [{ product_id, variant_id, name, sku, image, unit_price, purchase_price, quantity, subtotal, stock }]
+  items:      [],       // [{ product_id, variant_id, name, sku, image, unit_price, quantity, subtotal, stock }]
   customerId: 1,        // cliente genérico por defecto
   discount:   { type: '$', amount: 0, applied: 0 },
   note:       '',

@@ -23,6 +23,7 @@ import { useBranch } from '../../../context/BranchContext'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { openReceiptWindow } from '../printReceipt'
+import { toOrderItems } from '../orderItems'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 const GENERIC_CUSTOMER_ID = 1
@@ -128,14 +129,7 @@ const CreditModal = ({ onClose, onSaleCompleted }) => {
         total,
         notes:          cart.note || null,
         due_date:       dueDate,
-        items: cart.items.map(i => ({
-          product_id:     i.product_id,
-          variant_id:     i.variant_id ?? null,
-          quantity:       i.quantity,
-          unit_price:     i.unit_price,
-          purchase_price: i.purchase_price,
-          discount:       0,
-        })),
+        items: toOrderItems(cart.items),
         payments,
       }
       const { data } = await api.post(`orders?branch_id=${branchId}`, payload)

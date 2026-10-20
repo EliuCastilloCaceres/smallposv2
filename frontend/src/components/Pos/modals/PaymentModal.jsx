@@ -5,6 +5,7 @@ import { useBranch } from '../../../context/BranchContext'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { openReceiptWindow } from '../printReceipt'
+import { toOrderItems } from '../orderItems'
 import KeyboardNavGrid from '../../Common/KeyboardNavGrid'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
@@ -222,14 +223,7 @@ const PaymentModal = ({ onClose, onSaleCompleted }) => {
         discount:       cart.discount.applied,
         total,
         notes:          cart.note || null,
-        items: cart.items.map(i => ({
-          product_id:     i.product_id,
-          variant_id:     i.variant_id ?? null,
-          quantity:       i.quantity,
-          unit_price:     i.unit_price,
-          purchase_price: i.purchase_price,
-          discount:       0,
-        })),
+        items: toOrderItems(cart.items),
         payments: lines.map(l => ({
           payment_method_id: l.payment_method_id,
           amount:            Number(l.amount) || 0,

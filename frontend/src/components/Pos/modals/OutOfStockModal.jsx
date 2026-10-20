@@ -9,7 +9,7 @@
 // en error al final del cobro.
 //
 // `target` es el mismo objeto que se le pasaría a addItem():
-//   { product_id, variant_id, name, sku, image, unit_price, purchase_price, stock }
+//   { product_id, variant_id, name, sku, image, unit_price, stock }
 
 import { useState } from 'react'
 import { usePos } from '../../../context/PosContext'

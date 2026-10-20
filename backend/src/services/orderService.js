@@ -48,6 +48,29 @@ const validatePayments = async (conn, payments, total) => {
   return found;
 };
 
+// ─── Costo de las líneas ─────────────────────────────────────────────────────
+// [FIX] El costo de cada línea se toma SIEMPRE del catálogo, nunca del que
+// manda el cliente: antes se guardaba item.purchase_price tal cual, y el POS
+// lo mandaba con un respaldo `?? 0`, así que una venta podía quedar con costo
+// 0 e inflar la utilidad. Las variantes no tienen costo propio: usan el del
+// producto base. Devuelve Map(product_id → costo). Spec 03, requisitos 8–9.
+
+const getCatalogCosts = async (conn, items) => {
+  const ids = [...new Set(items.map(i => Number(i.product_id)))];
+  if (ids.length === 0) return new Map();
+
+  const [rows] = await conn.query(
+    'SELECT product_id, purchase_price FROM products WHERE product_id IN (?)',
+    [ids]
+  );
+  const costs   = new Map(rows.map(r => [r.product_id, r.purchase_price]));
+  const missing = ids.filter(id => !costs.has(id));
+  if (missing.length > 0)
+    throw new ValidationError(`Producto no encontrado (ID ${missing.join(', ')})`);
+
+  return costs;
+};
+
 // ─── Crear venta ──────────────────────────────────────────────────────────────
 
 const createOrder = async ({
@@ -98,6 +121,9 @@ const createOrder = async ({
     if (session.length === 0) throw new ValidationError('No hay sesión de caja activa');
     const sessionId = session[0].session_id;
 
+    // 2b. Costo de cada línea desde el catálogo (rechaza productos inexistentes)
+    const costs = await getCatalogCosts(conn, items);
+
     // 3. Insertar orden (cabecera) — ya sin payment_method/cash_received/cash_change
     const [orderResult] = await conn.query(
       `INSERT INTO orders
@@ -109,7 +135,8 @@ const createOrder = async ({
     );
     const orderId = orderResult.insertId;
 
-    // 4. Insertar detalles de la orden (snapshot de precios)
+    // 4. Insertar detalles de la orden (snapshot de precios; el costo es el
+    //    del catálogo, no item.purchase_price)
     for (const item of items) {
       await conn.query(
         `INSERT INTO order_details
@@ -122,7 +149,7 @@ const createOrder = async ({
           item.variant_id ?? null,
           item.quantity,
           item.unit_price,
-          item.purchase_price,
+          costs.get(Number(item.product_id)),
           item.discount ?? 0,
           item.unit_price * item.quantity,
         ]

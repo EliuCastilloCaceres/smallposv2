@@ -163,6 +163,9 @@ Para consultar o preparar datos directo en la base, usa el mismo pool del backen
 | `SUPERADMIN` | `tests/helpers/auth.js` | Credenciales del `superadmin` de los seeds. |
 | `createTestUser({ role, branchId, username, password })` | `tests/helpers/users.js` | Crea un usuario activo directo en la base (por defecto, cajero de la sucursal 1). Devuelve `{ userId, username, password, roleId, branchId }`. |
 | `resetDatabase()` | `tests/helpers/database.js` | Deja la base como una instalación nueva, con las migraciones aplicadas. Ya corre antes de cada archivo de integración; úsalo solo si un archivo necesita reiniciar a mitad. |
+| `openTestRegister({ userId, cashRegisterId, openAmount })` | `tests/helpers/sales.js` | Abre una caja con una sesión a nombre de `userId` (por defecto, la Caja 1 de la sucursal 1), para poder vender por la API. |
+| `createTestProduct({ purchasePrice, salePrice, stock, branchId, variants })` | `tests/helpers/sales.js` | Crea un producto activo con stock en la sucursal (por defecto, 10 unidades en la 1). Con `variants` (etiquetas) crea un producto variable con ese stock en cada variante. Devuelve `{ productId, variantIds, purchasePrice, salePrice }`. |
+| `paymentMethodId(code)` | `tests/helpers/sales.js` | `payment_method_id` de un método de los seeds por su código: `cash`, `card`, `transfer` o `credit`. |
 
 > `requirePermission` deja pasar siempre al `superadmin`. Para probar un 403, usa un usuario con otro rol creado con `createTestUser`.
 

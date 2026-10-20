@@ -87,9 +87,8 @@ const fetchMergedCatalog = async ({ branchId, search, categoryId, page = 1, limi
   // [FIX] El `search` de /products solo compara name/sku/description del
   // PRODUCTO — no el sku de sus variantes. /inventory/stock sí matchea por
   // sku de variante, así que al escanear el SKU de una variante el producto
-  // aparecía en stockRes pero quedaba fuera de priceMap, y sale_price/
-  // purchase_price caían al fallback `?? 0`: el producto se agregaba al
-  // carrito con precio $0. Para los product_id que faltan, se pide el
+  // aparecía en stockRes pero quedaba fuera de priceMap, y sale_price caía
+  // al fallback `?? 0`: el producto se agregaba al carrito con precio $0. Para los product_id que faltan, se pide el
   // precio directo por id — son a lo más unos pocos (típicamente 0 o 1),
   // nunca la página completa.
   const missingIds = (stockRes.data.data ?? [])
@@ -108,10 +107,11 @@ const fetchMergedCatalog = async ({ branchId, search, categoryId, page = 1, limi
 
   const data = (stockRes.data.data ?? []).map(p => {
     const priceInfo = priceMap.get(p.product_id)
+    // [FIX] Sin purchase_price: el costo lo toma el servidor del catálogo al
+    // vender (specs/03-fix-costos-e-indices.md).
     return {
       ...p,
-      sale_price:     priceInfo?.sale_price ?? 0,
-      purchase_price: priceInfo?.purchase_price ?? 0,
+      sale_price: priceInfo?.sale_price ?? 0,
     }
   })
 
@@ -472,7 +472,6 @@ const SaleScreen = () => {
       image:          p.image,
       unit_price:     p.sale_price,
       original_price: p.sale_price, // [NUEVO] fallback al borrar el precio editado
-      purchase_price: p.purchase_price,
       stock:          p.total_stock,
     })
   }
@@ -486,7 +485,6 @@ const SaleScreen = () => {
       image:          p.image,
       unit_price:     p.sale_price,
       original_price: p.sale_price, // [NUEVO] fallback al borrar el precio editado
-      purchase_price: p.purchase_price,
       stock:          v.quantity,
     })
   }

@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-18 | 2026-10-18 |
+| **Lista** | 2026-10-18 | 2026-10-19 |
 
 ## Objetivo
 
@@ -71,7 +71,7 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
   — tests: dos llamadas simultáneas hacen una sola petición y reciben el mismo token; si la petición falla, las dos reciben el error; terminada la primera, una llamada nueva hace otra petición.
 - [x] **T2. `UserContext` usa el refresh compartido** (requisitos 2, 3 y 5).
   — tests: montar `UserContextProvider` dentro de `React.StrictMode` hace un solo `POST /api/auth/refresh` y deja al usuario cargado; si el refresh falla, `user` queda en `null`.
-- [ ] **T3. El interceptor de `api.js` usa el refresh compartido** (requisitos 2 y 5).
+- [x] **T3. El interceptor de `api.js` usa el refresh compartido** (requisitos 2 y 5).
   — tests: un request con 401 provoca un refresh y se reintenta con el token nuevo; dos requests con 401 al mismo tiempo provocan un solo refresh y los dos se reintentan; si el refresh falla, se dispara `auth:logout` y los requests fallan; un 401 con `INVALID_CREDENTIALS` no dispara refresh.
 - [ ] **T4. Detección de reutilización en el backend** (requisitos 6 y 7).
   — tests: refresh con un token válido responde 200 y rota el token; reenviar el token ya rotado responde 401 y revoca todas las sesiones del usuario, incluida la nueva; los tokens que ya estaban revocados conservan su `revoked_at`.
@@ -102,3 +102,4 @@ Al recargar la página en desarrollo, la sesión se cierra y la app manda al log
 | 2026-10-18 | Pasa a **Lista**. | Usuario |
 | 2026-10-18 | T1 terminada: `refreshSession()` en `frontend/src/services/session.js`; también guarda el token nuevo en `sessionStorage`. | Usuario |
 | 2026-10-18 | T2 terminada. El test con `React.StrictMode` falla contra el `UserContext` anterior (2 refresh) y pasa con el nuevo (1). | Usuario |
+| 2026-10-19 | T3 terminada: el interceptor de `api.js` usa `refreshSession()` y se quita su cola propia. El test de un 401 durante la verificación de `UserContext` falla contra el interceptor anterior (2 refresh) y pasa con el nuevo (1). Si el refresh falla, ahora cada request en espera dispara `auth:logout` (antes, uno solo); el manejador es idempotente. | Usuario |

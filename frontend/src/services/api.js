@@ -2,26 +2,16 @@
 // Cliente HTTP centralizado con:
 //  · Access token en Authorization header
 //  · Refresh token automático cuando el servidor devuelve 401
-//  · Cola de requests pendientes durante el refresh para no perder llamadas
+//  · Requests que reciben 401 durante un refresh esperan ese mismo refresh
 //  · Logout automático si el refresh falla
 
 import axios from 'axios'
+import { refreshSession } from './session'
 
 const api = axios.create({
   baseURL:         import.meta.env.VITE_URL_BASE,
   withCredentials: true, // necesario para que el browser envíe la cookie del refreshToken
 })
-
-// ─── Cola de requests que llegaron mientras se hacía el refresh ───────────────
-let isRefreshing  = false
-let failedQueue   = []
-
-const processQueue = (error, token = null) => {
-  failedQueue.forEach(({ resolve, reject }) =>
-    error ? reject(error) : resolve(token)
-  )
-  failedQueue = []
-}
 
 // ─── Interceptor de request: añade el access token ───────────────────────────
 api.interceptors.request.use((config) => {
@@ -44,39 +34,26 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    // Si ya se está haciendo refresh, encolar este request
-    if (isRefreshing) {
-      return new Promise((resolve, reject) => {
-        failedQueue.push({ resolve, reject })
-      }).then((token) => {
-        original.headers['Authorization'] = `Bearer ${token}`
-        return api(original)
-      })
-    }
-
     original._retry = true
-    isRefreshing    = true
 
+    // [FIX] refreshSession comparte el refresh en curso: los requests que
+    // reciben 401 al mismo tiempo, o mientras UserContext verifica la sesión,
+    // esperan ese MISMO refresh en vez de mandar el suyo. Antes este
+    // interceptor hacía su propio refresh aparte del de UserContext, y dos
+    // refresh con la misma cookie cierran la sesión (ver services/session.js).
+    // También deja el token nuevo en sessionStorage.
+    let newToken
     try {
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_URL_BASE}auth/refresh`,
-        {},
-        { withCredentials: true }
-      )
-      const newToken = data.accessToken
-      sessionStorage.setItem('accessToken', newToken)
-      processQueue(null, newToken)
-      original.headers['Authorization'] = `Bearer ${newToken}`
-      return api(original)
+      newToken = await refreshSession()
     } catch (refreshError) {
-      processQueue(refreshError, null)
       // El refresh falló → limpiar sesión y redirigir al login
       sessionStorage.removeItem('accessToken')
       window.dispatchEvent(new CustomEvent('auth:logout'))
       return Promise.reject(refreshError)
-    } finally {
-      isRefreshing = false
     }
+
+    original.headers['Authorization'] = `Bearer ${newToken}`
+    return api(original)
   }
 )
 

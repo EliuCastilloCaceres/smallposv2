@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "nodemon index.js",
     "start": "node index.js",
+    "migrate": "node migrate.js",
     "test": "jest"
   },
   "dependencies": {

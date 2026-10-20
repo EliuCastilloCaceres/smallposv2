@@ -95,7 +95,7 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
 
 ## Tareas
 
-- [ ] **T1. Runner de migraciones** (requisitos 1–7).
+- [x] **T1. Runner de migraciones** (requisitos 1–7).
   — tests: aplica las migraciones pendientes en orden y las registra; no vuelve a aplicar las ya registradas; si una falla, se detiene, no la registra y no aplica las siguientes; después de `resetDatabase`, `schema_migrations` lista todas las migraciones.
 - [ ] **T2. Índices de fecha** (requisitos 17–18).
   — tests: después de migrar, los 7 índices existen en `information_schema.STATISTICS` con sus columnas en el orden indicado.
@@ -133,3 +133,4 @@ Además, es la primera spec que cambia el esquema de una base que ya existe. `ba
 | 2026-10-20 | Creación de la spec. | — |
 | 2026-10-20 | Se resuelven las 9 dudas: migraciones en SQL; se aplican al arrancar el backend y con `npm run migrate`; `sql-init/` queda como base fija y las migraciones corren encima; el POS deja de mandar `purchase_price`; los detalles de apartados existentes se llenan con el costo actual; "sin costo" es solo la regla `purchase_price = 0`; se puede vender un producto con costo 0; se aprueban los 7 índices, sin `cash_movements`; se documenta en `shared-features/`, incluido el runner. | Usuario |
 | 2026-10-20 | Pasa a **Lista**. | Usuario |
+| 2026-10-20 | T1 terminada: runner en `backend/src/utils/migrations.js`, `npm run migrate` en `backend/migrate.js`, y `index.js` aplica las migraciones antes de escuchar. Además de lo pedido, el runner rechaza nombres que no sigan `NNN-descripcion.sql` antes de aplicar nada. | Usuario |

@@ -7,6 +7,7 @@
 const fs    = require('fs');
 const path  = require('path');
 const mysql = require('mysql2/promise');
+const { runMigrations } = require('../../src/utils/migrations');
 
 const TEST_DB = {
   host:     process.env.TEST_DB_HOST ?? '127.0.0.1',
@@ -39,8 +40,9 @@ const readInitSql = () => {
 };
 
 // Deja la base exactamente como una instalación nueva: borra todas las
-// tablas y vuelve a correr el esquema y los seeds de sql-init. No basta con
-// TRUNCATE: el esquema trae valores de AUTO_INCREMENT propios (p. ej.
+// tablas, vuelve a correr el esquema y los seeds de sql-init y aplica las
+// migraciones de backend/migrations, igual que el backend al arrancar. No
+// basta con TRUNCATE: el esquema trae valores de AUTO_INCREMENT propios (p. ej.
 // permissions empieza en 79) y los seeds dependen de ellos.
 const resetDatabase = async () => {
   assertTestDatabase(TEST_DB.database);
@@ -57,6 +59,7 @@ const resetDatabase = async () => {
     }
     await conn.query(schemaSql);
     await conn.query(seedsSql);
+    await runMigrations(conn);
   } finally {
     await conn.end();
   }

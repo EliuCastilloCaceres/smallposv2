@@ -236,3 +236,29 @@
    con el color por defecto de arriba. */
 .rpt-detail-list__amt--in  { color: var(--rpt-green); }
 .rpt-detail-list__amt--out { color: var(--rpt-red); }
+/* ── Ventas y utilidad ───────────────────────────────────── */
+.rpt-presets { display: flex; gap: 2px; padding: 3px; background: var(--rpt-bg); border-radius: var(--rpt-radius-sm); flex-shrink: 0; }
+.rpt-preset {
+  all: unset; display: inline-flex; align-items: center; padding: 0 12px;
+  min-height: calc(var(--touch-min) - 6px); border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--rpt-muted); white-space: nowrap;
+}
+.rpt-preset:hover { color: var(--rpt-text); }
+.rpt-preset--active { background: var(--rpt-surface); color: var(--rpt-accent); font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+
+.rpt-notice {
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 14px;
+  border-radius: var(--rpt-radius-sm); background: var(--rpt-yellow-bg);
+  border: 1px solid rgba(234,179,8,.35); color: #92610a; font-size: 13px;
+}
+.rpt-notice i { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+
+.rpt-flag {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px;
+  background: var(--rpt-yellow-bg); color: #92610a; font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.rpt-flag i { font-size: 11px; }
+.rpt-group-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.rpt-table--static tbody tr { cursor: default; }
+.rpt-card--static { cursor: default; }

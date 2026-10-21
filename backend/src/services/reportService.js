@@ -19,13 +19,16 @@
 // aparte.
 
 const db = require('../config/db');
-const { NotFoundError } = require('../errors/AppError');
+const { NotFoundError, ValidationError } = require('../errors/AppError');
+const {
+  SOLD_STATUSES_SQL, RETURNS_JOIN_SQL, NET_QUANTITY_SQL, NET_SALE_SQL,
+} = require('../helpers/soldLines');
 // FIX: dateFrom/dateTo llegan del frontend como fecha "de pared" en México
 // (ej. "2026-08-24"), pero se comparaban directo contra s.opened_at /
 // s.closed_at, que son hora del SERVIDOR (2h adelantada sobre México) —
 // mismo bug que ya se corrigió en orderService.js. Se usa el mismo módulo
 // compartido para no volver a desincronizar el criterio.
-const { toServerDayStart, toServerDayEnd } = require('../utils/timezone');
+const { toServerDayStart, toServerDayEnd, toServerRange } = require('../utils/timezone');
 
 // ─── Sesiones de caja — listado ────────────────────────────────────────────
 
@@ -346,4 +349,175 @@ const getCashSessionDetail = async ({ sessionId, branchId = null }) => {
   };
 };
 
-module.exports = { getCashSessions, getCashSessionDetail };
+// ─── Ventas y utilidad ─────────────────────────────────────────────────────
+
+// Utilidad bruta de lo vendido en un rango, agrupada por producto,
+// categoría, sucursal o proveedor (specs/04-reporte-ventas-y-utilidad.md).
+// Por cada línea de venta:
+//   venta neta = fórmula compartida de helpers/soldLines.js (la misma de
+//                Ventas → Productos vendidos)
+//   costo      = unidades netas × od.purchase_price (lo devuelto regresó al
+//                inventario, así que no cuenta como costo)
+//   utilidad   = venta neta − costo
+//   margen     = utilidad ÷ venta neta × 100; null si la venta neta es 0
+// Una línea con od.purchase_price = 0 es "sin costo" (spec 03): se cuenta y
+// se marca, o se excluye de todo con excludeNoCost.
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Cada agrupación: la columna de la línea que la define y cómo sacar el
+// nombre del grupo a partir de esa llave (alias g, sobre la fila agregada t).
+const PROFIT_GROUPS = {
+  product: {
+    key:  'od.product_id',
+    join: 'JOIN products g ON g.product_id = t.group_id',
+    cols: 'g.name AS name, g.sku AS sku, g.uom AS uom',
+  },
+  category: {
+    key:  'p.category_id',
+    join: 'LEFT JOIN categories g ON g.category_id = t.group_id',
+    cols: "COALESCE(g.name, 'Sin categoría') AS name",
+  },
+  branch: {
+    key:  'o.branch_id',
+    join: 'JOIN branches g ON g.branch_id = t.group_id',
+    cols: 'g.name AS name',
+  },
+  provider: {
+    key:  'p.provider_id',
+    join: 'JOIN providers g ON g.provider_id = t.group_id',
+    cols: 'g.name AS name',
+  },
+};
+
+const PROFIT_SORTS = { net_sales: 'net_sales', profit: 'profit', margin: 'margin' };
+
+const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
+const round2 = (value) => +Number(value).toFixed(2);
+
+// branchId = null → consolidado (admin central). Un usuario con sucursal
+// asignada llega aquí con la suya ya forzada por el controller.
+const getProfitReport = async ({
+  startDate,
+  endDate,
+  branchId = null,
+  categoryId = null,
+  groupBy = 'product',
+  sortBy = 'profit',
+  sortDir = 'desc',
+  excludeNoCost = false,
+  page = 1,
+  limit = 20,
+}) => {
+  if (!DATE_RE.test(startDate ?? '') || !DATE_RE.test(endDate ?? '')) {
+    throw new ValidationError('start_date y end_date son requeridos, formato YYYY-MM-DD');
+  }
+  if (startDate > endDate) throw new ValidationError('start_date no puede ser posterior a end_date');
+  if (branchId !== null && !isPositiveInt(branchId)) throw new ValidationError('branch_id inválido');
+  if (categoryId !== null && !isPositiveInt(categoryId)) throw new ValidationError('category_id inválido');
+
+  const group = PROFIT_GROUPS[groupBy];
+  if (!group) throw new ValidationError('group_by debe ser product, category, branch o provider');
+  const sortColumn = PROFIT_SORTS[sortBy];
+  if (!sortColumn) throw new ValidationError('sort_by debe ser net_sales, profit o margin');
+  if (sortDir !== 'asc' && sortDir !== 'desc') throw new ValidationError('sort_dir debe ser asc o desc');
+
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+
+  const where  = [SOLD_STATUSES_SQL, 'o.created_at BETWEEN ? AND ?'];
+  const params = await toServerRange(startDate, endDate);
+  if (branchId !== null)   { where.push('o.branch_id = ?');   params.push(branchId); }
+  if (categoryId !== null) { where.push('p.category_id = ?'); params.push(categoryId); }
+  if (excludeNoCost)       { where.push('od.purchase_price > 0'); }
+
+  // Una fila por línea de venta, con sus valores ya netos. Las tres
+  // consultas de abajo agregan sobre esto mismo.
+  const linesSql = `
+    SELECT ${group.key} AS group_id,
+           od.product_id,
+           od.purchase_price,
+           ${NET_QUANTITY_SQL} AS net_qty,
+           ${NET_SALE_SQL} AS net_sale,
+           (${NET_QUANTITY_SQL}) * od.purchase_price AS cost
+      FROM order_details od
+      JOIN orders o   ON o.order_id   = od.order_id
+      JOIN products p ON p.product_id = od.product_id
+      ${RETURNS_JOIN_SQL}
+     WHERE ${where.join(' AND ')}
+  `;
+
+  const totalsCols = `
+    COALESCE(SUM(l.net_sale), 0)                    AS net_sales,
+    COALESCE(SUM(l.cost), 0)                        AS cost,
+    COALESCE(SUM(l.net_sale) - SUM(l.cost), 0)      AS profit,
+    CASE WHEN ROUND(SUM(l.net_sale), 2) = 0 THEN NULL
+         ELSE (SUM(l.net_sale) - SUM(l.cost)) / SUM(l.net_sale) * 100 END AS margin,
+    COALESCE(SUM(l.purchase_price = 0), 0)          AS no_cost_lines,
+    COALESCE(SUM(CASE WHEN l.purchase_price = 0 THEN l.net_sale ELSE 0 END), 0) AS no_cost_net_sales
+  `;
+
+  // Sin margen ("—") siempre al final, en cualquier dirección; group_id
+  // desempata para que la paginación sea estable.
+  const [rows] = await db.query(
+    `SELECT t.*, ${group.cols}
+       FROM (
+         SELECT l.group_id,
+                ${totalsCols},
+                SUM(l.net_qty)               AS units,
+                COUNT(DISTINCT l.product_id) AS product_count
+           FROM (${linesSql}) l
+          GROUP BY l.group_id
+       ) t
+       ${group.join}
+      ORDER BY (t.${sortColumn} IS NULL), t.${sortColumn} ${sortDir.toUpperCase()}, t.group_id
+      LIMIT ? OFFSET ?`,
+    [...params, safeLimit, (safePage - 1) * safeLimit]
+  );
+
+  const [[{ total }]] = await db.query(
+    `SELECT COUNT(*) AS total FROM (
+       SELECT l.group_id FROM (${linesSql}) l GROUP BY l.group_id
+     ) t`,
+    params
+  );
+
+  // KPIs sobre todo el resultado del filtro, no solo la página
+  const [[summary]] = await db.query(
+    `SELECT ${totalsCols} FROM (${linesSql}) l`,
+    params
+  );
+
+  const toAmounts = (r) => ({
+    netSales: round2(r.net_sales),
+    cost:     round2(r.cost),
+    profit:   round2(r.profit),
+    margin:   r.margin === null ? null : round2(r.margin),
+    noCost: {
+      lines:    Number(r.no_cost_lines),
+      netSales: round2(r.no_cost_net_sales),
+    },
+  });
+
+  const data = rows.map(r => ({
+    groupId: r.group_id,
+    name:    r.name,
+    ...(groupBy === 'product'
+      ? { sku: r.sku, units: +Number(r.units).toFixed(3), uom: r.uom }
+      : { productCount: Number(r.product_count) }),
+    ...toAmounts(r),
+  }));
+
+  return {
+    data,
+    pagination: {
+      page:  safePage,
+      limit: safeLimit,
+      total: Number(total),
+      totalPages: Math.max(1, Math.ceil(Number(total) / safeLimit)),
+    },
+    summary: toAmounts(summary),
+  };
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport };

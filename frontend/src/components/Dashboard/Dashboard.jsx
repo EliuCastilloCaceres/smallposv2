@@ -4,8 +4,9 @@ import { useUser } from '../../context/UserContext'
 import useApi from '../../hooks/useApi'
 import api from '../../services/api'
 import { getImageUrl } from '../../utils/imageUrl'
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns'
+import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { DATE_PRESETS, getPresetRange, today } from '../../utils/dateRanges'
 import './dashboard.css'
 import { Navigate } from 'react-router-dom'
 
@@ -38,9 +39,6 @@ const fmtCompactCurrency = (n) => {
   }).format(val).replace(/\s+/g, '') // Intl mete un espacio entre el número y la "k"/"M" en es-MX
 }
 
-const toISO = (d) => format(d, 'yyyy-MM-dd')
-const today = () => toISO(new Date())
-
 const formatHour = (hour) => {
   if (hour === null || hour === undefined) return '—'
   const d = new Date()
@@ -53,24 +51,6 @@ const formatHour = (hour) => {
 const formatHourShort = (hour) => {
   const h12 = hour % 12 === 0 ? 12 : hour % 12
   return `${h12}${hour < 12 ? 'a' : 'p'}`
-}
-
-const getPresetRange = (preset, custom) => {
-  const now = new Date()
-  switch (preset) {
-    case 'week':
-      return {
-        start: toISO(startOfWeek(now, { weekStartsOn: 1 })),
-        end: toISO(endOfWeek(now, { weekStartsOn: 1 })),
-      }
-    case 'month':
-      return { start: toISO(startOfMonth(now)), end: toISO(endOfMonth(now)) }
-    case 'custom':
-      return { start: custom.start || today(), end: custom.end || today() }
-    case 'today':
-    default:
-      return { start: today(), end: today() }
-  }
 }
 
 // FIX: renombrado de PAYMENT_COLORS a CHART_COLORS — se reusa también
@@ -718,12 +698,7 @@ const FilterControls = ({
     )}
 
     <div className="dash-preset-group" role="tablist" aria-label="Rango de fechas">
-      {[
-        { id: 'today', label: 'Hoy' },
-        { id: 'week', label: 'Esta semana' },
-        { id: 'month', label: 'Este mes' },
-        { id: 'custom', label: 'Personalizado' },
-      ].map(p => (
+      {DATE_PRESETS.map(p => (
         <button
           key={p.id}
           role="tab"

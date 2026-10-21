@@ -20,4 +20,11 @@ router.get(
   reportController.getCashSessionDetail
 );
 
+// GET /reports/profit?start_date=&end_date=&branch_id=&category_id=&group_by=&sort_by=&sort_dir=&exclude_no_cost=&page=&limit=
+router.get(
+  '/profit',
+  requirePermission('reports', 'profit'),
+  reportController.getProfitReport
+);
+
 module.exports = router;

@@ -1,16 +1,29 @@
 // src/components/Reports/Reports.jsx
 import { useState } from 'react'
+import { Navigate } from 'react-router-dom'
+import { useUser } from '../../context/UserContext'
 import CashSessionsTab from './tabs/CashSessionsTab'
+import ProfitTab from './tabs/ProfitTab'
+import { getVisibleReportTabs } from './reportTabs'
 import './reports.css'
 
-const TABS = [
-  { id: 'cash-sessions', icon: 'bi-cash-stack', label: 'Sesiones de caja' },
-  // Próximas tabs del módulo: ventas, inventario, crédito/apartados,
-  // devoluciones — se agregan aquí conforme se construyan.
-]
+// Contenido de cada pestaña de reportTabs.js
+const TAB_CONTENT = {
+  'cash-sessions': CashSessionsTab,
+  profit:          ProfitTab,
+}
 
 const Reports = () => {
-  const [activeTab, setActiveTab] = useState('cash-sessions')
+  const { hasPermission } = useUser()
+  const tabs = getVisibleReportTabs(hasPermission)
+  const [activeTab, setActiveTab] = useState(tabs[0]?.id ?? null)
+
+  // Igual que el Dashboard sin dashboard.read: sin ningún permiso de
+  // reportes se manda al inicio
+  if (tabs.length === 0) return <Navigate to="/" replace />
+
+  const currentTab = tabs.some(tab => tab.id === activeTab) ? activeTab : tabs[0].id
+  const Content = TAB_CONTENT[currentTab]
 
   return (
     <div className="rpt-root">
@@ -24,12 +37,12 @@ const Reports = () => {
 
       {/* ── Tabs ── */}
       <div className="rpt-tabs" role="tablist">
-        {TABS.map(tab => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`rpt-tab ${activeTab === tab.id ? 'rpt-tab--active' : ''}`}
+            aria-selected={currentTab === tab.id}
+            className={`rpt-tab ${currentTab === tab.id ? 'rpt-tab--active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
           >
             <i className={`bi ${tab.icon}`} />
@@ -40,7 +53,7 @@ const Reports = () => {
 
       {/* ── Contenido ── */}
       <div className="rpt-tab-content">
-        {activeTab === 'cash-sessions' && <CashSessionsTab />}
+        <Content />
       </div>
     </div>
   )

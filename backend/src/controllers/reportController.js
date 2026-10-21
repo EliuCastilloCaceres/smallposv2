@@ -1,15 +1,21 @@
 // src/controllers/reportController.js
 const reportService = require('../services/reportService');
-const { resolveUnrestrictedBranchId } = require('../helpers/helper');
+const { resolveOptionalBranchId } = require('../helpers/helper');
+
+// Alcance por sucursal de todo el módulo, igual que el Dashboard: un usuario
+// con sucursal asignada ve solo la suya aunque mande otro branch_id; el
+// admin central ve todas o filtra por una (resolveOptionalBranchId).
+// [FIX] Sesiones de caja usaba resolveUnrestrictedBranchId, que nunca lee la
+// sucursal del usuario: sin branch_id devolvía todas, y la pestaña no lo
+// manda para quien no es admin central. Ver specs/04-reporte-ventas-y-utilidad.md,
+// requisito 9.
+
+const intOrNull = (value) => (value ? parseInt(value) : null);
 
 // GET /reports/cash-sessions
-// [NOTA] Mismo criterio que layawayController.getByBranch: listado sin
-// restricción forzada de sucursal propia — un usuario con reports:basic ve
-// sus propias sesiones si tiene sucursal asignada, o todas si es admin
-// central (resolveUnrestrictedBranchId ya resuelve esa diferencia).
 const getCashSessions = async (req, res, next) => {
   try {
-    const branchId = resolveUnrestrictedBranchId(req);
+    const branchId = resolveOptionalBranchId(req);
     const {
       cash_register_id: cashRegisterId,
       user_id: userId,
@@ -22,8 +28,8 @@ const getCashSessions = async (req, res, next) => {
 
     const result = await reportService.getCashSessions({
       branchId,
-      cashRegisterId: cashRegisterId ? parseInt(cashRegisterId) : null,
-      userId:         userId ? parseInt(userId) : null,
+      cashRegisterId: intOrNull(cashRegisterId),
+      userId:         intOrNull(userId),
       dateFrom:       dateFrom || null,
       dateTo:         dateTo || null,
       onlyWithDifference: onlyWithDifference === 'true' || onlyWithDifference === '1',
@@ -36,9 +42,10 @@ const getCashSessions = async (req, res, next) => {
 };
 
 // GET /reports/cash-sessions/:sessionId
+// Una sesión de otra sucursal responde igual que una que no existe (404).
 const getCashSessionDetail = async (req, res, next) => {
   try {
-    const branchId = resolveUnrestrictedBranchId(req);
+    const branchId = resolveOptionalBranchId(req);
     const data = await reportService.getCashSessionDetail({
       sessionId: parseInt(req.params.sessionId),
       branchId,
@@ -47,4 +54,36 @@ const getCashSessionDetail = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getCashSessions, getCashSessionDetail };
+// GET /reports/profit
+const getProfitReport = async (req, res, next) => {
+  try {
+    const {
+      start_date: startDate,
+      end_date: endDate,
+      category_id: categoryId,
+      group_by: groupBy,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+      exclude_no_cost: excludeNoCost,
+      page,
+      limit,
+    } = req.query;
+
+    const result = await reportService.getProfitReport({
+      startDate,
+      endDate,
+      branchId:      resolveOptionalBranchId(req),
+      categoryId:    intOrNull(categoryId),
+      groupBy:       groupBy || 'product',
+      sortBy:        sortBy  || 'profit',
+      sortDir:       sortDir || 'desc',
+      excludeNoCost: excludeNoCost === 'true' || excludeNoCost === '1',
+      page:  intOrNull(page)  ?? 1,
+      limit: intOrNull(limit) ?? 20,
+    });
+
+    res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport };

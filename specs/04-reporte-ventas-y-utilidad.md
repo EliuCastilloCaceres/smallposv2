@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-20 | 2026-10-20 |
+| **Terminada** | 2026-10-20 | 2026-10-20 |
 
 ## Objetivo
 
@@ -116,33 +116,33 @@ La utilidad **neta** (bruta menos gastos) no entra aquí: llega con el módulo d
 
 ## Tareas
 
-- [ ] **T1. Permisos** (requisitos 1–3).
+- [x] **T1. Permisos** (requisitos 1–3).
   — tests: después de migrar, `reports.profit` existe y lo tienen superadmin, admin y supervisor, pero no el cajero ni el almacenista; `reports.advanced` y sus asignaciones ya no existen; con la base sin migrar, un rol creado por el usuario que tenía `reports.advanced` lo pierde y no recibe `reports.profit`.
-- [ ] **T2. Endpoint `GET /api/reports/profit`** (requisitos 7, 8 y 10–20, parte del backend).
+- [x] **T2. Endpoint `GET /api/reports/profit`** (requisitos 7, 8 y 10–20, parte del backend).
   — tests: con ventas conocidas, los KPIs y las filas cuadran con el cálculo a mano, incluyendo descuento de orden, devolución parcial con tarifa de restock y una venta cancelada que no cuenta; las ventas netas coinciden con las del Dashboard; una línea sin costo se cuenta y se marca, y con el filtro se excluye; las cuatro agrupaciones (con unidades al agrupar por producto y conteo de productos en las demás), el orden y la paginación (los KPIs no cambian entre páginas); las variantes se suman en su producto; un usuario de sucursal no ve otras aunque mande `branch_id`; el administrador central ve el consolidado y filtra; una venta de las 23:30 hora de México cuenta en ese día; el cajero recibe 403.
-- [ ] **T3. Alcance de Sesiones de caja** (requisito 9).
+- [x] **T3. Alcance de Sesiones de caja** (requisito 9).
   — tests: un usuario de la sucursal 1 solo ve sesiones de la sucursal 1, sin mandar `branch_id` y mandando el de otra; el detalle de una sesión de otra sucursal responde como una que no existe; el administrador central sigue viendo todas y filtrando por sucursal.
-- [ ] **T4. Acceso al módulo en el frontend** (requisitos 4–6).
+- [x] **T4. Acceso al módulo en el frontend** (requisitos 4–6).
   — tests: con solo `reports.profit`, el menú muestra Reportes; sin permisos de reportes, `/reports` manda al inicio; cada pestaña aparece solo con su permiso, y el módulo abre en la primera permitida.
-- [ ] **T5. Pestaña Ventas y utilidad y presets compartidos** (requisitos 14–19 y 21, parte del frontend).
+- [x] **T5. Pestaña Ventas y utilidad y presets compartidos** (requisitos 14–19 y 21, parte del frontend).
   — tests: los presets devuelven el rango correcto (incluida una semana que empieza en lunes) y el Dashboard los sigue usando; la pestaña empieza en Mes; con la respuesta de la API simulada, muestra los KPIs y las filas; el margen es "—" con venta neta 0; aparecen el aviso y la marca de ventas sin costo; el filtro de excluir empieza apagado y manda su parámetro al encenderlo; las unidades aparecen solo al agrupar por producto; el selector de sucursal y la agrupación por sucursal solo aparecen para el administrador central.
-- [ ] **T6. Documentación en `shared-features/`** (requisito 22).
+- [x] **T6. Documentación en `shared-features/`** (requisito 22).
   — tests: no lleva tests de código.
 
 ## Criterios de aceptación
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | Un supervisor ve Reportes con las dos pestañas; un cajero, solo Sesiones de caja; un almacenista no ve Reportes, y si entra a `/reports` vuelve al inicio. | _(se llena al cerrar)_ |
-| 2 | En la base de desarrollo, con los filtros apagados, las ventas netas del reporte coinciden con las del Dashboard para el mismo rango y sucursal. | _(se llena al cerrar)_ |
-| 3 | La utilidad de una venta con descuento de orden y una devolución parcial, calculada a mano, coincide con la del reporte. | _(se llena al cerrar)_ |
-| 4 | Una venta sin costo aparece marcada, y con "Excluir ventas sin costo" deja de contar en los KPIs. | _(se llena al cerrar)_ |
-| 5 | Un usuario con sucursal asignada no puede ver la utilidad de otra sucursal, ni mandando otro `branch_id` a la API. | _(se llena al cerrar)_ |
-| 6 | Un usuario con sucursal asignada ve en Sesiones de caja solo las de su sucursal, en pantalla y por la API. | _(se llena al cerrar)_ |
-| 7 | En la base de desarrollo ya no existe `reports.advanced`, y en Configuración → Roles aparece "Utilidad" dentro de Reportes. | _(se llena al cerrar)_ |
-| 8 | El Dashboard muestra los mismos datos que antes para cada preset. | _(se llena al cerrar)_ |
-| 9 | `shared-features/feat-reporte-ventas-y-utilidad.md` existe y está en el índice. | _(se llena al cerrar)_ |
-| 10 | Los tests del backend y del frontend pasan. | _(se llena al cerrar)_ |
+| 1 | Un supervisor ve Reportes con las dos pestañas; un cajero, solo Sesiones de caja; un almacenista no ve Reportes, y si entra a `/reports` vuelve al inicio. | 2026-10-20: en la base de desarrollo, después de la migración 003, el supervisor tiene `reports.basic` y `reports.profit`, el cajero solo `reports.basic` y el almacenista ninguno. Tests `Reports.test.jsx` (las dos pestañas con los dos permisos, solo Sesiones de caja con `reports.basic`, sin permisos de reportes manda al inicio) y `App.test.jsx` (Reportes en el menú con cualquiera de los dos permisos, y no sin ellos). La base de desarrollo solo tiene al usuario `superadmin`, así que no se probó con usuarios de cada rol en pantalla. |
+| 2 | En la base de desarrollo, con los filtros apagados, las ventas netas del reporte coinciden con las del Dashboard para el mismo rango y sucursal. | 2026-10-20, base de desarrollo (31 ventas): las ventas netas del reporte y las del Dashboard coinciden en Hoy ($2,300.00), Esta semana ($2,402.00), Este mes ($8,288.64) y un rango de enero a octubre ($8,288.64), en el consolidado y con la sucursal 1. Una consulta SQL directa da los mismos $8,288.64 de venta y $5,094.59 de costo. |
+| 3 | La utilidad de una venta con descuento de orden y una devolución parcial, calculada a mano, coincide con la del reporte. | Test `computes the KPIs with order discount, partial return with restock fee and without the cancelled sale` (`profit.test.js`). La venta tiene A ×2 a $100 y B ×1 a $50, con 10% de descuento de orden (total $225) y la devolución de 1 A con reembolso de $80. A mano: A = 200 × 0.9 − 80 = $100, con costo $40 y utilidad $60; B = 50 × 0.9 = $45, con costo $20 y utilidad $25. Las filas del reporte coinciden, y la venta suma $145 = 225 − 80. La base de desarrollo no tiene ventas con descuento de orden ni devoluciones. |
+| 4 | Una venta sin costo aparece marcada, y con "Excluir ventas sin costo" deja de contar en los KPIs. | Tests `profit.test.js`: una línea sin costo de $90 se cuenta y aparece en `noCost`; con `exclude_no_cost` los KPIs pasan de $525 / $170 / $355 a $435 / $170 / $265. Test `ProfitTab.test.jsx`: aparecen el aviso y la marca "Sin costo" en la fila, y el filtro empieza apagado y manda su parámetro al encenderlo. La base de desarrollo no tiene líneas sin costo (0 de 107). |
+| 5 | Un usuario con sucursal asignada no puede ver la utilidad de otra sucursal, ni mandando otro `branch_id` a la API. | Test `forces the branch of a user with an assigned branch, even if another branch_id is sent` (`profit.test.js`): un supervisor de la sucursal 1 que manda el `branch_id` de otra sucursal recibe solo la suya ($425), y al agrupar por sucursal solo aparece la 1. La base de desarrollo tiene una sola sucursal. |
+| 6 | Un usuario con sucursal asignada ve en Sesiones de caja solo las de su sucursal, en pantalla y por la API. | Tests `cash-sessions-scope.test.js`: un cajero de la sucursal 1 solo ve sus sesiones, sin mandar `branch_id` y mandando el de otra sucursal. El detalle de una sesión de otra sucursal responde igual que una que no existe (404, mismo cuerpo), y el administrador central ve todas y filtra. La pestaña usa ese mismo endpoint sin mandar `branch_id` para quien no es administrador central, así que en pantalla aplica la misma regla. La base de desarrollo tiene una sola sucursal. |
+| 7 | En la base de desarrollo ya no existe `reports.advanced`, y en Configuración → Roles aparece "Utilidad" dentro de Reportes. | 2026-10-20: el backend de desarrollo aplicó la migración `003` al reiniciarse (22:52:26), y `npm run migrate` dice "Migraciones al día". En `permissions` ya no existe `reports.advanced` y no quedan asignaciones huérfanas. `GET /api/permissions`, que alimenta Configuración → Roles, trae `reports.basic` y `reports.profit` en el módulo Reportes, y `PermissionsModal.jsx` muestra `profit` como "Utilidad". No se revisó la pantalla en el navegador. |
+| 8 | El Dashboard muestra los mismos datos que antes para cada preset. | 2026-10-20: el backend del Dashboard no cambió. El `getPresetRange` anterior (de `HEAD`) y el de `utils/dateRanges.js` dan el mismo rango en 6,570 comparaciones: los cuatro presets, cada día de 2026 a las 00:05, 12:00 y 23:55, en las zonas America/Mexico_City, America/Merida y UTC, sin diferencias. Test `Dashboard.test.jsx`: el Dashboard pide el rango de cada preset compartido. |
+| 9 | `shared-features/feat-reporte-ventas-y-utilidad.md` existe y está en el índice. | 2026-10-20: el archivo existe y está en la tabla del índice (`sf-index.md`). Se commitea junto con el resto de la spec. |
+| 10 | Los tests del backend y del frontend pasan. | 2026-10-20: backend 77/77 (16 archivos), frontend 52/52 (12 archivos). |
 
 ## Dudas abiertas
 
@@ -155,3 +155,10 @@ La utilidad **neta** (bruta menos gastos) no entra aquí: llega con el módulo d
 | 2026-10-20 | Creación de la spec. | — |
 | 2026-10-20 | Se resuelven las 7 dudas: solo se crea `reports.profit` (cada spec crea el permiso de su reporte); se corrige en esta spec el alcance de Sesiones de caja; "Excluir ventas sin costo" empieza apagado; fechas con presets como el Dashboard, empezando en Mes, con `getPresetRange` compartido; unidades solo al agrupar por producto (en las demás, conteo de productos); variantes sumadas en su producto; se documenta en `shared-features/` con todo, incluidos los permisos. Al revisar Sesiones de caja se confirmó que hoy un usuario con sucursal ve en pantalla las de todas las sucursales, no solo por la API. | Usuario |
 | 2026-10-20 | Se aprueba la spec: pasa a **Lista**. | Usuario |
+| 2026-10-20 | T1 terminada: migración `003-add-reports-profit-permission.sql` (crea `reports.profit`, se lo da a superadmin, admin y supervisor, y borra `reports.advanced`) y la etiqueta "Utilidad" en Permisos. | Usuario |
+| 2026-10-20 | T2 terminada: `GET /api/reports/profit`. La fórmula de venta neta pasa a `backend/src/helpers/soldLines.js`, que también usa Ventas → Productos vendidos (requisito 12). | Usuario |
+| 2026-10-20 | T3 terminada: Sesiones de caja usa `resolveOptionalBranchId` en el listado y el detalle. | Usuario |
+| 2026-10-20 | T4 y T5 terminadas: `Reports/reportTabs.js` (pestañas y permisos), guard de `/reports`, menú, pestaña `ProfitTab.jsx` y presets compartidos en `utils/dateRanges.js`. | Usuario |
+| 2026-10-20 | T6 terminada: `shared-features/feat-reporte-ventas-y-utilidad.md`, agregado al índice. Sus notas para portar se revisaron contra smallpos-saas: allá `reports.advanced` ya no existe, el permiso nuevo no les llega solo a los Supervisor de los tenants existentes, y Sesiones de caja ya respeta la sucursal del usuario. | Usuario |
+| 2026-10-20 | Evidencia de los 10 criterios de aceptación: 2, 7 y 8 contra la base de desarrollo y el código anterior; 1, 3, 4, 5 y 6 con sus tests, porque la base de desarrollo solo tiene al superadmin, una sucursal, y ninguna venta con descuento, devolución o sin costo. | Usuario |
+| 2026-10-20 | Pasa a **Terminada**. Toda la spec va en un solo commit. | Usuario |

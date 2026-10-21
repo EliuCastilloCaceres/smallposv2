@@ -35,7 +35,7 @@ const ACTION_LABELS = {
   adjust:   'Ajustar',
   transfer: 'Traspasar',
   basic:    'Básico',
-  advanced: 'Avanzado',
+  profit:   'Utilidad',
 }
 
 const MODULE_ICONS = {

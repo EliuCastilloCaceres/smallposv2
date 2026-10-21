@@ -8,6 +8,9 @@ const db = require('../config/db');
 const stockService = require('./stockService');
 const creditService = require('./creditService');
 const { getCatalogCosts } = require('../helpers/catalogCosts');
+const {
+  SOLD_STATUSES_SQL, RETURNS_JOIN_SQL, NET_QUANTITY_SQL, NET_SALE_SQL,
+} = require('../helpers/soldLines');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
 // FIX: buildOrdersFilter y buildSoldProductsFilter comparaban startDate/
 // endDate (fecha "de pared" en México, lo que manda el frontend) directo
@@ -687,19 +690,12 @@ const getCashiers = async ({ branchId, seeAllBranches = false }) => {
 // en el listado de ventas hacía mal).
 
 const buildSoldProductsFilter = async ({ branchId, startDate, endDate, categoryId, providerId, userId, search }) => {
-  // FIX: incluye 'partial_refund' — una orden con devolución parcial sigue
-  // aportando ingreso real por lo no devuelto; se resta lo devuelto más
-  // abajo en getSoldProducts, no se excluye la orden entera.
+  // Estados que cuentan: ver SOLD_STATUSES_SQL en helpers/soldLines.js.
   //
-  // FIX 2: también incluye 'refunded' — devolver todas las unidades de un
-  // producto (allReturned en returnService) no implica reembolsar el 100%
-  // del dinero (tarifa de restock). El neteo de abajo ya da $0 cuando el
-  // reembolso sí fue del 100% del dinero.
-  //
-  // FIX 3: mismo bug de zona horaria que buildOrdersFilter — el rango se
+  // FIX: mismo bug de zona horaria que buildOrdersFilter — el rango se
   // traduce a hora del servidor con toServerRange antes de compararlo
   // contra o.created_at.
-  let where = "WHERE o.status IN ('completed', 'partial_refund', 'refunded') AND o.created_at BETWEEN ? AND ?";
+  let where = `WHERE ${SOLD_STATUSES_SQL} AND o.created_at BETWEEN ? AND ?`;
   const params = await toServerRange(startDate, endDate);
 
   if (branchId) {
@@ -728,31 +724,6 @@ const buildSoldProductsFilter = async ({ branchId, startDate, endDate, categoryI
   return { where, params };
 };
 
-// Subquery reusado por getSoldProducts (tabla + totales): prorratea el
-// amount_refunded REAL de cada devolución entre sus líneas usando el valor
-// de lista de cada línea DENTRO de esa devolución como peso — no asume
-// reembolso al 100%. Si se cobró tarifa de restock, la diferencia entre el
-// valor de lista y lo realmente reembolsado se queda como ingreso del
-// producto en vez de restarse de más. Ver comentario extendido en
-// getSoldProducts.
-const RETURN_ATTRIBUTION_SUBQUERY = `
-  SELECT r.order_id, rd.product_id, rd.variant_id,
-         SUM(rd.quantity) AS ret_qty,
-         SUM(
-           r.amount_refunded * (rd.quantity * rd.unit_price)
-           / NULLIF(rf.face_value, 0)
-         ) AS ret_amount_actual
-  FROM return_details rd
-  JOIN returns r ON rd.return_id = r.return_id
-  JOIN (
-    SELECT return_id, SUM(quantity * unit_price) AS face_value
-    FROM return_details
-    GROUP BY return_id
-  ) rf ON rf.return_id = rd.return_id
-  WHERE r.status = 'completed'
-  GROUP BY r.order_id, rd.product_id, rd.variant_id
-`;
-
 const getSoldProducts = async ({
   branchId, startDate, endDate, categoryId = null, providerId = null, userId = null, search,
   page = 1, limit = 20,
@@ -777,47 +748,22 @@ const getSoldProducts = async ({
     params
   );
 
-  // total_sold = subtotal (unit_price * quantity) neto del descuento del
-  // renglón, prorrateado por el descuento a nivel de orden. od.discount
-  // siempre llega en 0 desde el PaymentModal (el descuento real se aplica
-  // a nivel de orden completa: orders.discount / orders.total), así que
-  // restarlo aquí no hacía nada. Usamos o.total/o.subtotal como el % de
-  // la orden que realmente se cobró y lo aplicamos a cada renglón: una
-  // orden con 100% de descuento (total = 0) aporta $0 de total_sold por
-  // cada producto.
-  //
-  // FIX: se resta también lo devuelto. quantity_sold SÍ se reduce por el
-  // total de unidades devueltas —a diferencia del descuento, el producto
-  // físicamente regresó al inventario (restoreSaleStock), así que ya no
-  // cuenta como vendido neto.
-  //
-  // FIX 2: el DINERO no se resta a valor de lista completo — eso asume
-  // reembolso al 100%. Se usa RETURN_ATTRIBUTION_SUBQUERY, que prorratea
-  // el amount_refunded REAL (ya neto de cualquier tarifa de restock) entre
-  // las líneas de esa devolución, y se resta DESPUÉS de aplicar el ratio
-  // de descuento de la orden — restarlo antes le aplicaría el descuento de
-  // orden dos veces a un monto que ya está en dólares finales. Sumado por
-  // orden esto da exactamente o.total - amount_refunded, el mismo neto que
-  // usa el dashboard (getKpis), así que ambos cuadran entre sí.
+  // quantity_sold y total_sold son las unidades y la venta neta de cada
+  // línea (descuento de orden prorrateado, menos lo devuelto), con la
+  // fórmula compartida de helpers/soldLines.js. Sumado por orden da
+  // o.total - amount_refunded, el mismo neto del dashboard (getKpis).
   const [rows] = await db.query(
     `SELECT p.product_id, p.name, p.sku, p.uom,
             c.category_id, c.name AS category_name, c.color AS category_color,
             pr.provider_id, pr.name AS provider_name,
-            SUM(od.quantity - COALESCE(ret.ret_qty, 0)) AS quantity_sold,
-            SUM(
-              (od.subtotal - od.discount) *
-              CASE WHEN o.subtotal > 0 THEN o.total / o.subtotal ELSE 0 END
-              - COALESCE(ret.ret_amount_actual, 0)
-            ) AS total_sold
+            SUM(${NET_QUANTITY_SQL}) AS quantity_sold,
+            SUM(${NET_SALE_SQL}) AS total_sold
      FROM order_details od
      JOIN orders o          ON o.order_id     = od.order_id
      JOIN products p        ON p.product_id   = od.product_id
      LEFT JOIN categories c ON c.category_id  = p.category_id
      LEFT JOIN providers pr ON pr.provider_id = p.provider_id
-     LEFT JOIN (${RETURN_ATTRIBUTION_SUBQUERY}) ret
-          ON ret.order_id = od.order_id
-         AND ret.product_id = od.product_id
-         AND ret.variant_id <=> od.variant_id
+     ${RETURNS_JOIN_SQL}
      ${where}
      GROUP BY p.product_id
      ORDER BY quantity_sold DESC
@@ -838,19 +784,12 @@ const getSoldProducts = async ({
   // descompuesto: es la suma de lo que aportó cada producto filtrado,
   // no un corte de caja.
   const [[{ total_items, total_amount }]] = await db.query(
-    `SELECT COALESCE(SUM(od.quantity - COALESCE(ret.ret_qty, 0)), 0) AS total_items,
-            COALESCE(SUM(
-              (od.subtotal - od.discount) *
-              CASE WHEN o.subtotal > 0 THEN o.total / o.subtotal ELSE 0 END
-              - COALESCE(ret.ret_amount_actual, 0)
-            ), 0) AS total_amount
+    `SELECT COALESCE(SUM(${NET_QUANTITY_SQL}), 0) AS total_items,
+            COALESCE(SUM(${NET_SALE_SQL}), 0) AS total_amount
      FROM order_details od
      JOIN orders o   ON o.order_id   = od.order_id
      JOIN products p ON p.product_id = od.product_id
-     LEFT JOIN (${RETURN_ATTRIBUTION_SUBQUERY}) ret
-          ON ret.order_id = od.order_id
-         AND ret.product_id = od.product_id
-         AND ret.variant_id <=> od.variant_id
+     ${RETURNS_JOIN_SQL}
      ${where}`,
     params
   );

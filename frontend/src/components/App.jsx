@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import { useBranch } from '../context/BranchContext'
+import { getVisibleReportTabs } from './Reports/reportTabs'
 import './app.css'
 
 function App() {
@@ -38,9 +39,10 @@ function App() {
     { to: '/layaways',           icon: 'bi-bookmark-check',        label: 'Apartados',    perm: ['layaway',   'read']  },
     { to: '/credits',            icon: 'bi-clock-history',         label: 'Créditos',     perm: ['credit',    'read']  },
      { to: '/returns',           icon: 'bi-arrow-return-left',     label: 'Devoluciones', perm: ['returns',    'read']  },
-    { to: '/reports',            icon: 'bi-bar-chart-line',        label: 'Reportes',     perm: ['reports',   'basic'] },
+    // Reportes: con al menos un permiso de reportes (ver Reports/reportTabs.js)
+    { to: '/reports',            icon: 'bi-bar-chart-line',        label: 'Reportes',     allowed: getVisibleReportTabs(hasPermission).length > 0 },
     { to: '/users',              icon: 'bi-person',                label: 'Usuarios',     perm: ['users',     'read']  },
-  ].filter(item => hasPermission(...item.perm))
+  ].filter(item => item.allowed ?? hasPermission(...item.perm))
 
   return (
     <div className="app-root">

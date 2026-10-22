@@ -13,6 +13,7 @@ vi.mock('../../context/UserContext', () => ({
 // El contenido de cada pestaña se prueba aparte
 vi.mock('./tabs/CashSessionsTab', () => ({ default: () => <p>contenido sesiones</p> }))
 vi.mock('./tabs/ProfitTab',       () => ({ default: () => <p>contenido utilidad</p> }))
+vi.mock('./tabs/TrendTab',        () => ({ default: () => <p>contenido tendencia</p> }))
 
 const renderReports = () => render(
   <MemoryRouter initialEntries={['/reports']}>
@@ -65,5 +66,24 @@ describe('Reports module access', () => {
 
     expect(tabNames()).toEqual(['Ventas y utilidad'])
     expect(screen.getByText('contenido utilidad')).toBeInTheDocument()
+  })
+
+  it('shows the three tabs with every report permission, trend last', () => {
+    permissions = ['reports.basic', 'reports.profit', 'reports.trend']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Sesiones de caja', 'Ventas y utilidad', 'Tendencia de ventas'])
+    fireEvent.click(screen.getByRole('tab', { name: 'Tendencia de ventas' }))
+    expect(screen.getByText('contenido tendencia')).toBeInTheDocument()
+  })
+
+  it('opens on the trend tab when it is the only one allowed', () => {
+    permissions = ['reports.trend']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Tendencia de ventas'])
+    expect(screen.getByText('contenido tendencia')).toBeInTheDocument()
   })
 })

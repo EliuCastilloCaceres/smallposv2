@@ -36,6 +36,7 @@ const ACTION_LABELS = {
   transfer: 'Traspasar',
   basic:    'Básico',
   profit:   'Utilidad',
+  trend:    'Tendencia',
 }
 
 const MODULE_ICONS = {

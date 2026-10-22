@@ -27,4 +27,11 @@ router.get(
   reportController.getProfitReport
 );
 
+// GET /reports/trend?start_date=&end_date=&granularity=&compare=&branch_id=
+router.get(
+  '/trend',
+  requirePermission('reports', 'trend'),
+  reportController.getTrendReport
+);
+
 module.exports = router;

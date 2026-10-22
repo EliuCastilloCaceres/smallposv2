@@ -7,6 +7,7 @@ import { getImageUrl } from '../../utils/imageUrl'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { DATE_PRESETS, getPresetRange, today } from '../../utils/dateRanges'
+import { CHART_COLORS } from '../../utils/chartColors'
 import './dashboard.css'
 import { Navigate } from 'react-router-dom'
 
@@ -54,11 +55,8 @@ const formatHourShort = (hour) => {
 }
 
 // FIX: renombrado de PAYMENT_COLORS a CHART_COLORS — se reusa también
-// para las series por sucursal de la gráfica de ventas por hora
-const CHART_COLORS = [
-  '#4f8ef7', '#10b981', '#f59e0b', '#8b5cf6',
-  '#ef4444', '#0891b2', '#db2777', '#65a30d',
-]
+// para las series por sucursal de la gráfica de ventas por hora. Vive en
+// utils/chartColors.js, compartida con la Tendencia de ventas.
 
 // FIX: hook para detectar móvil por ancho de viewport (mismo breakpoint
 // de 640px que ya usa el resto del dashboard para alternar tabla/tarjetas).

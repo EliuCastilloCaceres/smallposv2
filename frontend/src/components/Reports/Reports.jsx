@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom'
 import { useUser } from '../../context/UserContext'
 import CashSessionsTab from './tabs/CashSessionsTab'
 import ProfitTab from './tabs/ProfitTab'
+import TrendTab from './tabs/TrendTab'
 import { getVisibleReportTabs } from './reportTabs'
 import './reports.css'
 
@@ -11,6 +12,7 @@ import './reports.css'
 const TAB_CONTENT = {
   'cash-sessions': CashSessionsTab,
   profit:          ProfitTab,
+  trend:           TrendTab,
 }
 
 const Reports = () => {

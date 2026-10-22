@@ -262,3 +262,35 @@
 
 .rpt-table--static tbody tr { cursor: default; }
 .rpt-card--static { cursor: default; }
+
+/* ── Tendencia de ventas ─────────────────────────────────── */
+.rpt-preset:disabled { opacity: .4; cursor: not-allowed; }
+.rpt-preset:disabled:hover { color: var(--rpt-muted); }
+
+@media (min-width: 640px) {
+  .rpt-kpis--three { grid-template-columns: repeat(3, 1fr); }
+  .rpt-kpis--two   { grid-template-columns: repeat(2, 1fr); }
+}
+.rpt-kpi__sub { font-size: 12px; color: var(--rpt-muted); }
+
+.rpt-chart {
+  padding: 12px 8px 4px 0; background: var(--rpt-surface);
+  border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
+  transition: opacity .15s;
+}
+.rpt-chart--loading { opacity: .5; }
+
+.rpt-chart-tip {
+  display: flex; flex-direction: column; gap: 6px; min-width: 200px; padding: 10px 12px;
+  background: var(--rpt-surface); border: 1px solid var(--rpt-border);
+  border-radius: var(--rpt-radius-sm); box-shadow: 0 4px 12px rgba(15,23,42,.12); font-size: 12px;
+}
+.rpt-chart-tip__title { font-size: 13px; color: var(--rpt-text); }
+.rpt-chart-tip__marks { display: flex; gap: 6px; flex-wrap: wrap; }
+.rpt-chart-tip__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--rpt-muted); }
+.rpt-chart-tip__row span { display: inline-flex; align-items: center; gap: 6px; }
+.rpt-chart-tip__row strong { color: var(--rpt-text); font-variant-numeric: tabular-nums; }
+.rpt-chart-tip__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.rpt-chart-tip__dot--dashed { border: 2px dashed #4f8ef7; background: transparent; opacity: .6; width: 6px; height: 6px; }
+
+.rpt-flag--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }

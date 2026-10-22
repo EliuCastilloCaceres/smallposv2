@@ -7,6 +7,8 @@ const { ValidationError } = require('../errors/AppError');
 // duplicado en dos archivos es justo lo que causó que se desincronizaran
 // antes (ver src/utils/timezone.js para el porqué del offset).
 const { createdAtMx, toServerRange } = require('../utils/timezone');
+const { SOLD_STATUSES_SQL } = require('../helpers/soldLines');
+const { ORDER_REFUNDS_JOIN_SQL, ORDER_NET_SALE_SQL } = require('../helpers/orderNet');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -112,6 +114,9 @@ const pctChange = (current, previous) => {
 // ya reduce correctamente a $0 cuando el reembolso fue del 100% del dinero,
 // así que no hace falta excluir el status aparte — excluirlo tiraba a la
 // basura ese ingreso por tarifa de restock en vez de contarlo.
+//
+// El ingreso neto (helpers/orderNet.js) y los estados (SOLD_STATUSES_SQL)
+// se comparten con el reporte de Tendencia de ventas.
 const getKpis = async ({ startDate, endDate, branchId }) => {
   const range = await toRange(startDate, endDate);
   const branchClause = branchId ? 'AND o.branch_id = ?' : '';
@@ -120,7 +125,7 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
   const [[totals]] = await db.query(
     `SELECT
        COUNT(o.order_id)          AS orders_total,
-       COALESCE(SUM(o.total - COALESCE(rf.refunded, 0)), 0)  AS income,
+       COALESCE(SUM(${ORDER_NET_SALE_SQL}), 0)  AS income,
        COALESCE(SUM(o.discount), 0) AS total_discounts,
        COALESCE(SUM(qty.total_units - COALESCE(rq.returned_units, 0)), 0) AS total_units_sold
      FROM orders o
@@ -128,11 +133,7 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
        SELECT order_id, SUM(quantity) AS total_units
        FROM order_details GROUP BY order_id
      ) qty ON qty.order_id = o.order_id
-     LEFT JOIN (
-       SELECT order_id, SUM(amount_refunded) AS refunded
-       FROM returns WHERE status = 'completed'
-       GROUP BY order_id
-     ) rf ON rf.order_id = o.order_id
+     ${ORDER_REFUNDS_JOIN_SQL}
      LEFT JOIN (
        SELECT r.order_id, SUM(rd.quantity) AS returned_units
        FROM return_details rd
@@ -141,7 +142,7 @@ const getKpis = async ({ startDate, endDate, branchId }) => {
        GROUP BY r.order_id
      ) rq ON rq.order_id = o.order_id
      WHERE o.created_at BETWEEN ? AND ?
-       AND o.status IN ('completed', 'partial_refund', 'refunded')
+       AND ${SOLD_STATUSES_SQL}
        ${branchClause}`,
     [...range, ...branchParam]
   );

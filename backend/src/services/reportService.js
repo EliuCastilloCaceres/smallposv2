@@ -23,12 +23,14 @@ const { NotFoundError, ValidationError } = require('../errors/AppError');
 const {
   SOLD_STATUSES_SQL, RETURNS_JOIN_SQL, NET_QUANTITY_SQL, NET_SALE_SQL,
 } = require('../helpers/soldLines');
+const { ORDER_REFUNDS_JOIN_SQL, ORDER_NET_SALE_SQL } = require('../helpers/orderNet');
+const periods = require('../utils/periods');
 // FIX: dateFrom/dateTo llegan del frontend como fecha "de pared" en México
 // (ej. "2026-08-24"), pero se comparaban directo contra s.opened_at /
 // s.closed_at, que son hora del SERVIDOR (2h adelantada sobre México) —
 // mismo bug que ya se corrigió en orderService.js. Se usa el mismo módulo
 // compartido para no volver a desincronizar el criterio.
-const { toServerDayStart, toServerDayEnd, toServerRange } = require('../utils/timezone');
+const { toServerDayStart, toServerDayEnd, toServerRange, createdAtMx } = require('../utils/timezone');
 
 // ─── Sesiones de caja — listado ────────────────────────────────────────────
 
@@ -520,4 +522,235 @@ const getProfitReport = async ({
   };
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport };
+// ─── Tendencia de ventas ───────────────────────────────────────────────────
+
+// Monto, número de ventas, utilidad y ticket por día, semana o mes, con
+// comparación contra el año anterior o por sucursal
+// (specs/05-tendencia-de-ventas.md). Monto y ventas usan el ingreso neto del
+// Dashboard (helpers/orderNet.js); la utilidad, la venta neta menos el costo
+// por línea de Ventas y utilidad (helpers/soldLines.js).
+
+const TREND_COMPARES = ['none', 'previous_year', 'branch'];
+const GRANULARITY_LABELS = { day: 'Por día', week: 'Por semana', month: 'Por mes' };
+
+// Periodo de cada venta, en hora de México: el día, el lunes de su semana o
+// el día 1 de su mes
+const MX_DAY_SQL = `DATE(${createdAtMx('o.created_at')})`;
+const TREND_BUCKETS = {
+  day:   `DATE_FORMAT(${MX_DAY_SQL}, '%Y-%m-%d')`,
+  week:  `DATE_FORMAT(DATE_SUB(${MX_DAY_SQL}, INTERVAL WEEKDAY(${MX_DAY_SQL}) DAY), '%Y-%m-%d')`,
+  month: `DATE_FORMAT(${MX_DAY_SQL}, '%Y-%m-01')`,
+};
+
+const EMPTY_TOTALS = { netSales: 0, orders: 0, profit: 0, noCostLines: 0, noCostNetSales: 0 };
+const NO_VALUES    = { netSales: null, orders: null, profit: null, avgTicket: null };
+
+const trendKey = (branchId, period) => `${branchId ?? ''}|${period}`;
+
+// Totales entre dos fechas de México, agrupados por periodo (granularity) y,
+// con byBranch, también por sucursal. Sin granularity, un solo grupo 'all'.
+// Devuelve Map(trendKey → totales).
+const queryTrendTotals = async ({ from, to, granularity = null, branchId = null, byBranch = false }) => {
+  const bucket    = granularity ? TREND_BUCKETS[granularity] : "'all'";
+  const branchCol = byBranch ? 'o.branch_id' : 'NULL';
+  const where  = [SOLD_STATUSES_SQL, 'o.created_at BETWEEN ? AND ?'];
+  const params = await toServerRange(from, to);
+  if (branchId !== null) { where.push('o.branch_id = ?'); params.push(branchId); }
+  const whereSql = where.join(' AND ');
+
+  // Alias que no chocan con columnas: en GROUP BY, MySQL busca primero en las
+  // columnas de las tablas, así que "branch_id" agruparía por o.branch_id
+  // aunque el SELECT lo defina como NULL
+  const [orderRows] = await db.query(
+    `SELECT ${bucket} AS trend_period, ${branchCol} AS trend_branch,
+            COUNT(*) AS orders,
+            SUM(${ORDER_NET_SALE_SQL}) AS net_sales
+       FROM orders o
+       ${ORDER_REFUNDS_JOIN_SQL}
+      WHERE ${whereSql}
+      GROUP BY trend_period, trend_branch`,
+    params
+  );
+  const [lineRows] = await db.query(
+    `SELECT ${bucket} AS trend_period, ${branchCol} AS trend_branch,
+            SUM(${NET_SALE_SQL}) - SUM((${NET_QUANTITY_SQL}) * od.purchase_price) AS profit,
+            SUM(od.purchase_price = 0) AS no_cost_lines,
+            SUM(CASE WHEN od.purchase_price = 0 THEN ${NET_SALE_SQL} ELSE 0 END) AS no_cost_net_sales
+       FROM order_details od
+       JOIN orders o ON o.order_id = od.order_id
+       ${RETURNS_JOIN_SQL}
+      WHERE ${whereSql}
+      GROUP BY trend_period, trend_branch`,
+    params
+  );
+
+  const totals = new Map();
+  const entry  = (r) => {
+    const key = trendKey(r.trend_branch, r.trend_period);
+    if (!totals.has(key)) totals.set(key, { ...EMPTY_TOTALS });
+    return totals.get(key);
+  };
+  for (const r of orderRows) {
+    Object.assign(entry(r), { orders: Number(r.orders), netSales: Number(r.net_sales) });
+  }
+  for (const r of lineRows) {
+    Object.assign(entry(r), {
+      profit:         Number(r.profit),
+      noCostLines:    Number(r.no_cost_lines),
+      noCostNetSales: Number(r.no_cost_net_sales),
+    });
+  }
+  return totals;
+};
+
+const sumTotals = (list) => list.reduce((acc, t) => ({
+  netSales:       acc.netSales + t.netSales,
+  orders:         acc.orders + t.orders,
+  profit:         acc.profit + t.profit,
+  noCostLines:    acc.noCostLines + t.noCostLines,
+  noCostNetSales: acc.noCostNetSales + t.noCostNetSales,
+}), { ...EMPTY_TOTALS });
+
+// Ticket sin ventas: sin valor (no existe un ticket de $0)
+const toMetrics = (t) => ({
+  netSales:  round2(t.netSales),
+  orders:    t.orders,
+  profit:    round2(t.profit),
+  avgTicket: t.orders > 0 ? round2(t.netSales / t.orders) : null,
+});
+
+// Periodos con sus métricas; los futuros van sin valor
+const buildSeries = (periodList, totals, branchId = null) => periodList.map(p => ({
+  ...p,
+  ...(p.future ? NO_VALUES : toMetrics(totals.get(trendKey(branchId, p.start)) ?? EMPTY_TOTALS)),
+}));
+
+// Promedio por periodo sobre los periodos que ya empezaron
+const averagesOf = (metrics, elapsedCount) => (elapsedCount === 0 ? null : {
+  netSales: round2(metrics.netSales / elapsedCount),
+  orders:   round2(metrics.orders / elapsedCount),
+  profit:   round2(metrics.profit / elapsedCount),
+});
+
+// Mejor periodo de cada métrica entre los que ya empezaron; un empate se
+// queda con el más antiguo. Sin ventas no hay mejor periodo. Con el año
+// anterior, previousValue es el del mismo periodo un año antes.
+const bestPeriods = (series, previousSeries) => {
+  const elapsed  = series.map((p, index) => ({ p, index })).filter(({ p }) => !p.future);
+  const hasSales = elapsed.some(({ p }) => p.orders > 0);
+
+  const best = (metric) => {
+    const candidates = elapsed.filter(({ p }) => p[metric] !== null);
+    if (!hasSales || candidates.length === 0) return null;
+    const top = candidates.reduce((a, b) => (b.p[metric] > a.p[metric] ? b : a));
+    return {
+      index: top.index,
+      start: top.p.start,
+      value: top.p[metric],
+      ...(previousSeries && { previousValue: previousSeries[top.index][metric] }),
+    };
+  };
+
+  return { netSales: best('netSales'), orders: best('orders'), profit: best('profit'), avgTicket: best('avgTicket') };
+};
+
+// today: fecha de hoy en México, 'YYYY-MM-DD'. branchId = null → consolidado
+// (admin central); un usuario con sucursal llega con la suya ya forzada.
+const getTrendReport = async ({
+  startDate,
+  endDate,
+  granularity = null,
+  compare = 'none',
+  branchId = null,
+  today,
+}) => {
+  if (!periods.isValidDate(startDate) || !periods.isValidDate(endDate)) {
+    throw new ValidationError('start_date y end_date son requeridos, formato YYYY-MM-DD');
+  }
+  if (startDate > endDate) throw new ValidationError('start_date no puede ser posterior a end_date');
+  if (branchId !== null && !isPositiveInt(branchId)) throw new ValidationError('branch_id inválido');
+
+  const days = periods.rangeDays(startDate, endDate);
+  if (days > periods.MAX_RANGE_DAYS) {
+    throw new ValidationError(`El rango máximo es de 5 años (${periods.MAX_RANGE_DAYS} días)`);
+  }
+  const gran = granularity ?? periods.autoGranularity(days);
+  if (!periods.GRANULARITIES.includes(gran)) throw new ValidationError('granularity debe ser day, week o month');
+  if (!periods.fitsGranularity(gran, days)) {
+    throw new ValidationError(`${GRANULARITY_LABELS[gran]}: el rango puede tener hasta ${periods.GRANULARITY_LIMITS[gran]} días`);
+  }
+  if (!TREND_COMPARES.includes(compare)) throw new ValidationError('compare debe ser none, previous_year o branch');
+  if (compare === 'branch' && branchId !== null) {
+    throw new ValidationError('La comparación por sucursal solo está disponible en el consolidado del administrador central');
+  }
+
+  const periodList = periods.buildPeriods(startDate, endDate, gran, today);
+  const totals     = await queryTrendTotals({ from: startDate, to: endDate, granularity: gran, branchId });
+  const series     = buildSeries(periodList, totals);
+
+  // "A la fecha": los periodos que ya empezaron (en el futuro no hay ventas)
+  const elapsedCount  = periodList.filter(p => !p.future).length;
+  const toDate        = sumTotals(periodList.filter(p => !p.future).map(p => totals.get(trendKey(null, p.start)) ?? EMPTY_TOTALS));
+  const toDateMetrics = toMetrics(toDate);
+
+  // ── Año anterior: los mismos periodos, alineados, y sus KPIs a la fecha ──
+  let previousYear    = null;
+  let previousSummary = null;
+  if (compare === 'previous_year') {
+    const prev       = periods.previousYearRange(startDate, endDate, gran);
+    const prevTotals = await queryTrendTotals({ from: prev.start, to: prev.end, granularity: gran, branchId });
+    previousYear = {
+      startDate: prev.start,
+      endDate:   prev.end,
+      periods:   buildSeries(periods.buildPeriods(prev.start, prev.end, gran, today), prevTotals),
+    };
+
+    const prevToday  = periods.previousYearDate(today, gran);
+    const prevTo     = prev.end < prevToday ? prev.end : prevToday;
+    const prevToDate = prev.start > prevTo
+      ? EMPTY_TOTALS
+      : (await queryTrendTotals({ from: prev.start, to: prevTo, branchId })).get(trendKey(null, 'all')) ?? EMPTY_TOTALS;
+    const prevMetrics = toMetrics(prevToDate);
+    previousSummary = {
+      from:     prev.start,
+      to:       prevTo,
+      totals:   prevMetrics,
+      averages: averagesOf(prevMetrics, elapsedCount),
+    };
+  }
+
+  // ── Por sucursal: una serie por sucursal con ventas en el rango ──
+  let branches = null;
+  if (compare === 'branch') {
+    const byBranch = await queryTrendTotals({ from: startDate, to: endDate, granularity: gran, byBranch: true });
+    const ids = [...new Set([...byBranch.keys()].map(key => Number(key.split('|')[0])))];
+    const [rows] = ids.length === 0
+      ? [[]]
+      : await db.query('SELECT branch_id, name FROM branches WHERE branch_id IN (?) ORDER BY name', [ids]);
+    branches = rows.map(b => ({
+      branchId: b.branch_id,
+      name:     b.name,
+      periods:  buildSeries(periodList, byBranch, b.branch_id),
+    }));
+  }
+
+  return {
+    granularity: gran,
+    startDate,
+    endDate,
+    today,
+    periods: series,
+    previousYear,
+    branches,
+    summary: {
+      elapsedPeriods: elapsedCount,
+      totals:   toDateMetrics,
+      averages: averagesOf(toDateMetrics, elapsedCount),
+      best:     bestPeriods(series, previousYear?.periods ?? null),
+    },
+    previousSummary,
+    noCost: { lines: toDate.noCostLines, netSales: round2(toDate.noCostNetSales) },
+  };
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport };

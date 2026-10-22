@@ -1,6 +1,7 @@
 // src/controllers/reportController.js
 const reportService = require('../services/reportService');
 const { resolveOptionalBranchId } = require('../helpers/helper');
+const { todayInMexico } = require('../utils/timezone');
 
 // Alcance por sucursal de todo el módulo, igual que el Dashboard: un usuario
 // con sucursal asignada ve solo la suya aunque mande otro branch_id; el
@@ -86,4 +87,22 @@ const getProfitReport = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport };
+// GET /reports/trend
+const getTrendReport = async (req, res, next) => {
+  try {
+    const { start_date: startDate, end_date: endDate, granularity, compare } = req.query;
+
+    const data = await reportService.getTrendReport({
+      startDate,
+      endDate,
+      granularity: granularity || null,
+      compare:     compare || 'none',
+      branchId:    resolveOptionalBranchId(req),
+      today:       todayInMexico(),
+    });
+
+    res.json({ status: 'success', data });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport };

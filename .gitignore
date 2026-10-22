@@ -49,6 +49,7 @@ backend/coverage/
 backend/.env
 backend/logs/
 backend/uploads/temp/
+backend/dumps
 
 # ============================================
 # FRONTEND (React)

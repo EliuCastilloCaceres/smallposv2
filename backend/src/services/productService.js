@@ -60,7 +60,7 @@ const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'pa
 
 const getAllProducts = async ({ filters = {} } = {}) => {
   const {
-    search, category_id, provider_id, is_active,
+    search, category_id, provider_id, is_active, no_cost,
     page = 1, limit = 20,
   } = filters;
 
@@ -80,6 +80,10 @@ const getAllProducts = async ({ filters = {} } = {}) => {
 
   if (category_id) { conditions.push('p.category_id = ?'); params.push(category_id); }
   if (provider_id) { conditions.push('p.provider_id = ?'); params.push(provider_id); }
+
+  // Sin costo = purchase_price en 0, la misma regla que las líneas de venta
+  // (spec 03). La columna es NOT NULL, así que no hay costos nulos (spec 06).
+  if (no_cost === 'true' || no_cost === '1') conditions.push('p.purchase_price = 0');
 
   if (search) {
     conditions.push('(p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ?)');

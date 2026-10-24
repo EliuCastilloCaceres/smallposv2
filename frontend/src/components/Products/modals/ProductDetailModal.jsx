@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import api from '../../../services/api'
 import { getImageUrl } from '../../../utils/imageUrl'
 import { fmtDateTime } from '../../../utils/dateFormatter'
+import { fmtMargin, productMargin } from '../../../utils/productMargin'
 
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
@@ -39,10 +40,6 @@ const ProductDetailModal = ({ productId, canEdit, branchId, onClose, onEdit }) =
     }
     fetch()
   }, [productId])
-
-  const margin = product
-    ? (((product.sale_price - product.purchase_price) / product.sale_price) * 100).toFixed(1)
-    : null
 
   return (
     <div className="prd-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -122,9 +119,7 @@ const ProductDetailModal = ({ productId, canEdit, branchId, onClose, onEdit }) =
                 <span className="prd-detail__section-title">Precios</span>
                 <DetailRow icon="bi-cart-dash" label="Compra"  value={fmtMXN(product.purchase_price)} />
                 <DetailRow icon="bi-cart-plus" label="Venta"   value={fmtMXN(product.sale_price)} />
-                {margin !== null && (
-                  <DetailRow icon="bi-percent" label="Margen"  value={`${margin}%`} />
-                )}
+                <DetailRow icon="bi-percent" label="Margen"  value={fmtMargin(productMargin(product))} />
               </div>
 
               {/* Sección: variantes */}

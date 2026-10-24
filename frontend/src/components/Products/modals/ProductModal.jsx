@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import api from '../../../services/api'
 import { getImageUrl } from '../../../utils/imageUrl'
+import { fmtMargin, productMargin } from '../../../utils/productMargin'
 
 const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'paq', 'set']
 
@@ -124,12 +125,8 @@ const ProductModal = ({ product, categories, branchId, providers, onSaved, onClo
   }
 
   // ── Margen calculado en tiempo real ──
-  const margin = (() => {
-    const buy = parseFloat(form.purchase_price)
-    const sell = parseFloat(form.sale_price)
-    if (!buy || !sell || sell === 0) return null
-    return (((sell - buy) / sell) * 100).toFixed(1)
-  })()
+  // Misma fórmula que la tabla y el detalle (spec 06, requisito 7)
+  const margin = productMargin(form)
 
   const marginLevel = margin === null ? null
     : margin < 0 ? 'neg'
@@ -362,7 +359,7 @@ const ProductModal = ({ product, categories, branchId, providers, onSaved, onClo
                         marginLevel === 'high' ? 'bi-arrow-up-circle' :
                           'bi-dash-circle'
                       }`} />
-                    <span>Margen: <strong>{margin}%</strong></span>
+                    <span>Margen: <strong>{fmtMargin(margin)}</strong></span>
                     <span className="prd-margin__label">
                       {marginLevel === 'neg' ? 'Vendiendo a pérdida' :
                         marginLevel === 'low' ? 'Margen bajo' :

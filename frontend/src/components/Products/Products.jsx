@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useUser }   from '../../context/UserContext'
 import api from '../../services/api'
 import { getImageUrl } from '../../utils/imageUrl'
+import { fmtMargin, productMargin } from '../../utils/productMargin'
 import ProductModal      from './modals/ProductModal'
 import ProductDetailModal from './modals/ProductDetailModal'
 import BulkUploadModal   from './modals/BulkUploadModal'
@@ -23,6 +24,23 @@ export const StockBadge = ({ stock }) => {
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
 
+// ── Costo y margen (spec 06) ──────────────────────────────────────────────────
+// Sin costo = purchase_price en 0, la misma regla que las líneas de venta.
+// Se muestra el mismo "$0.00", en naranja, para que la columna quede alineada.
+const CostValue = ({ product }) =>
+  Number(product.purchase_price) === 0
+    ? <span className="prd-no-cost" title="Sin costo">{fmtMXN(0)}</span>
+    : fmtMXN(product.purchase_price)
+
+const MarginValue = ({ product }) => {
+  const margin = productMargin(product)
+  return (
+    <span className={margin < 0 ? 'prd-margin-value--negative' : undefined}>
+      {fmtMargin(margin)}
+    </span>
+  )
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 const Products = () => {
   const { user, isAdmin, hasPermission } = useUser()
@@ -39,6 +57,7 @@ const Products = () => {
   const [filterCat,     setFilterCat]     = useState('')
   const [filterProv,    setFilterProv]    = useState('')
   const [filterStatus,  setFilterStatus]  = useState('')
+  const [filterCost,    setFilterCost]    = useState('')
   const [categories,    setCategories]    = useState([])
   const [providers,     setProviders]     = useState([])
   const [page,          setPage]          = useState(1)
@@ -56,6 +75,7 @@ const Products = () => {
   const catRef      = useRef('')
   const provRef     = useRef('')
   const statusRef   = useRef('')
+  const costRef     = useRef('')
 
   // ── Cargar filtros de referencia ──
   useEffect(() => {
@@ -83,6 +103,7 @@ const Products = () => {
       if (catRef.current)    params.set('category_id', catRef.current)
       if (provRef.current)   params.set('provider_id', provRef.current)
       if (statusRef.current) params.set('is_active',   statusRef.current)
+      if (costRef.current)   params.set('no_cost',     costRef.current)
 
       // Catálogo global — no se filtra por sucursal
 
@@ -227,6 +248,12 @@ const Products = () => {
           <option value="true">Activos</option>
           <option value="false">Inactivos</option>
         </select>
+
+        <select className="prd-select" value={filterCost}
+          onChange={handleFilter(setFilterCost, costRef)}>
+          <option value="">Con y sin costo</option>
+          <option value="true">Sin costo</option>
+        </select>
       </div>
 
       {/* ── Error ── */}
@@ -265,7 +292,9 @@ const Products = () => {
                   <th>Categoría</th>
                   <th>Proveedor</th>
                   <th>UM</th>
+                  <th className="num">Costo</th>
                   <th className="num">Precio venta</th>
+                  <th className="num">Margen</th>
                   <th>Estado</th>
                   {canEdit && <th></th>}
                 </tr>
@@ -314,7 +343,9 @@ const Products = () => {
                     <td>
                       <span className="prd-uom-badge">{p.uom ?? '—'}</span>
                     </td>
+                    <td className="num"><CostValue product={p} /></td>
                     <td className="num">{fmtMXN(p.sale_price)}</td>
+                    <td className="num"><MarginValue product={p} /></td>
                     <td>
                       <span className={`prd-status ${p.is_active ? 'prd-status--on' : 'prd-status--off'}`}>
                         <span className="prd-status__dot" />
@@ -398,8 +429,16 @@ const Products = () => {
 
                 <div className="prd-card__prices">
                   <div className="prd-card__price-item">
+                    <span className="prd-muted">Costo</span>
+                    <strong><CostValue product={p} /></strong>
+                  </div>
+                  <div className="prd-card__price-item">
                     <span className="prd-muted">Venta</span>
                     <strong>{fmtMXN(p.sale_price)}</strong>
+                  </div>
+                  <div className="prd-card__price-item">
+                    <span className="prd-muted">Margen</span>
+                    <strong><MarginValue product={p} /></strong>
                   </div>
                   <div className="prd-card__price-item">
                     <span className="prd-muted">UM</span>

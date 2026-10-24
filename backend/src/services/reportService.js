@@ -753,4 +753,301 @@ const getTrendReport = async ({
   };
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport };
+// ─── Valuación de inventario ───────────────────────────────────────────────
+
+// Existencias del momento valoradas al costo y al precio de venta del
+// producto (specs/07-valuacion-de-inventario.md). Un artículo es un producto
+// simple o una variante; las variantes usan el costo y el precio de su
+// producto.
+//   disponible = stock > 0 de artículos activos, con las reglas de
+//                inventoryService.getStockByBranch. A diferencia de
+//                Inventario, las categorías ocultas para la sucursal sí
+//                cuentan: es mercancía que está ahí.
+//   apartado   = líneas de apartados activos; su stock ya se descontó al
+//                apartar. Se valoran con el costo y el precio de hoy, no con
+//                los del apartado.
+//   total      = disponible + apartado
+// Un artículo con purchase_price = 0 es "sin costo" (spec 06): cuenta y se
+// avisa, o sale de todo con excludeNoCost, menos de las alertas.
+
+// De dónde salen los artículos. Alias: i = la fila con la cantidad,
+// p = producto, v = variante.
+const INVENTORY_SOURCES = {
+  stock: {
+    branchCol: 'i.branch_id',
+    from: `inventory_stock i
+      JOIN products p              ON p.product_id = i.product_id
+      LEFT JOIN product_variants v ON v.variant_id = i.variant_id`,
+    // En un producto variable cuentan las filas de sus variantes; en uno
+    // simple, la fila sin variante. Inventario trata is_variable NULL como simple.
+    where: [
+      'i.quantity > 0',
+      `((p.is_variable = 1 AND i.variant_id IS NOT NULL)
+        OR (NOT (p.is_variable <=> 1) AND i.variant_id IS NULL))`,
+    ],
+  },
+  reserved: {
+    branchCol: 'l.branch_id',
+    from: `layaway_details i
+      JOIN layaways l              ON l.layaway_id = i.layaway_id
+      JOIN products p              ON p.product_id = i.product_id
+      LEFT JOIN product_variants v ON v.variant_id = i.variant_id`,
+    where: ["l.status = 'active'", 'i.quantity > 0'],
+  },
+};
+
+const ACTIVE_ITEM_SQL = '(p.is_active = 1 AND (i.variant_id IS NULL OR v.is_active = 1))';
+
+// Lo que cuenta cada tarjeta de alerta; su vista en la tabla muestra lo mismo
+const INVENTORY_ALERTS = {
+  no_cost:    `${ACTIVE_ITEM_SQL} AND p.purchase_price = 0`,
+  below_cost: `${ACTIVE_ITEM_SQL} AND p.sale_price < p.purchase_price`,
+  inactive:   `NOT ${ACTIVE_ITEM_SQL}`,
+};
+
+// Cada agrupación: la columna del artículo que la define y cómo sacar el
+// nombre del grupo (alias g, sobre la fila agregada r).
+const INVENTORY_GROUPS = {
+  product: {
+    key:  't.product_id',
+    join: 'JOIN products g ON g.product_id = r.group_id',
+    cols: 'g.name AS name, g.sku AS sku, g.uom AS uom',
+  },
+  category: {
+    key:  't.category_id',
+    join: 'LEFT JOIN categories g ON g.category_id = r.group_id',
+    cols: "COALESCE(g.name, 'Sin categoría') AS name",
+  },
+  provider: {
+    key:  't.provider_id',
+    join: 'JOIN providers g ON g.provider_id = r.group_id',
+    cols: 'g.name AS name',
+  },
+  branch: {
+    key:  't.branch_id',
+    join: 'JOIN branches g ON g.branch_id = r.group_id',
+    cols: 'g.name AS name',
+  },
+};
+
+const INVENTORY_SORTS = ['cost_value', 'sale_value', 'profit', 'margin'];
+
+// Un artículo es el par producto-variante
+const ITEM_KEY_SQL = "CONCAT(t.product_id, ':', IFNULL(t.variant_id, 0))";
+
+const ITEM_AMOUNTS_SQL = `
+  COUNT(DISTINCT ${ITEM_KEY_SQL})                 AS items,
+  COALESCE(SUM(t.quantity * t.purchase_price), 0) AS cost_value,
+  COALESCE(SUM(t.quantity * t.sale_price), 0)     AS sale_value,
+  COUNT(DISTINCT CASE WHEN t.purchase_price = 0 THEN ${ITEM_KEY_SQL} END) AS no_cost_items,
+  COALESCE(SUM(CASE WHEN t.purchase_price = 0 THEN t.quantity * t.sale_price ELSE 0 END), 0) AS no_cost_sale_value
+`;
+
+const round3 = (value) => +Number(value).toFixed(3);
+
+const marginOf = (costValue, saleValue) =>
+  (round2(saleValue) === 0 ? null : round2((saleValue - costValue) / saleValue * 100));
+
+// "3,4" → [3, 4]; null si algún id no es un entero positivo
+const parseIdList = (value) => {
+  const parts = String(value ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.some(s => !/^\d+$/.test(s) || Number(s) === 0)) return null;
+  return [...new Set(parts.map(Number))];
+};
+
+// Artículos de una fuente con los filtros del reporte y las condiciones
+// extra. Devuelve una consulta que se usa como tabla derivada.
+const inventoryItemsQuery = (source, filters, conditions) => {
+  const { branchCol, from, where: baseWhere } = INVENTORY_SOURCES[source];
+  const where  = [...baseWhere, ...conditions];
+  const params = [];
+
+  if (filters.branchId !== null)   { where.push(`${branchCol} = ?`);  params.push(filters.branchId); }
+  if (filters.categoryId !== null) { where.push('p.category_id = ?'); params.push(filters.categoryId); }
+  if (filters.providerId !== null) { where.push('p.provider_id = ?'); params.push(filters.providerId); }
+  if (filters.excludeCategoryIds.length > 0) {
+    where.push('(p.category_id IS NULL OR p.category_id NOT IN (?))');
+    params.push(filters.excludeCategoryIds);
+  }
+  // Igual que Inventario: si coincide, cuenta el producto con sus variantes
+  if (filters.search) {
+    const like = `%${filters.search}%`;
+    where.push(`(p.name LIKE ? OR p.sku LIKE ? OR EXISTS (
+      SELECT 1 FROM product_variants sv
+       WHERE sv.product_id = p.product_id AND sv.is_active = 1 AND sv.sku LIKE ?
+    ))`);
+    params.push(like, like, like);
+  }
+
+  return {
+    sql: `SELECT ${branchCol} AS branch_id, i.product_id, i.variant_id, i.quantity,
+                 p.purchase_price, p.sale_price, p.category_id, p.provider_id, p.uom
+            FROM ${from}
+           WHERE ${where.join(' AND ')}`,
+    params,
+  };
+};
+
+const unionItems = (...queries) => ({
+  sql:    queries.map(q => q.sql).join(' UNION ALL '),
+  params: queries.flatMap(q => q.params),
+});
+
+// Artículos, unidades por unidad de medida, valores y margen de un conjunto
+const aggregateItems = async ({ sql, params }) => {
+  const [[[totals]], [units]] = await Promise.all([
+    db.query(`SELECT ${ITEM_AMOUNTS_SQL} FROM (${sql}) t`, params),
+    db.query(
+      `SELECT NULLIF(TRIM(t.uom), '') AS uom, SUM(t.quantity) AS quantity
+         FROM (${sql}) t
+        GROUP BY NULLIF(TRIM(t.uom), '')
+        ORDER BY quantity DESC, uom`,
+      params
+    ),
+  ]);
+  const costValue = Number(totals.cost_value);
+  const saleValue = Number(totals.sale_value);
+  return {
+    items:     Number(totals.items),
+    units:     units.map(u => ({ uom: u.uom, quantity: round3(u.quantity) })),
+    costValue: round2(costValue),
+    saleValue: round2(saleValue),
+    profit:    round2(saleValue - costValue),
+    margin:    marginOf(costValue, saleValue),
+    noCost: {
+      items:     Number(totals.no_cost_items),
+      saleValue: round2(totals.no_cost_sale_value),
+    },
+  };
+};
+
+// branchId = null → consolidado (admin central). Un usuario con sucursal
+// asignada llega aquí con la suya ya forzada por el controller; isCentral
+// dice si es el admin central, el único que puede agrupar por sucursal.
+const getInventoryReport = async ({
+  branchId = null,
+  isCentral = false,
+  categoryId = null,
+  providerId = null,
+  search = '',
+  excludeCategoryIds = '',
+  excludeNoCost = false,
+  groupBy = 'product',
+  alert = null,
+  sortBy = 'cost_value',
+  sortDir = 'desc',
+  page = 1,
+  limit = 20,
+}) => {
+  if (branchId !== null && !isPositiveInt(branchId))     throw new ValidationError('branch_id inválido');
+  if (categoryId !== null && !isPositiveInt(categoryId)) throw new ValidationError('category_id inválido');
+  if (providerId !== null && !isPositiveInt(providerId)) throw new ValidationError('provider_id inválido');
+  const excludedIds = parseIdList(excludeCategoryIds);
+  if (excludedIds === null) throw new ValidationError('exclude_category_ids debe ser una lista de ids separados por coma');
+  if (categoryId !== null && excludedIds.length > 0) {
+    throw new ValidationError('Para excluir categorías hay que ver todas las categorías (sin category_id)');
+  }
+
+  const group = INVENTORY_GROUPS[groupBy];
+  if (!group) throw new ValidationError('group_by debe ser product, category, provider o branch');
+  if (groupBy === 'branch' && !isCentral) {
+    throw new ValidationError('La agrupación por sucursal solo está disponible para el administrador central');
+  }
+  if (alert !== null && !INVENTORY_ALERTS[alert]) {
+    throw new ValidationError('alert debe ser no_cost, below_cost o inactive');
+  }
+  if (alert !== null && groupBy !== 'product') throw new ValidationError('alert solo se puede usar con group_by=product');
+  if (!INVENTORY_SORTS.includes(sortBy)) throw new ValidationError('sort_by debe ser cost_value, sale_value, profit o margin');
+  if (sortDir !== 'asc' && sortDir !== 'desc') throw new ValidationError('sort_dir debe ser asc o desc');
+
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+
+  const filters = {
+    branchId, categoryId, providerId, excludeCategoryIds: excludedIds, search: String(search).trim(),
+  };
+  const counted   = excludeNoCost ? [ACTIVE_ITEM_SQL, 'p.purchase_price > 0'] : [ACTIVE_ITEM_SQL];
+  const available = inventoryItemsQuery('stock', filters, counted);
+  const reserved  = inventoryItemsQuery('reserved', filters, counted);
+  const alertSets = Object.fromEntries(Object.entries(INVENTORY_ALERTS).map(
+    ([key, condition]) => [key, inventoryItemsQuery('stock', filters, [condition])]
+  ));
+  const tableSet  = alert ? alertSets[alert] : available;
+
+  // Sin margen ("—") siempre al final, en cualquier dirección; el nombre y
+  // luego group_id desempatan para que la paginación sea estable.
+  const rowsQuery = db.query(
+    `SELECT r.*, ${group.cols}
+       FROM (
+         SELECT ${group.key} AS group_id,
+                ${ITEM_AMOUNTS_SQL},
+                SUM(t.quantity) AS units,
+                COALESCE(SUM(t.quantity * t.sale_price) - SUM(t.quantity * t.purchase_price), 0) AS profit,
+                CASE WHEN ROUND(SUM(t.quantity * t.sale_price), 2) = 0 THEN NULL
+                     ELSE (SUM(t.quantity * t.sale_price) - SUM(t.quantity * t.purchase_price))
+                          / SUM(t.quantity * t.sale_price) * 100 END AS margin
+           FROM (${tableSet.sql}) t
+          GROUP BY ${group.key}
+       ) r
+       ${group.join}
+      ORDER BY (r.${sortBy} IS NULL), r.${sortBy} ${sortDir.toUpperCase()}, name, r.group_id
+      LIMIT ? OFFSET ?`,
+    [...tableSet.params, safeLimit, (safePage - 1) * safeLimit]
+  );
+  const countQuery = db.query(
+    `SELECT COUNT(*) AS total FROM (
+       SELECT ${group.key} FROM (${tableSet.sql}) t GROUP BY ${group.key}
+     ) g`,
+    tableSet.params
+  );
+
+  const [[rows], [[{ total }]], availableAgg, reservedAgg, totalAgg, noCostAgg, belowCostAgg, inactiveAgg] =
+    await Promise.all([
+      rowsQuery,
+      countQuery,
+      aggregateItems(available),
+      aggregateItems(reserved),
+      aggregateItems(unionItems(available, reserved)),
+      aggregateItems(alertSets.no_cost),
+      aggregateItems(alertSets.below_cost),
+      aggregateItems(alertSets.inactive),
+    ]);
+
+  const withoutNoCost = ({ noCost, ...agg }) => agg;
+
+  const data = rows.map(r => ({
+    groupId: r.group_id,
+    name:    r.name,
+    ...(groupBy === 'product'
+      ? { sku: r.sku, units: round3(r.units), uom: r.uom }
+      : { items: Number(r.items) }),
+    costValue:   round2(r.cost_value),
+    saleValue:   round2(r.sale_value),
+    profit:      round2(r.profit),
+    margin:      r.margin === null ? null : round2(r.margin),
+    noCostItems: Number(r.no_cost_items),
+  }));
+
+  return {
+    data,
+    pagination: {
+      page:  safePage,
+      limit: safeLimit,
+      total: Number(total),
+      totalPages: Math.max(1, Math.ceil(Number(total) / safeLimit)),
+    },
+    summary: {
+      available: withoutNoCost(availableAgg),
+      reserved:  withoutNoCost(reservedAgg),
+      total:     withoutNoCost(totalAgg),
+      noCost:    availableAgg.noCost,
+      alerts: {
+        noCost:    withoutNoCost(noCostAgg),
+        belowCost: withoutNoCost(belowCostAgg),
+        inactive:  withoutNoCost(inactiveAgg),
+      },
+    },
+  };
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport };

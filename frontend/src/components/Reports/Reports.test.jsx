@@ -14,6 +14,7 @@ vi.mock('../../context/UserContext', () => ({
 vi.mock('./tabs/CashSessionsTab', () => ({ default: () => <p>contenido sesiones</p> }))
 vi.mock('./tabs/ProfitTab',       () => ({ default: () => <p>contenido utilidad</p> }))
 vi.mock('./tabs/TrendTab',        () => ({ default: () => <p>contenido tendencia</p> }))
+vi.mock('./tabs/InventoryTab',    () => ({ default: () => <p>contenido inventario</p> }))
 
 const renderReports = () => render(
   <MemoryRouter initialEntries={['/reports']}>
@@ -85,5 +86,24 @@ describe('Reports module access', () => {
 
     expect(tabNames()).toEqual(['Tendencia de ventas'])
     expect(screen.getByText('contenido tendencia')).toBeInTheDocument()
+  })
+
+  it('shows the inventory tab last with every report permission', () => {
+    permissions = ['reports.basic', 'reports.profit', 'reports.trend', 'reports.inventory']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Sesiones de caja', 'Ventas y utilidad', 'Tendencia de ventas', 'Valuación de inventario'])
+    fireEvent.click(screen.getByRole('tab', { name: 'Valuación de inventario' }))
+    expect(screen.getByText('contenido inventario')).toBeInTheDocument()
+  })
+
+  it('opens on the inventory tab for a storekeeper with only reports.inventory', () => {
+    permissions = ['inventory.read', 'reports.inventory']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Valuación de inventario'])
+    expect(screen.getByText('contenido inventario')).toBeInTheDocument()
   })
 })

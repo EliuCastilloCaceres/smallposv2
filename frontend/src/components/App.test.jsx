@@ -50,6 +50,14 @@ describe('App menu', () => {
     expect(reportLinks().length).toBeGreaterThan(0)
   })
 
+  it('shows Reportes to a user with only reports.inventory', () => {
+    permissions.push('reports.inventory')
+
+    renderMenu()
+
+    expect(reportLinks().length).toBeGreaterThan(0)
+  })
+
   it('hides Reportes from a user without report permissions', () => {
     renderMenu()
 

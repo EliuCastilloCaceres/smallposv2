@@ -105,4 +105,41 @@ const getTrendReport = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport };
+// GET /reports/inventory
+const getInventoryReport = async (req, res, next) => {
+  try {
+    const {
+      category_id: categoryId,
+      provider_id: providerId,
+      search,
+      exclude_category_ids: excludeCategoryIds,
+      exclude_no_cost: excludeNoCost,
+      group_by: groupBy,
+      alert,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+      page,
+      limit,
+    } = req.query;
+
+    const result = await reportService.getInventoryReport({
+      branchId:           resolveOptionalBranchId(req),
+      isCentral:          req.user.branch_id === null,
+      categoryId:         intOrNull(categoryId),
+      providerId:         intOrNull(providerId),
+      search:             search ? String(search) : '',
+      excludeCategoryIds: excludeCategoryIds ? String(excludeCategoryIds) : '',
+      excludeNoCost:      excludeNoCost === 'true' || excludeNoCost === '1',
+      groupBy:            groupBy || 'product',
+      alert:              alert || null,
+      sortBy:             sortBy  || 'cost_value',
+      sortDir:            sortDir || 'desc',
+      page:  intOrNull(page)  ?? 1,
+      limit: intOrNull(limit) ?? 20,
+    });
+
+    res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
+module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport };

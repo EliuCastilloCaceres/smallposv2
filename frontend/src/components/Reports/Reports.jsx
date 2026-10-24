@@ -5,6 +5,7 @@ import { useUser } from '../../context/UserContext'
 import CashSessionsTab from './tabs/CashSessionsTab'
 import ProfitTab from './tabs/ProfitTab'
 import TrendTab from './tabs/TrendTab'
+import InventoryTab from './tabs/InventoryTab'
 import { getVisibleReportTabs } from './reportTabs'
 import './reports.css'
 
@@ -13,6 +14,7 @@ const TAB_CONTENT = {
   'cash-sessions': CashSessionsTab,
   profit:          ProfitTab,
   trend:           TrendTab,
+  inventory:       InventoryTab,
 }
 
 const Reports = () => {

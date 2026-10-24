@@ -34,4 +34,11 @@ router.get(
   reportController.getTrendReport
 );
 
+// GET /reports/inventory?branch_id=&category_id=&provider_id=&search=&exclude_category_ids=&exclude_no_cost=&group_by=&alert=&sort_by=&sort_dir=&page=&limit=
+router.get(
+  '/inventory',
+  requirePermission('reports', 'inventory'),
+  reportController.getInventoryReport
+);
+
 module.exports = router;

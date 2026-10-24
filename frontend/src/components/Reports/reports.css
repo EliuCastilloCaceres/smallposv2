@@ -20,6 +20,7 @@
   --rpt-red-bg:     rgba(220,38,38,.08);
   --rpt-yellow:     #eab308;
   --rpt-yellow-bg:  rgba(234,179,8,.10);
+  --rpt-orange:     #d97706;
   --touch-min:      44px;
 }
 
@@ -294,3 +295,142 @@
 .rpt-chart-tip__dot--dashed { border: 2px dashed #4f8ef7; background: transparent; opacity: .6; width: 6px; height: 6px; }
 
 .rpt-flag--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }
+
+/* ── Valuación de inventario ─────────────────────────────── */
+/* De arriba abajo: filtros, resumen, "Revisar captura" y desglose */
+@media (min-width: 768px) { .rpt-only-mobile { display: none !important; } }
+
+.rpt-inv-section-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--rpt-text); }
+
+/* Filtros. En móvil se ve la búsqueda y el botón "Filtros"; en desktop,
+   todo en dos filas (el cuerpo se integra a la fila con display: contents) */
+.rpt-inv-filters {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px;
+  background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
+}
+.rpt-inv-filters__top { display: flex; gap: 8px; flex: 1 1 100%; min-width: 0; }
+.rpt-inv-search { position: relative; flex: 1; min-width: 0; }
+.rpt-inv-search i {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 14px; color: var(--rpt-muted); pointer-events: none;
+}
+.rpt-inv-search input { width: 100%; box-sizing: border-box; padding-left: 34px; cursor: text; }
+.rpt-inv-filters__body { display: none; flex-direction: column; gap: 10px; flex: 1 1 100%; }
+.rpt-inv-filters__body--open { display: flex; }
+.rpt-inv-filters__selects { display: flex; flex-direction: column; gap: 8px; }
+.rpt-inv-filters__selects .rpt-select { width: 100%; }
+.rpt-inv-filters__exclude {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding-top: 10px; border-top: 1px dashed var(--rpt-border);
+}
+.rpt-inv-filters__label { font-size: 12px; font-weight: 600; color: var(--rpt-muted); }
+.rpt-toggle--sm, .rpt-select--sm { height: 34px; font-size: 12px; }
+.rpt-toggle--sm { padding: 0 10px; }
+.rpt-select--sm { padding: 0 8px; }
+.rpt-select:disabled { opacity: .5; cursor: not-allowed; }
+.rpt-badge {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 5px; border-radius: 999px; background: var(--rpt-accent); color: #fff; font-size: 11px; font-weight: 700;
+}
+@media (min-width: 768px) {
+  .rpt-inv-filters__top { flex: 1 1 260px; }
+  .rpt-inv-filters__body { display: contents; }
+  .rpt-inv-filters__selects { flex-direction: row; }
+  .rpt-inv-filters__selects .rpt-select { width: auto; }
+  .rpt-inv-filters__exclude { flex: 1 1 100%; }
+}
+
+.rpt-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border-radius: 999px;
+  border: 1px solid var(--rpt-border); background: var(--rpt-bg);
+  font-size: 12px; font-weight: 500; color: var(--rpt-text); cursor: pointer;
+}
+.rpt-chip:hover { border-color: var(--rpt-red); color: var(--rpt-red); }
+
+/* Resumen */
+.rpt-inv-summary {
+  display: flex; flex-direction: column; gap: 14px; padding: 18px 20px;
+  background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
+}
+.rpt-inv-summary__main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rpt-inv-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rpt-inv-stat--hero { grid-column: 1 / -1; }
+.rpt-inv-stat__label { font-size: 12px; font-weight: 500; color: var(--rpt-muted); }
+.rpt-inv-stat__value { font-size: 20px; font-weight: 700; color: var(--rpt-text); font-variant-numeric: tabular-nums; }
+.rpt-inv-stat__value .rpt-diff { font-weight: 700; }
+.rpt-inv-stat--hero .rpt-inv-stat__value { font-size: 30px; letter-spacing: -.5px; line-height: 1.15; }
+.rpt-inv-stat__sub { font-size: 12px; color: var(--rpt-muted); }
+@media (min-width: 768px) {
+  .rpt-inv-summary__main { grid-template-columns: 2fr 1fr 1fr; align-items: start; }
+  .rpt-inv-stat--hero { grid-column: auto; }
+}
+.rpt-inv-note {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px;
+  border-radius: var(--rpt-radius-sm); background: var(--rpt-yellow-bg); color: #92610a; font-size: 13px;
+}
+.rpt-inv-note > span { flex: 1 1 220px; }
+.rpt-inv-note button {
+  all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-weight: 600; white-space: nowrap;
+  background: rgba(255,255,255,.7); border: 1px solid currentColor;
+}
+.rpt-inv-note button:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; }
+.rpt-inv-note--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }
+.rpt-inv-summary__foot {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px;
+  padding-top: 12px; border-top: 1px solid var(--rpt-border); font-size: 13px; color: var(--rpt-muted);
+}
+.rpt-inv-summary__reserved { display: flex; flex-direction: column; gap: 4px; }
+.rpt-inv-summary__reserved strong { margin-right: 6px; font-weight: 600; color: var(--rpt-text); }
+.rpt-inv-summary__asof { font-size: 12px; color: var(--rpt-muted); }
+
+/* Revisar captura */
+.rpt-inv-review { display: flex; flex-direction: column; gap: 8px; }
+.rpt-inv-review__list { display: grid; grid-template-columns: 1fr; gap: 8px; }
+@media (min-width: 768px) { .rpt-inv-review__list { grid-template-columns: repeat(3, 1fr); } }
+.rpt-inv-issue {
+  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius-sm);
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.rpt-inv-issue:hover:not(:disabled) { border-color: var(--rpt-orange); }
+.rpt-inv-issue:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; }
+.rpt-inv-issue:disabled { opacity: .55; cursor: default; }
+.rpt-inv-issue--active { border-color: var(--rpt-orange); background: rgba(217,119,6,.06); }
+.rpt-inv-issue__icon {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 8px; background: rgba(217,119,6,.10); color: var(--rpt-orange);
+}
+.rpt-inv-issue:disabled .rpt-inv-issue__icon { background: var(--rpt-bg); color: var(--rpt-muted); }
+.rpt-inv-issue__text { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 13px; color: var(--rpt-text); }
+.rpt-inv-issue__label { font-size: 12px; color: var(--rpt-muted); }
+.rpt-inv-issue__text small { font-size: 12px; color: var(--rpt-muted); }
+.rpt-inv-issue > .bi-chevron-right { color: var(--rpt-muted); }
+
+/* Desglose */
+.rpt-inv-breakdown { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 16px; }
+.rpt-inv-breakdown__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rpt-inv-breakdown__head .rpt-presets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.rpt-inv-breakdown__count { margin-left: auto; font-size: 13px; color: var(--rpt-muted); }
+.rpt-inv-viewing {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px;
+  border-radius: var(--rpt-radius-sm); background: rgba(217,119,6,.08);
+  border: 1px solid rgba(217,119,6,.3); color: #92400e; font-size: 13px;
+}
+.rpt-inv-viewing > span { flex: 1 1 220px; }
+.rpt-inv-viewing button {
+  all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-weight: 600;
+  background: var(--rpt-surface); border: 1px solid rgba(217,119,6,.4);
+}
+.rpt-sort {
+  all: unset; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+}
+.rpt-sort i { font-size: 11px; opacity: .4; }
+.rpt-sort:hover { color: var(--rpt-text); }
+.rpt-sort--active { color: var(--rpt-text); }
+.rpt-sort--active i { opacity: 1; color: var(--rpt-accent); }
+.rpt-sort:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; border-radius: 4px; }
+
+/* Costo 0 y margen negativo, como en Productos */
+.rpt-no-cost { font-weight: 600; color: var(--rpt-orange); }
+.rpt-margin--neg { font-weight: 600; color: var(--rpt-red); }

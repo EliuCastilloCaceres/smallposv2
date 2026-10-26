@@ -15,7 +15,7 @@ Agrega al módulo de Reportes la pestaña **Valuación de inventario**, con el p
 - **Apartado y total en tienda,** al pie del resumen: las líneas de apartados activos (cuyo stock ya se descontó) y disponible + apartado. Lo apartado se valora con el costo y el precio de hoy, no con los del apartado. Sin apartados dice "Sin apartados activos".
 - **Desglose:** "Ver por" producto (las variantes se suman en su producto), categoría, proveedor y sucursal (solo el admin central), ordenable con un clic en los encabezados (en móvil, con un selector) y paginado.
 - **Filtros,** arriba: búsqueda por nombre o SKU (también de variante), sucursal, categoría, proveedor y "Excluir del cálculo": **categorías** (por ejemplo, Recargas; solo con "Todas las categorías") y **productos sin costo**, apagado por defecto. El aviso de sin costo va junto a la utilidad, con "Excluirlos" o "Incluirlos". En móvil, los filtros se abren con un botón que dice cuántos hay activos.
-- **Revisar captura:** accesos de sin costo, precio menor al costo e inactivos con stock. Al darles clic, el desglose muestra solo esos artículos, con un aviso y "Ver todos"; el de sin costo vuelve a incluirlos si estaban excluidos. Los inactivos no entran en el resumen.
+- **Revisar captura:** accesos de sin costo, costo mayor al precio e inactivos con stock (la segunda se llamaba "Precio menor al costo" hasta la spec 09). Al darles clic, el desglose muestra solo esos artículos, con un aviso y "Ver todos"; el de sin costo vuelve a incluirlos si estaban excluidos. Los inactivos no entran en el resumen.
 - **Editar productos:** al ver por producto (también en las vistas de "Revisar captura"), cada fila tiene un botón Editar que abre el mismo formulario de Productos. Solo lo ve quien tiene `products.update`. Al guardar, la valuación se vuelve a pedir con los mismos filtros, orden y página.
 
 Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-inventario.md).
@@ -30,7 +30,7 @@ Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-
 - Como **supervisor**, quiero saber cuántos productos y unidades tengo y cuánto valen al costo y a precio de venta, para conocer el dinero que tengo en mercancía.
 - Como **supervisor**, quiero ver la utilidad estimada del inventario por categoría, proveedor y producto, para saber dónde está el dinero y qué deja más.
 - Como **administrador central**, quiero ver el inventario consolidado y el de cada sucursal, para comparar cuánto tiene cada una.
-- Como **almacenista**, quiero encontrar los productos con stock sin costo, con precio menor al costo o inactivos, para corregirlos.
+- Como **almacenista**, quiero encontrar los productos con stock sin costo, con el costo mayor al precio o inactivos, para corregirlos.
 - Como **supervisor**, quiero ver la utilidad estimada sin los productos sin costo y sin categorías que no son mercancía, para no confiar en una cifra inflada.
 
 ## Archivos modificados

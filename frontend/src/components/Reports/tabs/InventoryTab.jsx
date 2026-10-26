@@ -41,7 +41,7 @@ const SORTS = [
 // Cada acceso de "Revisar captura" y el valor que muestra además del conteo
 const ALERTS = [
   { id: 'no_cost',    key: 'noCost',    label: 'Sin costo',             icon: 'bi-currency-dollar',  amount: 'saleValue', amountLabel: 'a precio de venta' },
-  { id: 'below_cost', key: 'belowCost', label: 'Precio menor al costo', icon: 'bi-graph-down-arrow', amount: 'costValue', amountLabel: 'al costo' },
+  { id: 'below_cost', key: 'belowCost', label: 'Costo mayor al precio', icon: 'bi-graph-down-arrow', amount: 'costValue', amountLabel: 'al costo' },
   { id: 'inactive',   key: 'inactive',  label: 'Inactivos con stock',   icon: 'bi-eye-slash',        amount: 'costValue', amountLabel: 'al costo' },
 ]
 

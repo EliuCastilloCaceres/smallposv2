@@ -56,13 +56,27 @@ const normalizeSku = (v) => {
 
 const UOM_OPTIONS = ['pza', 'kg', 'g', 'lt', 'ml', 'mt', 'cm', 'par', 'cja', 'paq'];
 
+// Filtro de costo de Productos (specs/09-filtro-de-costo-en-productos.md).
+// Costo mayor al precio = sale_price < purchase_price, la misma regla de la
+// alerta de Valuación de inventario; incluye precio 0 con costo, y un producto
+// sin costo nunca la cumple.
+const COST_ISSUE_CONDITIONS = {
+  no_cost:     'p.purchase_price = 0',
+  above_price: 'p.purchase_price > p.sale_price',
+  any:         '(p.purchase_price = 0 OR p.purchase_price > p.sale_price)',
+};
+
 // ─── getAllProducts ────────────────────────────────────────────────────────────
 
 const getAllProducts = async ({ filters = {} } = {}) => {
   const {
-    search, category_id, provider_id, is_active, no_cost,
+    search, category_id, provider_id, is_active, no_cost, cost_issue,
     page = 1, limit = 20,
   } = filters;
+
+  if (cost_issue !== undefined && !Object.hasOwn(COST_ISSUE_CONDITIONS, cost_issue)) {
+    throw new ValidationError('cost_issue debe ser no_cost, above_price o any');
+  }
 
   const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
   const safePage  = Math.max(parseInt(page) || 1, 1);
@@ -84,6 +98,7 @@ const getAllProducts = async ({ filters = {} } = {}) => {
   // Sin costo = purchase_price en 0, la misma regla que las líneas de venta
   // (spec 03). La columna es NOT NULL, así que no hay costos nulos (spec 06).
   if (no_cost === 'true' || no_cost === '1') conditions.push('p.purchase_price = 0');
+  if (cost_issue) conditions.push(COST_ISSUE_CONDITIONS[cost_issue]);
 
   if (search) {
     conditions.push('(p.name LIKE ? OR p.sku LIKE ? OR p.description LIKE ?)');

@@ -347,13 +347,13 @@ describe('InventoryTab', () => {
       fireEvent.click(viewBy('Categoría'))
       await waitFor(() => expect(lastParams().get('group_by')).toBe('category'))
 
-      fireEvent.click(alertButton('Precio menor al costo'))
+      fireEvent.click(alertButton('Costo mayor al precio'))
 
       await waitFor(() => expect(lastParams().get('alert')).toBe('below_cost'))
       expect(lastParams().get('group_by')).toBe('product')
-      expect(alertButton('Precio menor al costo')).toHaveAttribute('aria-pressed', 'true')
+      expect(alertButton('Costo mayor al precio')).toHaveAttribute('aria-pressed', 'true')
       const banner = within(screen.getByRole('region', { name: 'Desglose' })).getByRole('status')
-      expect(banner).toHaveTextContent('Mostrando solo: Precio menor al costo. El resumen de arriba no cambia.')
+      expect(banner).toHaveTextContent('Mostrando solo: Costo mayor al precio. El resumen de arriba no cambia.')
 
       fireEvent.click(within(banner).getByRole('button', { name: 'Ver todos' }))
       await waitFor(() => expect(lastParams().has('alert')).toBe(false))
@@ -363,7 +363,7 @@ describe('InventoryTab', () => {
       await renderTab()
 
       expect(alertButton('Sin costo')).toHaveTextContent('940 artículos$254,570.00 a precio de venta')
-      expect(alertButton('Precio menor al costo')).toHaveTextContent('8 artículos$38,000.00 al costo')
+      expect(alertButton('Costo mayor al precio')).toHaveTextContent('8 artículos$38,000.00 al costo')
       expect(alertButton('Inactivos con stock')).toBeDisabled()
     })
 
@@ -398,7 +398,7 @@ describe('InventoryTab', () => {
       await renderTab()
       expect(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' })).toBeInTheDocument()
 
-      fireEvent.click(alertButton('Precio menor al costo'))
+      fireEvent.click(alertButton('Costo mayor al precio'))
       await waitFor(() => expect(lastParams().get('alert')).toBe('below_cost'))
 
       expect(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' })).toBeInTheDocument()

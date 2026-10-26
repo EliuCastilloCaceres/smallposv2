@@ -24,13 +24,18 @@ export const StockBadge = ({ stock }) => {
 const fmtMXN = (v) =>
   `$${Number(v ?? 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`
 
-// ── Costo y margen (spec 06) ──────────────────────────────────────────────────
+// ── Costo y margen (specs 06 y 09) ────────────────────────────────────────────
 // Sin costo = purchase_price en 0, la misma regla que las líneas de venta.
 // Se muestra el mismo "$0.00", en naranja, para que la columna quede alineada.
-const CostValue = ({ product }) =>
-  Number(product.purchase_price) === 0
-    ? <span className="prd-no-cost" title="Sin costo">{fmtMXN(0)}</span>
-    : fmtMXN(product.purchase_price)
+// Un costo mayor al precio de venta (incluido precio 0) sale en rojo.
+const CostValue = ({ product }) => {
+  const cost = Number(product.purchase_price)
+  if (cost === 0) return <span className="prd-no-cost" title="Sin costo">{fmtMXN(0)}</span>
+  if (cost > Number(product.sale_price)) {
+    return <span className="prd-cost-above" title="Costo mayor al precio de venta">{fmtMXN(cost)}</span>
+  }
+  return fmtMXN(cost)
+}
 
 const MarginValue = ({ product }) => {
   const margin = productMargin(product)
@@ -103,7 +108,7 @@ const Products = () => {
       if (catRef.current)    params.set('category_id', catRef.current)
       if (provRef.current)   params.set('provider_id', provRef.current)
       if (statusRef.current) params.set('is_active',   statusRef.current)
-      if (costRef.current)   params.set('no_cost',     costRef.current)
+      if (costRef.current)   params.set('cost_issue',  costRef.current)
 
       // Catálogo global — no se filtra por sucursal
 
@@ -249,10 +254,12 @@ const Products = () => {
           <option value="false">Inactivos</option>
         </select>
 
-        <select className="prd-select" value={filterCost}
+        <select className="prd-select" aria-label="Costo" value={filterCost}
           onChange={handleFilter(setFilterCost, costRef)}>
-          <option value="">Con y sin costo</option>
-          <option value="true">Sin costo</option>
+          <option value="">Todos los costos</option>
+          <option value="no_cost">Sin costo</option>
+          <option value="above_price">Costo mayor al precio</option>
+          <option value="any">Sin costo o costo mayor al precio</option>
         </select>
       </div>
 

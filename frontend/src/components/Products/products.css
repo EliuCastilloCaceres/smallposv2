@@ -148,6 +148,7 @@
 /* ── Costo y margen (spec 06) ────────────────────────────── */
 /* Costo en 0: el mismo monto, en naranja y sin fondo, para no romper la alineación */
 .prd-no-cost { font-weight: 600; color: var(--prd-warn); }
+.prd-cost-above { font-weight: 600; color: var(--prd-red); }
 .prd-margin-value--negative { color: var(--prd-red); font-weight: 600; }
 
 /* ── Status ──────────────────────────────────────────────── */

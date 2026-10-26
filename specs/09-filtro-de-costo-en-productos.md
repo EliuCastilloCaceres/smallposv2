@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-26 | 2026-10-26 |
+| **Terminada** | 2026-10-26 | 2026-10-26 |
 
 ## Objetivo
 
@@ -75,35 +75,35 @@ Amplía el filtro de costo de **Productos** para encontrar, además de los produ
 
 ## Tareas
 
-- [ ] **T1. Parámetro `cost_issue` en `GET /api/products`** (requisitos 1, 4 y 5).
+- [x] **T1. Parámetro `cost_issue` en `GET /api/products`** (requisitos 1, 4 y 5).
   — tests de integración:
   - `no_cost`, `above_price` y `any` devuelven solo esos productos, y el total cuenta solo esos; `above_price` incluye uno con precio 0 y excluye uno con el costo igual al precio;
   - se combina con `is_active`, `category_id` y `search`;
   - sin el parámetro vienen todos, y `no_cost=true` sigue funcionando;
   - un valor desconocido responde 400;
   - un cajero, con `products.read`, lo puede usar.
-- [ ] **T2. Filtro y marca en Productos** (requisitos 2, 3 y 6).
+- [x] **T2. Filtro y marca en Productos** (requisitos 2, 3 y 6).
   — tests, con la API simulada:
   - el selector tiene las cuatro opciones y empieza en "Todos los costos";
   - cada opción manda su `cost_issue`, vuelve a la página 1 y se combina con la categoría;
   - un costo mayor al precio sale en rojo con su ayuda, en la tabla y en las tarjetas; un costo 0 sigue en naranja y un costo normal no se marca.
-- [ ] **T3. Nombre de la alerta en Valuación** (requisito 7).
+- [x] **T3. Nombre de la alerta en Valuación** (requisito 7).
   — tests: `InventoryTab.test.jsx` usa el nombre nuevo en el acceso y en el aviso "Mostrando solo".
-- [ ] **T4. Documentación** (requisito 8).
+- [x] **T4. Documentación** (requisito 8).
   — tests: no lleva tests de código.
 
 ## Criterios de aceptación
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | En la base de desarrollo, "Sin costo", "Costo mayor al precio" y "Sin costo o costo mayor al precio" listan solo esos productos, y el contador coincide con un conteo en la base. | _(se llena al cerrar)_ |
-| 2 | El filtro se combina con la búsqueda, la categoría, el proveedor y el estado. | _(se llena al cerrar)_ |
-| 3 | Un costo mayor al precio se ve en rojo con su ayuda, en la tabla y en las tarjetas; el costo 0 sigue en naranja. | _(se llena al cerrar)_ |
-| 4 | En Valuación de inventario, la alerta dice "Costo mayor al precio" y sigue contando lo mismo. | _(se llena al cerrar)_ |
-| 5 | `no_cost=true` sigue funcionando como en la spec 06. | _(se llena al cerrar)_ |
-| 6 | El filtro se ve y se usa bien en móvil. | _(se llena al cerrar)_ |
-| 7 | `shared-features/feat-filtro-de-costo-en-productos.md` existe y está en el índice. | _(se llena al cerrar)_ |
-| 8 | Los tests del backend y del frontend pasan. | _(se llena al cerrar)_ |
+| 1 | En la base de desarrollo, "Sin costo", "Costo mayor al precio" y "Sin costo o costo mayor al precio" listan solo esos productos, y el contador coincide con un conteo en la base. | 2026-10-26, copia de producción (`marksexpressv2`): con `cost_issue`, la API da 844 sin costo, 8 con el costo mayor al precio y 852 con los dos, igual que un conteo SQL de los productos activos (`purchase_price = 0`, `purchase_price > sale_price` y la unión). En pantalla, "Costo mayor al precio" muestra "8 productos encontrados", entre ellos "vive100 ultra" (costo $12.00, precio $0.00). El usuario lo probó en el navegador. Tests `list-cost-issue.test.js` (las tres opciones con su total, precio 0, costo igual al precio que no cuenta y sin costo que no cuenta como costo mayor al precio). |
+| 2 | El filtro se combina con la búsqueda, la categoría, el proveedor y el estado. | 2026-10-26, copia de producción: "Costo mayor al precio" con los inactivos da 5 productos, igual que SQL. Tests `list-cost-issue.test.js` (estado, categoría y búsqueda) y `Products.test.jsx` (vuelve a la página 1 y conserva la categoría). |
+| 3 | Un costo mayor al precio se ve en rojo con su ayuda, en la tabla y en las tarjetas; el costo 0 sigue en naranja. | 2026-10-26: revisado en pantalla (Edge sin ventana, 1366 px y 390 px) sobre la copia de producción: los 8 costos salen en rojo en la tabla y en las tarjetas, junto con el margen negativo. Test `Products.test.jsx`: el costo mayor al precio lleva `prd-cost-above` y la ayuda "Costo mayor al precio de venta" en la tabla y en las tarjetas; el costo 0 sigue con `prd-no-cost` y un costo normal no se marca. |
+| 4 | En Valuación de inventario, la alerta dice "Costo mayor al precio" y sigue contando lo mismo. | 2026-10-26: el acceso y el aviso "Mostrando solo" de Valuación dicen "Costo mayor al precio"; `alert=below_cost` y el cálculo no cambiaron. Test `InventoryTab.test.jsx` (30 tests) con el nombre nuevo. |
+| 5 | `no_cost=true` sigue funcionando como en la spec 06. | 2026-10-26, copia de producción: `no_cost=true` sigue dando 844 productos. Los 4 tests de `list-no-cost.test.js` (spec 06) pasan sin cambios, y `list-cost-issue.test.js` lo comprueba otra vez. |
+| 6 | El filtro se ve y se usa bien en móvil. | 2026-10-26: revisado en Edge sin ventana con el ancho de un teléfono (390 px): las tarjetas muestran el costo en rojo. El selector "Costo" está en la fila de filtros de Productos, que en móvil se desliza de lado como los demás filtros (comportamiento de antes de esta spec). No se revisó en un teléfono real. |
+| 7 | `shared-features/feat-filtro-de-costo-en-productos.md` existe y está en el índice. | 2026-10-26: el archivo existe y está en la tabla del índice (`sf-index.md`). `feat-valuacion-de-inventario.md` tiene el nombre nuevo de la alerta. |
+| 8 | Los tests del backend y del frontend pasan. | 2026-10-26: backend 156/156 (23 archivos), frontend 159/159 (21 archivos); `vite build` compila. |
 
 ## Dudas abiertas
 
@@ -116,3 +116,8 @@ Amplía el filtro de costo de **Productos** para encontrar, además de los produ
 | 2026-10-26 | Antes de redactar se resolvieron 5 dudas:<br>1. Primero se cierra la spec 08.<br>2. El selector de costo tiene cuatro opciones: todos, sin costo, costo mayor al precio y los dos juntos.<br>3. El costo mayor al precio se marca en rojo, además del margen.<br>4. Se documenta en `shared-features/`.<br>5. El nombre es "Costo mayor al precio", también en la alerta de Valuación de inventario. | Usuario |
 | 2026-10-26 | Creación de la spec, en **Borrador**. | — |
 | 2026-10-26 | Se aprueba la spec: pasa a **Lista**. | Usuario |
+| 2026-10-26 | T1 terminada: `productService.getAllProducts` acepta `cost_issue` (`no_cost`, `above_price` o `any`) y responde 400 con otro valor. El valor se valida con `Object.hasOwn`, para que una clave heredada como `toString` no pase. | Usuario |
+| 2026-10-26 | T2 terminada: el selector "Costo" de `Products.jsx` tiene las cuatro opciones y manda `cost_issue`; `CostValue` muestra en rojo (`.prd-cost-above`) un costo mayor al precio, en la tabla y en las tarjetas. | Usuario |
+| 2026-10-26 | T3 terminada: la alerta de Valuación dice "Costo mayor al precio", en el acceso y en el aviso "Mostrando solo". Anotado en el historial de la spec 07 y en `feat-valuacion-de-inventario.md`. | Usuario |
+| 2026-10-26 | T4 terminada: `shared-features/feat-filtro-de-costo-en-productos.md`, agregado al índice. Sus notas para portar se revisaron contra smallpos-saas: depende de portar antes la spec 06. | Usuario |
+| 2026-10-26 | Se llena la evidencia de los 8 criterios de aceptación con la copia de la base de producción, después de que el usuario lo probó en el navegador. Pasa a **Terminada**. | Usuario |

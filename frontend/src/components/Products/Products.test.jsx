@@ -1,5 +1,6 @@
 // src/components/Products/Products.test.jsx
-// Costo, margen y filtro "Sin costo" en la tabla de Productos (spec 06, T3).
+// Costo, margen y filtro de costo en la tabla de Productos (spec 06, T3;
+// spec 09, T2).
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../../services/api'
@@ -84,6 +85,16 @@ describe('Products cost and margin', () => {
     expect(within(tableRow('Galletas')).getByText('40.0%')).not.toHaveClass('prd-margin-value--negative')
   })
 
+  it('shows a cost above the price in red, and leaves a normal cost unmarked', async () => {
+    await renderProducts()
+    const cost = within(tableRow('Refresco')).getByText('$112.50')
+
+    expect(cost).toHaveClass('prd-cost-above')
+    expect(cost).toHaveAttribute('title', 'Costo mayor al precio de venta')
+    expect(within(tableRow('Galletas')).getByText('$60.00')).not.toHaveClass('prd-cost-above')
+    expect(within(tableRow('Agua natural')).getByText('$0.00')).not.toHaveClass('prd-cost-above')
+  })
+
   it('shows the cost and the margin in the mobile cards', async () => {
     const { container } = await renderProducts()
     const card = (name) => within(container.querySelector('.prd-cards')).getByText(name).closest('.prd-card')
@@ -92,11 +103,36 @@ describe('Products cost and margin', () => {
     expect(card('Galletas')).toHaveTextContent('Margen40.0%')
     expect(within(card('Agua natural')).getByText('$0.00')).toHaveClass('prd-no-cost')
     expect(card('Agua natural')).toHaveTextContent('Margen—')
+    expect(within(card('Refresco')).getByText('$112.50')).toHaveClass('prd-cost-above')
   })
 
-  it('sends no_cost=true, goes back to page 1 and combines with the other filters', async () => {
-    const { container } = await renderProducts()
+  it('offers the four cost options, starting with every cost', async () => {
+    await renderProducts()
+    const select = screen.getByRole('combobox', { name: 'Costo' })
+
+    expect([...select.options].map(o => o.textContent)).toEqual([
+      'Todos los costos', 'Sin costo', 'Costo mayor al precio', 'Sin costo o costo mayor al precio',
+    ])
+    expect(select).toHaveValue('')
+  })
+
+  it.each([
+    ['Sin costo', 'no_cost'],
+    ['Costo mayor al precio', 'above_price'],
+    ['Sin costo o costo mayor al precio', 'any'],
+  ])('sends cost_issue for "%s"', async (label, value) => {
+    await renderProducts()
+    const select = screen.getByRole('combobox', { name: 'Costo' })
+
+    fireEvent.change(select, { target: { value: [...select.options].find(o => o.textContent === label).value } })
+
+    await waitFor(() => expect(lastProductsParams().get('cost_issue')).toBe(value))
     expect(lastProductsParams().has('no_cost')).toBe(false)
+  })
+
+  it('sends the cost filter, goes back to page 1 and combines with the other filters', async () => {
+    const { container } = await renderProducts()
+    expect(lastProductsParams().has('cost_issue')).toBe(false)
 
     fireEvent.click(container.querySelector('.prd-pagination button:last-child'))
     await waitFor(() => expect(lastProductsParams().get('page')).toBe('2'))
@@ -104,8 +140,8 @@ describe('Products cost and margin', () => {
     fireEvent.change(screen.getByDisplayValue('Todas las categorías'), { target: { value: '5' } })
     await waitFor(() => expect(lastProductsParams().get('category_id')).toBe('5'))
 
-    fireEvent.change(screen.getByDisplayValue('Con y sin costo'), { target: { value: 'true' } })
-    await waitFor(() => expect(lastProductsParams().get('no_cost')).toBe('true'))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Costo' }), { target: { value: 'above_price' } })
+    await waitFor(() => expect(lastProductsParams().get('cost_issue')).toBe('above_price'))
     expect(lastProductsParams().get('page')).toBe('1')
     expect(lastProductsParams().get('category_id')).toBe('5')
   })

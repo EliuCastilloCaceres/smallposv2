@@ -98,7 +98,7 @@ const tableRow = (name) =>
   within(screen.getByRole('table', { name: 'Valuación por grupo' })).getByText(name).closest('tr')
 
 const summaryCard = () => within(screen.getByRole('region', { name: 'Resumen del inventario' }))
-const stat = (label) => summaryCard().getByText(label).closest('.rpt-inv-stat')
+const stat = (label) => summaryCard().getByText(label).closest('.rpt-stat')
 const alertButton = (label) => within(screen.getByRole('region', { name: 'Revisar captura' })).getByText(label).closest('button')
 const viewBy = (label) => within(screen.getByRole('group', { name: 'Ver por' })).getByRole('button', { name: label })
 const noCostToggle = () => screen.getByRole('button', { name: 'Productos sin costo' })

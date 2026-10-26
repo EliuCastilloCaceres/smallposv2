@@ -296,34 +296,49 @@
 
 .rpt-flag--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }
 
-/* ── Valuación de inventario ─────────────────────────────── */
-/* De arriba abajo: filtros, resumen, "Revisar captura" y desglose */
+/* ── Piezas comunes de las pestañas (specs 07 y 08) ───────────── */
+/* Cada control va arriba de lo que cambia: lo que cambia toda la pestaña,
+   en la tarjeta de filtros de arriba; lo que cambia la tabla o la gráfica,
+   en el encabezado de su sección. */
 @media (min-width: 768px) { .rpt-only-mobile { display: none !important; } }
 
-.rpt-inv-section-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--rpt-text); }
+.rpt-section-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--rpt-text); }
 
-/* Filtros. En móvil se ve la búsqueda y el botón "Filtros"; en desktop,
-   todo en dos filas (el cuerpo se integra a la fila con display: contents) */
-.rpt-inv-filters {
+/* Tarjeta de filtros (Reports/components/FilterCard.jsx). En móvil se ve
+   `top` y el botón "Filtros"; en desktop, todo en dos filas (el cuerpo se
+   integra a la fila con display: contents) */
+.rpt-filter-card {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px;
   background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
 }
-.rpt-inv-filters__top { display: flex; gap: 8px; flex: 1 1 100%; min-width: 0; }
-.rpt-inv-search { position: relative; flex: 1; min-width: 0; }
-.rpt-inv-search i {
-  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-  font-size: 14px; color: var(--rpt-muted); pointer-events: none;
-}
-.rpt-inv-search input { width: 100%; box-sizing: border-box; padding-left: 34px; cursor: text; }
-.rpt-inv-filters__body { display: none; flex-direction: column; gap: 10px; flex: 1 1 100%; }
-.rpt-inv-filters__body--open { display: flex; }
-.rpt-inv-filters__selects { display: flex; flex-direction: column; gap: 8px; }
-.rpt-inv-filters__selects .rpt-select { width: 100%; }
-.rpt-inv-filters__exclude {
+.rpt-filter-card__top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; }
+.rpt-filter-card__top .rpt-presets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.rpt-filter-card__body { display: none; flex-direction: column; gap: 10px; flex: 1 1 100%; }
+.rpt-filter-card__body--open { display: flex; }
+.rpt-filter-card__row { display: flex; flex-direction: column; gap: 8px; }
+.rpt-filter-card__row .rpt-select { width: 100%; }
+.rpt-filter-card__exclude {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   padding-top: 10px; border-top: 1px dashed var(--rpt-border);
 }
-.rpt-inv-filters__label { font-size: 12px; font-weight: 600; color: var(--rpt-muted); }
+.rpt-filter-card__label { font-size: 12px; font-weight: 600; color: var(--rpt-muted); }
+@media (min-width: 768px) {
+  .rpt-filter-card__top { flex: 1 1 260px; }
+  .rpt-filter-card__body { display: contents; }
+  .rpt-filter-card__row { flex-direction: row; }
+  .rpt-filter-card__row .rpt-select { width: auto; }
+  .rpt-filter-card__exclude { flex: 1 1 100%; }
+}
+
+/* Fechas que cubre el periodo elegido, junto a los presets */
+.rpt-period-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--rpt-muted); white-space: nowrap; }
+
+.rpt-search { position: relative; flex: 1; min-width: 0; }
+.rpt-search i {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 14px; color: var(--rpt-muted); pointer-events: none;
+}
+.rpt-search input { width: 100%; box-sizing: border-box; padding-left: 34px; cursor: text; }
 .rpt-toggle--sm, .rpt-select--sm { height: 34px; font-size: 12px; }
 .rpt-toggle--sm { padding: 0 10px; }
 .rpt-select--sm { padding: 0 8px; }
@@ -332,14 +347,6 @@
   display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
   padding: 0 5px; border-radius: 999px; background: var(--rpt-accent); color: #fff; font-size: 11px; font-weight: 700;
 }
-@media (min-width: 768px) {
-  .rpt-inv-filters__top { flex: 1 1 260px; }
-  .rpt-inv-filters__body { display: contents; }
-  .rpt-inv-filters__selects { flex-direction: row; }
-  .rpt-inv-filters__selects .rpt-select { width: auto; }
-  .rpt-inv-filters__exclude { flex: 1 1 100%; }
-}
-
 .rpt-chip {
   display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border-radius: 999px;
   border: 1px solid var(--rpt-border); background: var(--rpt-bg);
@@ -347,42 +354,75 @@
 }
 .rpt-chip:hover { border-color: var(--rpt-red); color: var(--rpt-red); }
 
-/* Resumen */
-.rpt-inv-summary {
+/* Resumen: una tarjeta con una cifra principal */
+.rpt-summary {
   display: flex; flex-direction: column; gap: 14px; padding: 18px 20px;
   background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
 }
-.rpt-inv-summary__main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.rpt-inv-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.rpt-inv-stat--hero { grid-column: 1 / -1; }
-.rpt-inv-stat__label { font-size: 12px; font-weight: 500; color: var(--rpt-muted); }
-.rpt-inv-stat__value { font-size: 20px; font-weight: 700; color: var(--rpt-text); font-variant-numeric: tabular-nums; }
-.rpt-inv-stat__value .rpt-diff { font-weight: 700; }
-.rpt-inv-stat--hero .rpt-inv-stat__value { font-size: 30px; letter-spacing: -.5px; line-height: 1.15; }
-.rpt-inv-stat__sub { font-size: 12px; color: var(--rpt-muted); }
+.rpt-summary__main { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.rpt-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rpt-stat--hero { grid-column: 1 / -1; }
+.rpt-stat__label { font-size: 12px; font-weight: 500; color: var(--rpt-muted); }
+.rpt-stat__value { font-size: 20px; font-weight: 700; color: var(--rpt-text); font-variant-numeric: tabular-nums; }
+.rpt-stat__value .rpt-diff { font-weight: 700; }
+.rpt-stat--hero .rpt-stat__value { font-size: 30px; letter-spacing: -.5px; line-height: 1.15; }
+.rpt-stat__sub { font-size: 12px; color: var(--rpt-muted); }
 @media (min-width: 768px) {
-  .rpt-inv-summary__main { grid-template-columns: 2fr 1fr 1fr; align-items: start; }
-  .rpt-inv-stat--hero { grid-column: auto; }
+  .rpt-summary__main { grid-template-columns: 2fr 1fr 1fr; align-items: start; }
+  .rpt-stat--hero { grid-column: auto; }
 }
-.rpt-inv-note {
+/* Resumen como cuenta, de izquierda a derecha: ventas − costo = utilidad.
+   En móvil, una cifra debajo de otra y sin los signos */
+.rpt-summary__equation { display: flex; flex-direction: column; gap: 12px; }
+.rpt-summary__op { display: none; }
+@media (min-width: 768px) {
+  .rpt-summary__equation { flex-direction: row; align-items: flex-start; gap: 20px; }
+  .rpt-summary__op { display: block; padding-top: 18px; font-size: 22px; font-weight: 300; line-height: 1; color: var(--rpt-muted); }
+}
+.rpt-note {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 10px 12px;
   border-radius: var(--rpt-radius-sm); background: var(--rpt-yellow-bg); color: #92610a; font-size: 13px;
 }
-.rpt-inv-note > span { flex: 1 1 220px; }
-.rpt-inv-note button {
+.rpt-note > span { flex: 1 1 220px; }
+.rpt-note button {
   all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-weight: 600; white-space: nowrap;
   background: rgba(255,255,255,.7); border: 1px solid currentColor;
 }
-.rpt-inv-note button:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; }
-.rpt-inv-note--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }
-.rpt-inv-summary__foot {
+.rpt-note button:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; }
+.rpt-note--info { background: var(--rpt-accent-bg); color: var(--rpt-accent); }
+.rpt-summary__foot {
   display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px;
   padding-top: 12px; border-top: 1px solid var(--rpt-border); font-size: 13px; color: var(--rpt-muted);
 }
-.rpt-inv-summary__reserved { display: flex; flex-direction: column; gap: 4px; }
-.rpt-inv-summary__reserved strong { margin-right: 6px; font-weight: 600; color: var(--rpt-text); }
-.rpt-inv-summary__asof { font-size: 12px; color: var(--rpt-muted); }
+.rpt-summary__lines { display: flex; flex-direction: column; gap: 4px; }
+.rpt-summary__lines strong { margin-right: 6px; font-weight: 600; color: var(--rpt-text); }
+.rpt-summary__asof { font-size: 12px; color: var(--rpt-muted); }
 
+/* Secciones (desglose, gráfica): título y sus controles arriba */
+.rpt-section { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 16px; }
+.rpt-section__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.rpt-section__head .rpt-presets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.rpt-section__count { margin-left: auto; font-size: 13px; color: var(--rpt-muted); }
+.rpt-button-group { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; }
+.rpt-button-group__caption { font-size: 12px; font-weight: 600; color: var(--rpt-muted); white-space: nowrap; }
+.rpt-button-group .rpt-presets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+
+/* Encabezados ordenables (Reports/components/Sorting.jsx) */
+.rpt-sort {
+  all: unset; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+}
+.rpt-sort i { font-size: 11px; opacity: .4; }
+.rpt-sort:hover { color: var(--rpt-text); }
+.rpt-sort--active { color: var(--rpt-text); }
+.rpt-sort--active i { opacity: 1; color: var(--rpt-accent); }
+.rpt-sort:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; border-radius: 4px; }
+
+/* Costo con ventas o productos sin costo, y margen negativo, como en Productos */
+.rpt-no-cost { font-weight: 600; color: var(--rpt-orange); }
+.rpt-margin--neg { font-weight: 600; color: var(--rpt-red); }
+
+/* ── Valuación de inventario ─────────────────────────────── */
 /* Revisar captura */
 .rpt-inv-review { display: flex; flex-direction: column; gap: 8px; }
 .rpt-inv-review__list { display: grid; grid-template-columns: 1fr; gap: 8px; }
@@ -406,11 +446,7 @@
 .rpt-inv-issue__text small { font-size: 12px; color: var(--rpt-muted); }
 .rpt-inv-issue > .bi-chevron-right { color: var(--rpt-muted); }
 
-/* Desglose */
-.rpt-inv-breakdown { display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 16px; }
-.rpt-inv-breakdown__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.rpt-inv-breakdown__head .rpt-presets { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.rpt-inv-breakdown__count { margin-left: auto; font-size: 13px; color: var(--rpt-muted); }
+/* Aviso de la vista de una alerta */
 .rpt-inv-viewing {
   display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 8px 12px;
   border-radius: var(--rpt-radius-sm); background: rgba(217,119,6,.08);
@@ -421,21 +457,21 @@
   all: unset; cursor: pointer; padding: 4px 10px; border-radius: 6px; font-weight: 600;
   background: var(--rpt-surface); border: 1px solid rgba(217,119,6,.4);
 }
-.rpt-sort {
-  all: unset; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
-}
-.rpt-sort i { font-size: 11px; opacity: .4; }
-.rpt-sort:hover { color: var(--rpt-text); }
-.rpt-sort--active { color: var(--rpt-text); }
-.rpt-sort--active i { opacity: 1; color: var(--rpt-accent); }
-.rpt-sort:focus-visible { outline: 2px solid var(--rpt-accent); outline-offset: 2px; border-radius: 4px; }
 
 /* Botón Editar de cada producto del desglose */
 .rpt-row-edit { width: 34px; height: 34px; border-color: transparent; background: transparent; color: var(--rpt-muted); }
 .rpt-row-edit:hover { border-color: var(--rpt-border); background: var(--rpt-surface); color: var(--rpt-accent); }
 .rpt-card__top .rpt-row-edit { margin-left: auto; }
 
-/* Costo 0 y margen negativo, como en Productos */
-.rpt-no-cost { font-weight: 600; color: var(--rpt-orange); }
-.rpt-margin--neg { font-weight: 600; color: var(--rpt-red); }
+/* ── Tendencia de ventas: tarjeta de la gráfica ──────────────── */
+/* De arriba abajo: métrica, granularidad y comparación; título; KPIs;
+   aviso de ventas sin costo y gráfica (spec 08, requisito 13) */
+.rpt-chart-card {
+  display: flex; flex-direction: column; gap: 14px; padding: 16px;
+  background: var(--rpt-surface); border: 1px solid var(--rpt-border); border-radius: var(--rpt-radius);
+}
+.rpt-chart-card__controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.rpt-chart-card__title { margin: 0; font-size: 15px; font-weight: 700; color: var(--rpt-text); }
+.rpt-chart-card__title span { font-weight: 400; color: var(--rpt-muted); }
+.rpt-chart-card .rpt-kpi { background: var(--rpt-bg); border-color: transparent; }
+.rpt-chart-card .rpt-chart { padding: 4px 0 0; border: none; border-radius: 0; }

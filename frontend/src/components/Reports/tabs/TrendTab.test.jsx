@@ -1,9 +1,10 @@
 // src/components/Reports/tabs/TrendTab.test.jsx
-// Pestaña Tendencia de ventas con la API simulada (spec 05, T4).
+// Pestaña Tendencia de ventas con la API simulada (spec 05, T4; rediseño de la
+// spec 08, T3).
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../../../services/api'
-import { getTrendPresetRange } from '../../../utils/dateRanges'
+import { fmtRangeLabel, getTrendPresetRange } from '../../../utils/dateRanges'
 import TrendTab, { TrendTooltip } from './TrendTab'
 import { fmtMoney } from './trendData'
 
@@ -77,7 +78,11 @@ const renderTab = async () => {
   await screen.findByText('Total', { selector: '.rpt-kpi__label' })
 }
 
-const granularityButton = (name) => within(screen.getByRole('group', { name: 'Granularidad' })).getByRole('button', { name })
+const buttonIn = (group) => (name) => within(screen.getByRole('group', { name: group })).getByRole('button', { name })
+const granularityButton = buttonIn('Granularidad')
+const metricButton      = buttonIn('Métrica')
+const compareButton     = buttonIn('Comparación')
+const compareOptions    = () => within(screen.getByRole('group', { name: 'Comparación' })).getAllByRole('button').map(b => b.textContent)
 
 // Recharts mide el contenedor con ResizeObserver, que jsdom no trae
 const OriginalResizeObserver = globalThis.ResizeObserver
@@ -105,6 +110,32 @@ describe('TrendTab', () => {
     expect(params.get('compare')).toBe('none')
   })
 
+  it('shows the dates of the period next to the presets, and a chart title with the metric, granularity and period', async () => {
+    await renderTab()
+    const { start, end } = getTrendPresetRange('last12months')
+    const chart = within(screen.getByRole('region', { name: 'Gráfica de tendencia' }))
+
+    expect(within(screen.getByRole('region', { name: 'Filtros' })).getByText(fmtRangeLabel(start, end))).toBeInTheDocument()
+    expect(chart.getByRole('heading')).toHaveTextContent(`Monto vendido por mes · ${fmtRangeLabel(start, end)}`)
+
+    fireEvent.click(metricButton('Número de ventas'))
+
+    expect(chart.getByRole('heading')).toHaveTextContent('Número de ventas por mes')
+    expect(metricButton('Número de ventas')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('puts the metric, granularity and comparison controls above the KPIs, inside the chart card', async () => {
+    await renderTab()
+    const card = screen.getByRole('region', { name: 'Gráfica de tendencia' })
+    const metricGroup = within(card).getByRole('group', { name: 'Métrica' })
+    const totalCard = kpiCard('Total')
+
+    expect(card).toContainElement(totalCard)
+    expect(metricGroup.compareDocumentPosition(totalCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(card).getByRole('group', { name: 'Granularidad' })).toBeInTheDocument()
+    expect(within(card).getByRole('group', { name: 'Comparación' })).toBeInTheDocument()
+  })
+
   it('disables the granularities beyond their limit and goes back to the automatic one when the range changes', async () => {
     await renderTab()
 
@@ -126,9 +157,10 @@ describe('TrendTab', () => {
   it('sends the chosen comparison', async () => {
     await renderTab()
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Comparación' }), { target: { value: 'previous_year' } })
+    fireEvent.click(compareButton('Año anterior'))
 
     await waitFor(() => expect(lastTrendParams().get('compare')).toBe('previous_year'))
+    expect(compareButton('Año anterior')).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows total, average and best period, and only the range ticket and best period for the ticket', async () => {
@@ -139,7 +171,7 @@ describe('TrendTab', () => {
     expect(kpiCard('Mejor mes')).toHaveTextContent(fmtMoney(1000))
     expect(kpiCard('Mejor mes')).toHaveTextContent('enero 2026')
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Métrica' }), { target: { value: 'avgTicket' } })
+    fireEvent.click(metricButton('Ticket promedio'))
 
     expect(kpiCard('Ticket del rango')).toHaveTextContent(fmtMoney(250))
     expect(screen.queryByText('Promedio por mes')).toBeNull()
@@ -148,14 +180,14 @@ describe('TrendTab', () => {
 
   it('shows the previous year value and change in each card, or "—" when it was 0', async () => {
     await renderTab()
-    fireEvent.change(screen.getByRole('combobox', { name: 'Comparación' }), { target: { value: 'previous_year' } })
+    fireEvent.click(compareButton('Año anterior'))
     await screen.findByText(/vs .*1,250/)
 
     expect(kpiCard('Total')).toHaveTextContent('↑ 20%')
     expect(kpiCard('Mejor mes')).toHaveTextContent('enero 2025')
     expect(kpiCard('Mejor mes')).toHaveTextContent('↑ 25%')
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Métrica' }), { target: { value: 'profit' } })
+    fireEvent.click(metricButton('Utilidad bruta'))
     expect(kpiCard('Total')).toHaveTextContent(`vs ${fmtMoney(0)} · —`)
   })
 
@@ -165,7 +197,7 @@ describe('TrendTab', () => {
 
     expect(screen.queryByRole('status')).toBeNull()
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Métrica' }), { target: { value: 'profit' } })
+    fireEvent.click(metricButton('Utilidad bruta'))
 
     expect(screen.getByRole('status')).toHaveTextContent(`1 línea de venta sin costo suma ${fmtMoney(90)}`)
     expect(screen.getByRole('status')).toHaveTextContent('Ventas y utilidad')
@@ -173,20 +205,15 @@ describe('TrendTab', () => {
 
   it('offers the branch comparison only to the central admin in the consolidated view', async () => {
     await renderTab()
-    const optionsOf = () => within(screen.getByRole('combobox', { name: 'Comparación' }))
-      .getAllByRole('option').map(o => o.value)
-
-    expect(optionsOf()).toEqual(['none', 'previous_year'])
+    expect(compareOptions()).toEqual(['Ninguna', 'Año anterior'])
   })
 
   it('removes the branch comparison when the central admin filters a branch', async () => {
     isCentralAdmin = true
     await renderTab()
-    const comparison = screen.getByRole('combobox', { name: 'Comparación' })
+    expect(compareOptions()).toEqual(['Ninguna', 'Año anterior', 'Por sucursal'])
 
-    expect(within(comparison).getAllByRole('option').map(o => o.value)).toEqual(['none', 'previous_year', 'branch'])
-
-    fireEvent.change(comparison, { target: { value: 'branch' } })
+    fireEvent.click(compareButton('Por sucursal'))
     await waitFor(() => expect(lastTrendParams().get('compare')).toBe('branch'))
 
     await screen.findByRole('option', { name: 'Sucursal Norte' })
@@ -194,7 +221,7 @@ describe('TrendTab', () => {
 
     await waitFor(() => expect(lastTrendParams().get('branch_id')).toBe('2'))
     expect(lastTrendParams().get('compare')).toBe('none')
-    expect(within(comparison).getAllByRole('option').map(o => o.value)).toEqual(['none', 'previous_year'])
+    expect(compareOptions()).toEqual(['Ninguna', 'Año anterior'])
   })
 })
 

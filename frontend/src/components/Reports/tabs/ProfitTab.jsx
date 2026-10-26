@@ -3,10 +3,18 @@
 // margen, agrupados por producto, categoría, sucursal o proveedor
 // (specs/04-reporte-ventas-y-utilidad.md). Los cálculos los hace el backend
 // (GET /reports/profit); aquí solo se filtra y se muestra.
+//
+// De arriba abajo (specs/08-rediseno-ventas-y-tendencia.md): filtros (cambian
+// todo lo de abajo), resumen como una cuenta (ventas − costo = utilidad) y
+// desglose con sus controles encima.
 import { useState, useEffect, useMemo } from 'react'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
-import { DATE_PRESETS, getPresetRange, today } from '../../../utils/dateRanges'
+import { DATE_PRESETS, getPresetRange, today, fmtRangeLabel } from '../../../utils/dateRanges'
+import FilterCard from '../components/FilterCard'
+import ButtonGroup from '../components/ButtonGroup'
+import SummaryNote from '../components/SummaryNote'
+import { SortHeader, SortSelect, nextSort } from '../components/Sorting'
 
 const PAGE_SIZE = 20
 
@@ -17,11 +25,13 @@ const GROUPS = [
   { id: 'provider', label: 'Proveedor', plural: 'proveedores', icon: 'bi-truck' },
 ]
 
+// Columnas ordenables; el costo no, porque el endpoint no ordena por costo
 const SORTS = [
-  { id: 'profit',    label: 'Utilidad' },
-  { id: 'net_sales', label: 'Venta neta' },
-  { id: 'margin',    label: 'Margen' },
+  { id: 'net_sales', label: 'Venta neta', more: 'Mayor venta neta', less: 'Menor venta neta' },
+  { id: 'profit',    label: 'Utilidad',   more: 'Mayor utilidad',   less: 'Menor utilidad' },
+  { id: 'margin',    label: 'Margen',     more: 'Mayor margen',     less: 'Menor margen' },
 ]
+const sortColumn = (id) => SORTS.find(s => s.id === id)
 
 const EMPTY_SUMMARY = { netSales: 0, cost: 0, profit: 0, margin: null, noCost: { lines: 0, netSales: 0 } }
 
@@ -38,28 +48,38 @@ const fmtUnits = (units, uom) =>
 
 const fmtProductCount = (n) => `${n} producto${n !== 1 ? 's' : ''}`
 
+const fmtLines = (n) => `${n} línea${n !== 1 ? 's' : ''}`
+
+// El SKU no se repite si es igual al nombre
+const showSku = (row) => row.sku && row.sku.trim().toLowerCase() !== row.name.trim().toLowerCase()
+
 const Profit = ({ value }) => (
   <span className={value < 0 ? 'rpt-diff rpt-diff--neg' : 'rpt-diff'}>{money(value)}</span>
 )
 
-const NoCostFlag = ({ row }) => row.noCost.lines > 0 && (
-  <span
-    className="rpt-flag"
-    title={`Incluye ${row.noCost.lines} línea${row.noCost.lines !== 1 ? 's' : ''} sin costo (${money(row.noCost.netSales)})`}
-  >
-    <i className="bi bi-exclamation-triangle" />
-    Sin costo
-  </span>
-)
+// Una fila con líneas sin costo muestra su costo en naranja, como Productos
+// y Valuación, en lugar de una pastilla junto al nombre
+const CostValue = ({ row }) =>
+  row.noCost.lines > 0
+    ? (
+      <span
+        className="rpt-no-cost"
+        title={`Incluye ${fmtLines(row.noCost.lines)} sin costo (${money(row.noCost.netSales)} de venta neta)`}
+      >
+        {money(row.cost)}
+      </span>
+    )
+    : money(row.cost)
 
 const ProfitTab = () => {
   const { isCentralAdmin } = useUser()
 
-  const [rows,       setRows]       = useState([])
-  const [pagination, setPagination] = useState({ total: 0, page: 1, totalPages: 1 })
-  const [summary,    setSummary]    = useState(EMPTY_SUMMARY)
-  const [isLoading,  setIsLoading]  = useState(true)
-  const [error,      setError]      = useState(null)
+  const [rows,        setRows]        = useState([])
+  const [rowsGroupBy, setRowsGroupBy] = useState('product')
+  const [pagination,  setPagination]  = useState({ total: 0, page: 1, totalPages: 1 })
+  const [summary,     setSummary]     = useState(EMPTY_SUMMARY)
+  const [isLoading,   setIsLoading]   = useState(true)
+  const [error,       setError]       = useState(null)
 
   // Filtros — rango por defecto: este mes
   const [preset,           setPreset]           = useState('month')
@@ -87,7 +107,9 @@ const ProfitTab = () => {
   // Agrupar por sucursal solo tiene sentido en el consolidado del admin central
   const canGroupByBranch = isCentralAdmin && !selectedBranchId
   const groups = GROUPS.filter(g => g.id !== 'branch' || canGroupByBranch)
-  const group  = GROUPS.find(g => g.id === groupBy)
+  // La tabla se dibuja con la agrupación de las filas que ya llegaron: al
+  // cambiarla, las filas viejas siguen en pantalla hasta que llega la respuesta
+  const group  = GROUPS.find(g => g.id === rowsGroupBy)
 
   const { start, end } = useMemo(() => getPresetRange(preset, customRange), [preset, customRange])
 
@@ -111,6 +133,7 @@ const ProfitTab = () => {
       .then(({ data }) => {
         if (ignore) return
         setRows(data.data)
+        setRowsGroupBy(new URLSearchParams(query).get('group_by'))
         setPagination(data.pagination)
         setSummary(data.summary)
       })
@@ -123,249 +146,248 @@ const ProfitTab = () => {
 
   // Cambiar cualquier filtro regresa a la página 1
   const withPageReset = (setter) => (value) => { setter(value); setPage(1) }
-  const changePreset     = withPageReset(setPreset)
-  const changeCategory   = withPageReset(setCategoryId)
-  const changeGroupBy    = withPageReset(setGroupBy)
-  const changeSortBy     = withPageReset(setSortBy)
-  const changeCustom     = withPageReset(setCustomRange)
-  const toggleSortDir    = () => { setSortDir(d => (d === 'desc' ? 'asc' : 'desc')); setPage(1) }
-  const toggleExclude    = () => { setExcludeNoCost(v => !v); setPage(1) }
+  const changePreset        = withPageReset(setPreset)
+  const changeCategory      = withPageReset(setCategoryId)
+  const changeGroupBy       = withPageReset(setGroupBy)
+  const changeCustom        = withPageReset(setCustomRange)
+  const changeExcludeNoCost = withPageReset(setExcludeNoCost)
   const changeBranch = (value) => {
     setSelectedBranchId(value)
     if (value && groupBy === 'branch') setGroupBy('product')
     setPage(1)
   }
+  const changeSort = (next) => {
+    setSortBy(next.sortBy)
+    setSortDir(next.sortDir)
+    setPage(1)
+  }
+  const sortByColumn = (id) => changeSort(nextSort({ sortBy, sortDir }, id))
 
-  const isProduct = groupBy === 'product'
+  const isProduct     = rowsGroupBy === 'product'
+  const activeFilters = [selectedBranchId, categoryId].filter(Boolean).length + (excludeNoCost ? 1 : 0)
+  const sortProps     = { sortBy, sortDir, onSort: sortByColumn }
 
   return (
     <div className="rpt-panel">
-      {/* ── KPIs ── */}
-      <div className="rpt-kpis">
-        <div className="rpt-kpi">
-          <span className="rpt-kpi__label">Ventas netas</span>
-          <span className="rpt-kpi__value">{money(summary.netSales)}</span>
-        </div>
-        <div className="rpt-kpi">
-          <span className="rpt-kpi__label">Costo de lo vendido</span>
-          <span className="rpt-kpi__value">{money(summary.cost)}</span>
-        </div>
-        <div className={`rpt-kpi ${summary.profit < 0 ? 'rpt-kpi--alert' : ''}`}>
-          <span className="rpt-kpi__label">Utilidad bruta</span>
-          <span className="rpt-kpi__value">{money(summary.profit)}</span>
-        </div>
-        <div className="rpt-kpi">
-          <span className="rpt-kpi__label">Margen</span>
-          <span className="rpt-kpi__value">{fmtMargin(summary.margin)}</span>
-        </div>
-      </div>
-
-      {/* ── Aviso de ventas sin costo ── */}
-      {summary.noCost.lines > 0 && (
-        <div className="rpt-notice" role="status">
-          <i className="bi bi-exclamation-triangle" />
-          <span>
-            {summary.noCost.lines} línea{summary.noCost.lines !== 1 ? 's' : ''} de venta sin costo
-            suma{summary.noCost.lines !== 1 ? 'n' : ''} {money(summary.noCost.netSales)} de venta neta.
-            Como no tienen costo capturado, su utilidad aparece completa. Puedes excluirlas con
-            "Excluir ventas sin costo".
-          </span>
-        </div>
-      )}
-
-      {/* ── Filtros ── */}
-      <div className="rpt-filters">
-        <div className="rpt-presets" role="tablist" aria-label="Rango de fechas">
-          {DATE_PRESETS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              role="tab"
-              aria-selected={preset === p.id}
-              className={`rpt-preset ${preset === p.id ? 'rpt-preset--active' : ''}`}
-              onClick={() => changePreset(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {preset === 'custom' && (
+      {/* ── 1. Filtros: cambian todo lo de abajo ── */}
+      <FilterCard
+        activeCount={activeFilters}
+        top={(
           <>
-            <input
-              type="date" className="rpt-select" aria-label="Fecha inicial"
-              value={customRange.start} max={customRange.end}
-              onChange={e => changeCustom({ ...customRange, start: e.target.value })}
-            />
-            <input
-              type="date" className="rpt-select" aria-label="Fecha final"
-              value={customRange.end} min={customRange.start} max={today()}
-              onChange={e => changeCustom({ ...customRange, end: e.target.value })}
-            />
+            <div className="rpt-presets" role="tablist" aria-label="Rango de fechas">
+              {DATE_PRESETS.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={preset === p.id}
+                  className={`rpt-preset ${preset === p.id ? 'rpt-preset--active' : ''}`}
+                  onClick={() => changePreset(p.id)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {preset === 'custom' && (
+              <>
+                <input
+                  type="date" className="rpt-select" aria-label="Fecha inicial"
+                  value={customRange.start} max={customRange.end}
+                  onChange={e => changeCustom({ ...customRange, start: e.target.value })}
+                />
+                <input
+                  type="date" className="rpt-select" aria-label="Fecha final"
+                  value={customRange.end} min={customRange.start} max={today()}
+                  onChange={e => changeCustom({ ...customRange, end: e.target.value })}
+                />
+              </>
+            )}
+
+            <span className="rpt-period-label">
+              <i className="bi bi-calendar3" aria-hidden="true" />
+              {fmtRangeLabel(start, end)}
+            </span>
           </>
         )}
+      >
+        <div className="rpt-filter-card__row">
+          {isCentralAdmin && (
+            <select
+              className="rpt-select" aria-label="Sucursal"
+              value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
+            >
+              <option value="">Todas las sucursales</option>
+              {branches.map(b => (
+                <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+              ))}
+            </select>
+          )}
 
-        {isCentralAdmin && (
           <select
-            className="rpt-select" aria-label="Sucursal"
-            value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
+            className="rpt-select" aria-label="Categoría"
+            value={categoryId} onChange={e => changeCategory(e.target.value)}
           >
-            <option value="">Consolidado (todas)</option>
-            {branches.map(b => (
-              <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+            <option value="">Todas las categorías</option>
+            {categories.map(c => (
+              <option key={c.category_id} value={c.category_id}>{c.name}</option>
             ))}
           </select>
+        </div>
+
+        <div className="rpt-filter-card__exclude" role="group" aria-label="Excluir del cálculo">
+          <span className="rpt-filter-card__label">Excluir del cálculo:</span>
+          <button
+            type="button"
+            aria-pressed={excludeNoCost}
+            className={`rpt-toggle rpt-toggle--sm ${excludeNoCost ? 'rpt-toggle--active' : ''}`}
+            onClick={() => changeExcludeNoCost(!excludeNoCost)}
+          >
+            <i className={`bi ${excludeNoCost ? 'bi-check-square-fill' : 'bi-square'}`} aria-hidden="true" />
+            Ventas sin costo
+          </button>
+        </div>
+      </FilterCard>
+
+      {/* ── 2. Resumen: ventas − costo = utilidad ── */}
+      <section className="rpt-summary" aria-label="Resumen de ventas y utilidad">
+        <div className="rpt-summary__equation">
+          <div className="rpt-stat">
+            <span className="rpt-stat__label">Ventas netas</span>
+            <span className="rpt-stat__value">{money(summary.netSales)}</span>
+          </div>
+          <span className="rpt-summary__op" aria-hidden="true">−</span>
+          <div className="rpt-stat">
+            <span className="rpt-stat__label">Costo de lo vendido</span>
+            <span className="rpt-stat__value">{money(summary.cost)}</span>
+          </div>
+          <span className="rpt-summary__op" aria-hidden="true">=</span>
+          <div className="rpt-stat rpt-stat--hero">
+            <span className="rpt-stat__label">Utilidad bruta</span>
+            <span className="rpt-stat__value"><Profit value={summary.profit} /></span>
+            <span className="rpt-stat__sub">Margen {fmtMargin(summary.margin)}</span>
+          </div>
+        </div>
+
+        {!excludeNoCost && summary.noCost.lines > 0 && (
+          <SummaryNote actionLabel="Excluirlas" onAction={() => changeExcludeNoCost(true)}>
+            {fmtLines(summary.noCost.lines)} de venta sin costo
+            suma{summary.noCost.lines !== 1 ? 'n' : ''} {money(summary.noCost.netSales)} de venta neta.
+            Como no tienen costo capturado, su utilidad cuenta completa.
+          </SummaryNote>
+        )}
+        {excludeNoCost && (
+          <SummaryNote tone="info" actionLabel="Incluirlas" onAction={() => changeExcludeNoCost(false)}>
+            No se están contando las ventas sin costo.
+          </SummaryNote>
+        )}
+      </section>
+
+      {/* ── 3. Desglose ── */}
+      <section className="rpt-section" aria-label="Desglose">
+        <div className="rpt-section__head">
+          <h2 className="rpt-section-title">Desglose</h2>
+          <ButtonGroup label="Ver por" options={groups} value={groupBy} onChange={changeGroupBy} />
+          <span className="rpt-section__count">
+            {pagination.total.toLocaleString('es-MX')}{' '}
+            {pagination.total === 1 ? group.label.toLowerCase() : group.plural} con ventas
+          </span>
+          <SortSelect sorts={SORTS} sortBy={sortBy} sortDir={sortDir} onChange={changeSort} />
+        </div>
+
+        {error && (
+          <div className="rpt-alert">
+            <i className="bi bi-exclamation-circle" />
+            <span>{error}</span>
+            <button onClick={() => setError(null)}><i className="bi bi-x" /></button>
+          </div>
         )}
 
-        <select
-          className="rpt-select" aria-label="Categoría"
-          value={categoryId} onChange={e => changeCategory(e.target.value)}
-        >
-          <option value="">Todas las categorías</option>
-          {categories.map(c => (
-            <option key={c.category_id} value={c.category_id}>{c.name}</option>
-          ))}
-        </select>
-
-        <select
-          className="rpt-select" aria-label="Agrupar por"
-          value={groupBy} onChange={e => changeGroupBy(e.target.value)}
-        >
-          {groups.map(g => (
-            <option key={g.id} value={g.id}>Por {g.label.toLowerCase()}</option>
-          ))}
-        </select>
-
-        <select
-          className="rpt-select" aria-label="Ordenar por"
-          value={sortBy} onChange={e => changeSortBy(e.target.value)}
-        >
-          {SORTS.map(s => (
-            <option key={s.id} value={s.id}>Ordenar: {s.label.toLowerCase()}</option>
-          ))}
-        </select>
-
-        <button
-          type="button"
-          className="rpt-btn rpt-btn--ghost rpt-btn--icon"
-          onClick={toggleSortDir}
-          aria-label={sortDir === 'desc' ? 'Orden de mayor a menor' : 'Orden de menor a mayor'}
-          title={sortDir === 'desc' ? 'De mayor a menor' : 'De menor a mayor'}
-        >
-          <i className={`bi ${sortDir === 'desc' ? 'bi-sort-down' : 'bi-sort-up'}`} />
-        </button>
-
-        <button
-          type="button"
-          aria-pressed={excludeNoCost}
-          className={`rpt-toggle ${excludeNoCost ? 'rpt-toggle--active' : ''}`}
-          onClick={toggleExclude}
-        >
-          <i className="bi bi-funnel" />
-          Excluir ventas sin costo
-        </button>
-      </div>
-
-      <span className="rpt-panel__count">
-        {pagination.total} {pagination.total === 1 ? group.label.toLowerCase() : group.plural} con ventas
-      </span>
-
-      {/* ── Error ── */}
-      {error && (
-        <div className="rpt-alert">
-          <i className="bi bi-exclamation-circle" />
-          <span>{error}</span>
-          <button onClick={() => setError(null)}><i className="bi bi-x" /></button>
-        </div>
-      )}
-
-      {/* ── Contenido ── */}
-      {isLoading ? (
-        <div className="rpt-skeleton">
-          {[...Array(5)].map((_, i) => <div key={i} className="rpt-skeleton__row" />)}
-        </div>
-      ) : rows.length === 0 ? (
-        <div className="rpt-empty">
-          <i className="bi bi-graph-up" />
-          <span>No hay ventas en este rango</span>
-        </div>
-      ) : (
-        <>
-          {/* ── Tabla (desktop) ── */}
-          <div className="rpt-table-wrap">
-            <table className="rpt-table rpt-table--static">
-              <thead>
-                <tr>
-                  <th>{group.label}</th>
-                  <th className="num">{isProduct ? 'Unidades' : 'Productos'}</th>
-                  <th className="num">Venta neta</th>
-                  <th className="num">Costo</th>
-                  <th className="num">Utilidad</th>
-                  <th className="num">Margen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.groupId ?? 'none'}>
-                    <td>
-                      <div className="rpt-group-name">
-                        <span className="rpt-folio">{r.name}</span>
-                        <NoCostFlag row={r} />
-                      </div>
-                      {isProduct && r.sku && <span className="rpt-td-muted">{r.sku}</span>}
-                    </td>
-                    <td className="num">{isProduct ? fmtUnits(r.units, r.uom) : r.productCount}</td>
-                    <td className="num">{money(r.netSales)}</td>
-                    <td className="num">{money(r.cost)}</td>
-                    <td className="num"><Profit value={r.profit} /></td>
-                    <td className="num">{fmtMargin(r.margin)}</td>
+        {isLoading ? (
+          <div className="rpt-skeleton">
+            {[...Array(5)].map((_, i) => <div key={i} className="rpt-skeleton__row" />)}
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="rpt-empty">
+            <i className="bi bi-graph-up" />
+            <span>No hay ventas en este rango</span>
+          </div>
+        ) : (
+          <>
+            {/* ── Tabla (desktop) ── */}
+            <div className="rpt-table-wrap">
+              <table className="rpt-table rpt-table--static" aria-label="Ventas y utilidad por grupo">
+                <thead>
+                  <tr>
+                    <th>{group.label}</th>
+                    <th className="num">{isProduct ? 'Unidades' : 'Productos'}</th>
+                    <SortHeader sort={sortColumn('net_sales')} {...sortProps} />
+                    <th className="num">Costo</th>
+                    <SortHeader sort={sortColumn('profit')} {...sortProps} />
+                    <SortHeader sort={sortColumn('margin')} {...sortProps} />
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* ── Cards (móvil) ── */}
-          <div className="rpt-cards">
-            {rows.map(r => (
-              <div key={r.groupId ?? 'none'} className="rpt-card rpt-card--static">
-                <div className="rpt-card__top">
-                  <span className="rpt-folio">{r.name}</span>
-                  <NoCostFlag row={r} />
-                </div>
-                <div className="rpt-card__meta">
-                  <span className="rpt-muted">
-                    <i className={`bi ${group.icon}`} />
-                    {isProduct ? fmtUnits(r.units, r.uom) : fmtProductCount(r.productCount)}
-                  </span>
-                  <span className="rpt-muted">Venta neta {money(r.netSales)} · Costo {money(r.cost)}</span>
-                </div>
-                <div className="rpt-card__total">
-                  <span className="rpt-muted">Utilidad · {fmtMargin(r.margin)}</span>
-                  <strong><Profit value={r.profit} /></strong>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* ── Paginación ── */}
-          {pagination.totalPages > 1 && (
-            <div className="rpt-pagination">
-              <button className="rpt-btn rpt-btn--ghost rpt-btn--icon" aria-label="Página anterior"
-                onClick={() => setPage(p => p - 1)} disabled={page === 1}>
-                <i className="bi bi-chevron-left" />
-              </button>
-              <span className="rpt-pagination__info">
-                Página <strong>{page}</strong> de <strong>{pagination.totalPages}</strong>
-              </span>
-              <button className="rpt-btn rpt-btn--ghost rpt-btn--icon" aria-label="Página siguiente"
-                onClick={() => setPage(p => p + 1)} disabled={page === pagination.totalPages}>
-                <i className="bi bi-chevron-right" />
-              </button>
+                </thead>
+                <tbody>
+                  {rows.map(r => (
+                    <tr key={r.groupId ?? 'none'}>
+                      <td>
+                        <span className="rpt-folio">{r.name}</span>
+                        {isProduct && showSku(r) && <span className="rpt-td-muted d-block">{r.sku}</span>}
+                      </td>
+                      <td className="num">{isProduct ? fmtUnits(r.units, r.uom) : r.productCount}</td>
+                      <td className="num">{money(r.netSales)}</td>
+                      <td className="num"><CostValue row={r} /></td>
+                      <td className="num"><Profit value={r.profit} /></td>
+                      <td className="num">{fmtMargin(r.margin)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </>
-      )}
+
+            {/* ── Cards (móvil) ── */}
+            <div className="rpt-cards">
+              {rows.map(r => (
+                <div key={r.groupId ?? 'none'} className="rpt-card rpt-card--static">
+                  <div className="rpt-card__top">
+                    <span className="rpt-folio">{r.name}</span>
+                  </div>
+                  <div className="rpt-card__meta">
+                    <span className="rpt-muted">
+                      <i className={`bi ${group.icon}`} />
+                      {isProduct ? fmtUnits(r.units, r.uom) : fmtProductCount(r.productCount)}
+                    </span>
+                    <span className="rpt-muted">
+                      Venta neta {money(r.netSales)} · Costo <CostValue row={r} />
+                    </span>
+                  </div>
+                  <div className="rpt-card__total">
+                    <span className="rpt-muted">Utilidad · {fmtMargin(r.margin)}</span>
+                    <strong><Profit value={r.profit} /></strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ── Paginación ── */}
+            {pagination.totalPages > 1 && (
+              <div className="rpt-pagination">
+                <button className="rpt-btn rpt-btn--ghost rpt-btn--icon" aria-label="Página anterior"
+                  onClick={() => setPage(p => p - 1)} disabled={page === 1}>
+                  <i className="bi bi-chevron-left" />
+                </button>
+                <span className="rpt-pagination__info">
+                  Página <strong>{page}</strong> de <strong>{pagination.totalPages}</strong>
+                </span>
+                <button className="rpt-btn rpt-btn--ghost rpt-btn--icon" aria-label="Página siguiente"
+                  onClick={() => setPage(p => p + 1)} disabled={page === pagination.totalPages}>
+                  <i className="bi bi-chevron-right" />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
     </div>
   )
 }

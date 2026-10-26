@@ -13,6 +13,10 @@ import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { fmtDateTime } from '../../../utils/dateFormatter'
 import ProductModal from '../../Products/modals/ProductModal'
+import FilterCard from '../components/FilterCard'
+import ButtonGroup from '../components/ButtonGroup'
+import SummaryNote from '../components/SummaryNote'
+import { SortHeader, SortSelect, nextSort } from '../components/Sorting'
 // Estilos del formulario de producto; sus variables viven en .prd-root
 import '../../Products/products.css'
 
@@ -106,20 +110,6 @@ const EditButton = ({ row, onEdit }) => (
   </button>
 )
 
-// Encabezado que ordena la tabla: un clic ordena de mayor a menor, otro invierte
-const SortHeader = ({ sort, sortBy, sortDir, onSort }) => {
-  const active = sortBy === sort.id
-  const arrow  = !active ? 'bi-arrow-down-up' : sortDir === 'desc' ? 'bi-arrow-down' : 'bi-arrow-up'
-  return (
-    <th className="num" aria-sort={active ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none'}>
-      <button type="button" className={`rpt-sort ${active ? 'rpt-sort--active' : ''}`} onClick={() => onSort(sort.id)}>
-        {sort.label}
-        <i className={`bi ${arrow}`} aria-hidden="true" />
-      </button>
-    </th>
-  )
-}
-
 const InventoryTab = () => {
   const { isCentralAdmin, hasPermission } = useUser()
   const canEditProducts = hasPermission('products', 'update')
@@ -145,7 +135,6 @@ const InventoryTab = () => {
   const [sortDir,          setSortDir]          = useState('desc')
   const [excludeNoCost,    setExcludeNoCost]    = useState(false)
   const [page,             setPage]             = useState(1)
-  const [showFilters,      setShowFilters]      = useState(false)
   // Producto abierto en el formulario, y un contador para volver a pedir la
   // valuación con los mismos parámetros después de guardarlo
   const [editing,          setEditing]          = useState(null)
@@ -249,17 +238,12 @@ const InventoryTab = () => {
     if (value !== 'product') setAlertView(null)
     setPage(1)
   }
-  const sortByColumn = (id) => {
-    if (id === sortBy) setSortDir(d => (d === 'desc' ? 'asc' : 'desc'))
-    else { setSortBy(id); setSortDir('desc') }
+  const changeSort = (next) => {
+    setSortBy(next.sortBy)
+    setSortDir(next.sortDir)
     setPage(1)
   }
-  const changeSort = (value) => {
-    const [id, dir] = value.split(':')
-    setSortBy(id)
-    setSortDir(dir)
-    setPage(1)
-  }
+  const sortByColumn = (id) => changeSort(nextSort({ sortBy, sortDir }, id))
   // Ver los artículos sin costo con su exclusión encendida la apaga
   const selectAlert = (id) => {
     if (alertView === id) { setAlertView(null); setPage(1); return }
@@ -283,9 +267,10 @@ const InventoryTab = () => {
   return (
     <div className="rpt-panel">
       {/* ── 1. Filtros: cambian todo lo de abajo ── */}
-      <section className="rpt-inv-filters" aria-label="Filtros">
-        <div className="rpt-inv-filters__top">
-          <div className="rpt-inv-search">
+      <FilterCard
+        activeCount={activeFilters}
+        top={(
+          <div className="rpt-search">
             <i className="bi bi-search" aria-hidden="true" />
             <input
               type="search" className="rpt-select" aria-label="Buscar"
@@ -293,128 +278,112 @@ const InventoryTab = () => {
               value={searchInput} onChange={e => setSearchInput(e.target.value)}
             />
           </div>
-          <button
-            type="button" className="rpt-toggle rpt-only-mobile"
-            aria-expanded={showFilters} onClick={() => setShowFilters(v => !v)}
+        )}
+      >
+        <div className="rpt-filter-card__row">
+          {isCentralAdmin && (
+            <select
+              className="rpt-select" aria-label="Sucursal"
+              value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
+            >
+              <option value="">Todas las sucursales</option>
+              {branches.map(b => (
+                <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
+              ))}
+            </select>
+          )}
+
+          <select
+            className="rpt-select" aria-label="Categoría"
+            value={categoryId} onChange={e => changeCategory(e.target.value)}
           >
-            <i className="bi bi-sliders" />
-            Filtros
-            {activeFilters > 0 && <span className="rpt-badge" aria-label={`${activeFilters} activos`}>{activeFilters}</span>}
-          </button>
-        </div>
-
-        <div className={`rpt-inv-filters__body ${showFilters ? 'rpt-inv-filters__body--open' : ''}`}>
-          <div className="rpt-inv-filters__selects">
-            {isCentralAdmin && (
-              <select
-                className="rpt-select" aria-label="Sucursal"
-                value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
-              >
-                <option value="">Todas las sucursales</option>
-                {branches.map(b => (
-                  <option key={b.branch_id} value={b.branch_id}>{b.name}</option>
-                ))}
-              </select>
-            )}
-
-            <select
-              className="rpt-select" aria-label="Categoría"
-              value={categoryId} onChange={e => changeCategory(e.target.value)}
-            >
-              <option value="">Todas las categorías</option>
-              {categories.map(c => (
-                <option key={c.category_id} value={c.category_id}>{c.name}</option>
-              ))}
-            </select>
-
-            <select
-              className="rpt-select" aria-label="Proveedor"
-              value={providerId} onChange={e => changeProvider(e.target.value)}
-            >
-              <option value="">Todos los proveedores</option>
-              {providers.map(p => (
-                <option key={p.provider_id} value={p.provider_id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="rpt-inv-filters__exclude" role="group" aria-label="Excluir del cálculo">
-            <span className="rpt-inv-filters__label">Excluir del cálculo:</span>
-            <button
-              type="button"
-              aria-pressed={excludeNoCost}
-              className={`rpt-toggle rpt-toggle--sm ${excludeNoCost ? 'rpt-toggle--active' : ''}`}
-              onClick={() => changeExcludeNoCost(!excludeNoCost)}
-            >
-              <i className={`bi ${excludeNoCost ? 'bi-check-square-fill' : 'bi-square'}`} aria-hidden="true" />
-              Productos sin costo
-            </button>
-            <select
-              className="rpt-select rpt-select--sm" aria-label="Excluir categoría"
-              value="" disabled={Boolean(categoryId)}
-              title={categoryId ? 'Para excluir categorías elige "Todas las categorías"' : undefined}
-              onChange={e => addExcluded(e.target.value)}
-            >
-              <option value="">+ Categoría…</option>
-              {excludable.map(c => (
-                <option key={c.category_id} value={c.category_id}>{c.name}</option>
-              ))}
-            </select>
-            {excludedIds.map(id => (
-              <button
-                key={id} type="button" className="rpt-chip"
-                aria-label={`Quitar exclusión de ${categoryName(id)}`}
-                onClick={() => removeExcluded(id)}
-              >
-                {categoryName(id)} <i className="bi bi-x" />
-              </button>
+            <option value="">Todas las categorías</option>
+            {categories.map(c => (
+              <option key={c.category_id} value={c.category_id}>{c.name}</option>
             ))}
-          </div>
+          </select>
+
+          <select
+            className="rpt-select" aria-label="Proveedor"
+            value={providerId} onChange={e => changeProvider(e.target.value)}
+          >
+            <option value="">Todos los proveedores</option>
+            {providers.map(p => (
+              <option key={p.provider_id} value={p.provider_id}>{p.name}</option>
+            ))}
+          </select>
         </div>
-      </section>
+
+        <div className="rpt-filter-card__exclude" role="group" aria-label="Excluir del cálculo">
+          <span className="rpt-filter-card__label">Excluir del cálculo:</span>
+          <button
+            type="button"
+            aria-pressed={excludeNoCost}
+            className={`rpt-toggle rpt-toggle--sm ${excludeNoCost ? 'rpt-toggle--active' : ''}`}
+            onClick={() => changeExcludeNoCost(!excludeNoCost)}
+          >
+            <i className={`bi ${excludeNoCost ? 'bi-check-square-fill' : 'bi-square'}`} aria-hidden="true" />
+            Productos sin costo
+          </button>
+          <select
+            className="rpt-select rpt-select--sm" aria-label="Excluir categoría"
+            value="" disabled={Boolean(categoryId)}
+            title={categoryId ? 'Para excluir categorías elige "Todas las categorías"' : undefined}
+            onChange={e => addExcluded(e.target.value)}
+          >
+            <option value="">+ Categoría…</option>
+            {excludable.map(c => (
+              <option key={c.category_id} value={c.category_id}>{c.name}</option>
+            ))}
+          </select>
+          {excludedIds.map(id => (
+            <button
+              key={id} type="button" className="rpt-chip"
+              aria-label={`Quitar exclusión de ${categoryName(id)}`}
+              onClick={() => removeExcluded(id)}
+            >
+              {categoryName(id)} <i className="bi bi-x" />
+            </button>
+          ))}
+        </div>
+      </FilterCard>
 
       {/* ── 2. Resumen del disponible ── */}
-      <section className="rpt-inv-summary" aria-label="Resumen del inventario">
-        <div className="rpt-inv-summary__main">
-          <div className="rpt-inv-stat rpt-inv-stat--hero">
-            <span className="rpt-inv-stat__label">Valor del inventario al costo</span>
-            <span className="rpt-inv-stat__value">{money(available.costValue)}</span>
-            <span className="rpt-inv-stat__sub">
+      <section className="rpt-summary" aria-label="Resumen del inventario">
+        <div className="rpt-summary__main">
+          <div className="rpt-stat rpt-stat--hero">
+            <span className="rpt-stat__label">Valor del inventario al costo</span>
+            <span className="rpt-stat__value">{money(available.costValue)}</span>
+            <span className="rpt-stat__sub">
               <span title="Cada variante cuenta como un artículo">{fmtItems(available.items)}</span>
               {' · '}{fmtUnitList(available.units)}
             </span>
           </div>
-          <div className="rpt-inv-stat">
-            <span className="rpt-inv-stat__label">A precio de venta</span>
-            <span className="rpt-inv-stat__value">{money(available.saleValue)}</span>
+          <div className="rpt-stat">
+            <span className="rpt-stat__label">A precio de venta</span>
+            <span className="rpt-stat__value">{money(available.saleValue)}</span>
           </div>
-          <div className="rpt-inv-stat">
-            <span className="rpt-inv-stat__label">Utilidad estimada</span>
-            <span className="rpt-inv-stat__value"><Profit value={available.profit} /></span>
-            <span className="rpt-inv-stat__sub">Margen {fmtMargin(available.margin)}</span>
+          <div className="rpt-stat">
+            <span className="rpt-stat__label">Utilidad estimada</span>
+            <span className="rpt-stat__value"><Profit value={available.profit} /></span>
+            <span className="rpt-stat__sub">Margen {fmtMargin(available.margin)}</span>
           </div>
         </div>
 
         {!excludeNoCost && summary.noCost.items > 0 && (
-          <div className="rpt-inv-note" role="status">
-            <i className="bi bi-exclamation-triangle" aria-hidden="true" />
-            <span>
-              La utilidad incluye {fmtItems(summary.noCost.items)} sin costo, que valen{' '}
-              {money(summary.noCost.saleValue)} a precio de venta y cuentan como ganancia completa.
-            </span>
-            <button type="button" onClick={() => changeExcludeNoCost(true)}>Excluirlos</button>
-          </div>
+          <SummaryNote actionLabel="Excluirlos" onAction={() => changeExcludeNoCost(true)}>
+            La utilidad incluye {fmtItems(summary.noCost.items)} sin costo, que valen{' '}
+            {money(summary.noCost.saleValue)} a precio de venta y cuentan como ganancia completa.
+          </SummaryNote>
         )}
         {excludeNoCost && alerts.noCost.items > 0 && (
-          <div className="rpt-inv-note rpt-inv-note--info" role="status">
-            <i className="bi bi-info-circle" aria-hidden="true" />
-            <span>No se están contando {fmtItems(alerts.noCost.items)} sin costo.</span>
-            <button type="button" onClick={() => changeExcludeNoCost(false)}>Incluirlos</button>
-          </div>
+          <SummaryNote tone="info" actionLabel="Incluirlos" onAction={() => changeExcludeNoCost(false)}>
+            No se están contando {fmtItems(alerts.noCost.items)} sin costo.
+          </SummaryNote>
         )}
 
-        <div className="rpt-inv-summary__foot">
-          <div className="rpt-inv-summary__reserved">
+        <div className="rpt-summary__foot">
+          <div className="rpt-summary__lines">
             {reserved.items === 0 ? (
               <span><i className="bi bi-bag" aria-hidden="true" /> Sin apartados activos</span>
             ) : (
@@ -432,7 +401,7 @@ const InventoryTab = () => {
               </>
             )}
           </div>
-          <span className="rpt-inv-summary__asof">
+          <span className="rpt-summary__asof">
             Existencias y precios al {loadedAt ? fmtDateTime(loadedAt) : '…'}
           </span>
         </div>
@@ -440,7 +409,7 @@ const InventoryTab = () => {
 
       {/* ── 3. Revisar captura ── */}
       <section className="rpt-inv-review" aria-label="Revisar captura">
-        <h2 className="rpt-inv-section-title">Revisar captura</h2>
+        <h2 className="rpt-section-title">Revisar captura</h2>
         <div className="rpt-inv-review__list">
           {ALERTS.map(a => {
             const data = alerts[a.key]
@@ -467,34 +436,14 @@ const InventoryTab = () => {
       </section>
 
       {/* ── 4. Desglose ── */}
-      <section className="rpt-inv-breakdown" aria-label="Desglose" ref={breakdownRef}>
-        <div className="rpt-inv-breakdown__head">
-          <h2 className="rpt-inv-section-title">Desglose</h2>
-          <div className="rpt-presets" role="group" aria-label="Ver por">
-            {groups.map(g => (
-              <button
-                key={g.id}
-                type="button"
-                aria-pressed={groupBy === g.id}
-                className={`rpt-preset ${groupBy === g.id ? 'rpt-preset--active' : ''}`}
-                onClick={() => changeGroupBy(g.id)}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
-          <span className="rpt-inv-breakdown__count">
+      <section className="rpt-section" aria-label="Desglose" ref={breakdownRef}>
+        <div className="rpt-section__head">
+          <h2 className="rpt-section-title">Desglose</h2>
+          <ButtonGroup label="Ver por" options={groups} value={groupBy} onChange={changeGroupBy} />
+          <span className="rpt-section__count">
             {pagination.total.toLocaleString('es-MX')} {pagination.total === 1 ? group.label.toLowerCase() : group.plural}
           </span>
-          <select
-            className="rpt-select rpt-only-mobile" aria-label="Ordenar"
-            value={`${sortBy}:${sortDir}`} onChange={e => changeSort(e.target.value)}
-          >
-            {SORTS.flatMap(s => [
-              <option key={`${s.id}:desc`} value={`${s.id}:desc`}>{s.more}</option>,
-              <option key={`${s.id}:asc`} value={`${s.id}:asc`}>{s.less}</option>,
-            ])}
-          </select>
+          <SortSelect sorts={SORTS} sortBy={sortBy} sortDir={sortDir} onChange={changeSort} />
         </div>
 
         {activeAlert && (

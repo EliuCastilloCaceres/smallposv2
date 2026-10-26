@@ -3,6 +3,11 @@
 // semana o mes, con comparación contra el año anterior o por sucursal
 // (specs/05-tendencia-de-ventas.md). Los periodos y los KPIs los calcula el
 // backend (GET /reports/trend); aquí se filtra, se grafica y se muestra.
+//
+// De arriba abajo (specs/08-rediseno-ventas-y-tendencia.md): filtros
+// (periodo y sucursal) y la tarjeta de la gráfica, con sus controles
+// (métrica, granularidad y comparación) arriba del título, los KPIs y la
+// gráfica.
 import { useState, useEffect, useMemo } from 'react'
 import { addDays, format, parseISO, subDays } from 'date-fns'
 import {
@@ -12,8 +17,10 @@ import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import {
   TREND_PRESETS, DEFAULT_TREND_PRESET, MAX_RANGE_DAYS, GRANULARITY_LIMITS,
-  getTrendPresetRange, todayInAppTimezone, rangeDays, autoGranularity, fitsGranularity,
+  getTrendPresetRange, todayInAppTimezone, rangeDays, autoGranularity, fitsGranularity, fmtRangeLabel,
 } from '../../../utils/dateRanges'
+import FilterCard from '../components/FilterCard'
+import ButtonGroup from '../components/ButtonGroup'
 import { CHART_COLORS, chartColor } from '../../../utils/chartColors'
 import {
   METRICS, GRANULARITIES, COMPARES,
@@ -213,83 +220,70 @@ const TrendTab = () => {
       ),
     ]
 
+  const granularityOptions = GRANULARITIES.map(g => {
+    const allowed = fitsGranularity(g.id, days)
+    return {
+      id: g.id, label: g.label, disabled: !allowed,
+      title: allowed ? undefined : `${g.limitLabel}: hasta ${GRANULARITY_LIMITS[g.id]} días`,
+    }
+  })
+  const shownNoun = data ? GRANULARITIES.find(g => g.id === data.granularity).noun : null
+
   return (
     <div className="rpt-panel">
-      {/* ── Filtros ── */}
-      <div className="rpt-filters">
-        <div className="rpt-presets" role="tablist" aria-label="Rango de fechas">
-          {TREND_PRESETS.map(p => (
-            <button
-              key={p.id} type="button" role="tab" aria-selected={preset === p.id}
-              className={`rpt-preset ${preset === p.id ? 'rpt-preset--active' : ''}`}
-              onClick={() => changePreset(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {preset === 'custom' && (
+      {/* ── 1. Filtros: periodo y sucursal ── */}
+      <FilterCard
+        activeCount={selectedBranchId ? 1 : 0}
+        top={(
           <>
-            <input
-              type="date" className="rpt-select" aria-label="Fecha inicial"
-              value={customRange.start} max={customRange.end}
-              min={shiftDate(customRange.end, -(MAX_RANGE_DAYS - 1))}
-              onChange={e => e.target.value && changeCustom({ ...customRange, start: e.target.value })}
-            />
-            <input
-              type="date" className="rpt-select" aria-label="Fecha final"
-              value={customRange.end} min={customRange.start}
-              max={shiftDate(customRange.start, MAX_RANGE_DAYS - 1)}
-              onChange={e => e.target.value && changeCustom({ ...customRange, end: e.target.value })}
-            />
+            <div className="rpt-presets" role="tablist" aria-label="Rango de fechas">
+              {TREND_PRESETS.map(p => (
+                <button
+                  key={p.id} type="button" role="tab" aria-selected={preset === p.id}
+                  className={`rpt-preset ${preset === p.id ? 'rpt-preset--active' : ''}`}
+                  onClick={() => changePreset(p.id)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {preset === 'custom' && (
+              <>
+                <input
+                  type="date" className="rpt-select" aria-label="Fecha inicial"
+                  value={customRange.start} max={customRange.end}
+                  min={shiftDate(customRange.end, -(MAX_RANGE_DAYS - 1))}
+                  onChange={e => e.target.value && changeCustom({ ...customRange, start: e.target.value })}
+                />
+                <input
+                  type="date" className="rpt-select" aria-label="Fecha final"
+                  value={customRange.end} min={customRange.start}
+                  max={shiftDate(customRange.start, MAX_RANGE_DAYS - 1)}
+                  onChange={e => e.target.value && changeCustom({ ...customRange, end: e.target.value })}
+                />
+              </>
+            )}
+
+            <span className="rpt-period-label">
+              <i className="bi bi-calendar3" aria-hidden="true" />
+              {fmtRangeLabel(start, end)}
+            </span>
           </>
         )}
-
+      >
         {isCentralAdmin && (
-          <select
-            className="rpt-select" aria-label="Sucursal"
-            value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
-          >
-            <option value="">Consolidado (todas)</option>
-            {branches.map(b => <option key={b.branch_id} value={b.branch_id}>{b.name}</option>)}
-          </select>
+          <div className="rpt-filter-card__row">
+            <select
+              className="rpt-select" aria-label="Sucursal"
+              value={selectedBranchId} onChange={e => changeBranch(e.target.value)}
+            >
+              <option value="">Todas las sucursales</option>
+              {branches.map(b => <option key={b.branch_id} value={b.branch_id}>{b.name}</option>)}
+            </select>
+          </div>
         )}
-      </div>
-
-      <div className="rpt-filters">
-        <select
-          className="rpt-select" aria-label="Métrica"
-          value={metric} onChange={e => setMetric(e.target.value)}
-        >
-          {METRICS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </select>
-
-        <div className="rpt-presets" role="group" aria-label="Granularidad">
-          {GRANULARITIES.map(g => {
-            const allowed = fitsGranularity(g.id, days)
-            return (
-              <button
-                key={g.id} type="button"
-                aria-pressed={granularity === g.id}
-                disabled={!allowed}
-                title={allowed ? undefined : `${g.limitLabel}: hasta ${GRANULARITY_LIMITS[g.id]} días`}
-                className={`rpt-preset ${granularity === g.id ? 'rpt-preset--active' : ''}`}
-                onClick={() => setChosenGranularity(g.id)}
-              >
-                {g.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <select
-          className="rpt-select" aria-label="Comparación"
-          value={compare} onChange={e => setCompare(e.target.value)}
-        >
-          {compares.map(c => <option key={c.id} value={c.id}>Comparar: {c.label.toLowerCase()}</option>)}
-        </select>
-      </div>
+      </FilterCard>
 
       {/* ── Error ── */}
       {error && (
@@ -300,53 +294,72 @@ const TrendTab = () => {
         </div>
       )}
 
-      {isLoading && !data ? (
-        <div className="rpt-skeleton">
-          {[...Array(3)].map((_, i) => <div key={i} className="rpt-skeleton__row" />)}
+      {/* ── 2. Gráfica: sus controles arriba ── */}
+      <section className="rpt-chart-card" aria-label="Gráfica de tendencia">
+        <ButtonGroup label="Métrica" options={METRICS} value={metric} onChange={setMetric} />
+        <div className="rpt-chart-card__controls">
+          <ButtonGroup
+            label="Granularidad" caption="Por"
+            options={granularityOptions} value={granularity} onChange={setChosenGranularity}
+          />
+          <ButtonGroup
+            label="Comparación" caption="Comparar"
+            options={compares} value={compare} onChange={setCompare}
+          />
         </div>
-      ) : data && (
-        <>
-          {/* ── KPIs ── */}
-          <TrendKpis data={data} metric={metric} compare={shownCompare} />
 
-          {/* ── Aviso de ventas sin costo ── */}
-          {metric === 'profit' && data.noCost.lines > 0 && (
-            <div className="rpt-notice" role="status">
-              <i className="bi bi-exclamation-triangle" />
-              <span>
-                {data.noCost.lines} línea{data.noCost.lines !== 1 ? 's' : ''} de venta sin costo
-                suma{data.noCost.lines !== 1 ? 'n' : ''} {fmtMoney(data.noCost.netSales)} de venta neta en
-                este rango. Como no tienen costo capturado, su utilidad aparece completa; puedes revisarlas y
-                excluirlas en Ventas y utilidad.
-              </span>
-            </div>
-          )}
-
-          {/* ── Gráfica ── */}
-          <div className={`rpt-chart ${isLoading ? 'rpt-chart--loading' : ''}`} aria-label={`Gráfica de ${metricLabel.toLowerCase()}`}>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartRows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={12} />
-                <YAxis
-                  tick={{ fontSize: 11 }} width={56}
-                  tickFormatter={fmtAxis(metric)} allowDecimals={metric !== 'orders'}
-                />
-                <Tooltip
-                  content={(
-                    <TrendTooltip
-                      metric={metric} granularity={data.granularity}
-                      compare={shownCompare} branches={data.branches ?? []}
-                    />
-                  )}
-                />
-                {shownCompare !== 'none' && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                {lines}
-              </LineChart>
-            </ResponsiveContainer>
+        {isLoading && !data ? (
+          <div className="rpt-skeleton">
+            {[...Array(3)].map((_, i) => <div key={i} className="rpt-skeleton__row" />)}
           </div>
-        </>
-      )}
+        ) : data && (
+          <>
+            <h2 className="rpt-chart-card__title">
+              {metricLabel} por {shownNoun} <span>· {fmtRangeLabel(start, end)}</span>
+            </h2>
+
+            {/* ── KPIs ── */}
+            <TrendKpis data={data} metric={metric} compare={shownCompare} />
+
+            {/* ── Aviso de ventas sin costo ── */}
+            {metric === 'profit' && data.noCost.lines > 0 && (
+              <div className="rpt-notice" role="status">
+                <i className="bi bi-exclamation-triangle" />
+                <span>
+                  {data.noCost.lines} línea{data.noCost.lines !== 1 ? 's' : ''} de venta sin costo
+                  suma{data.noCost.lines !== 1 ? 'n' : ''} {fmtMoney(data.noCost.netSales)} de venta neta en
+                  este rango. Como no tienen costo capturado, su utilidad aparece completa; puedes revisarlas y
+                  excluirlas en Ventas y utilidad.
+                </span>
+              </div>
+            )}
+
+            {/* ── Gráfica ── */}
+            <div className={`rpt-chart ${isLoading ? 'rpt-chart--loading' : ''}`} aria-label={`Gráfica de ${metricLabel.toLowerCase()}`}>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartRows} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={12} />
+                  <YAxis
+                    tick={{ fontSize: 11 }} width={56}
+                    tickFormatter={fmtAxis(metric)} allowDecimals={metric !== 'orders'}
+                  />
+                  <Tooltip
+                    content={(
+                      <TrendTooltip
+                        metric={metric} granularity={data.granularity}
+                        compare={shownCompare} branches={data.branches ?? []}
+                      />
+                    )}
+                  />
+                  {shownCompare !== 'none' && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                  {lines}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        )}
+      </section>
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DATE_PRESETS, getPresetRange,
   TREND_PRESETS, getTrendPresetRange, todayInAppTimezone, rangeDays, autoGranularity, fitsGranularity,
+  fmtRangeLabel,
 } from './dateRanges'
 
 // Miércoles 15 de octubre de 2026, a media tarde
@@ -100,5 +101,23 @@ describe('trend granularity', () => {
     expect([fitsGranularity('day', 92), fitsGranularity('day', 93)]).toEqual([true, false])
     expect([fitsGranularity('week', 731), fitsGranularity('week', 732)]).toEqual([true, false])
     expect([fitsGranularity('month', 1827), fitsGranularity('month', 1828)]).toEqual([true, false])
+  })
+})
+
+describe('fmtRangeLabel', () => {
+  it('shows a single day', () => {
+    expect(fmtRangeLabel('2026-10-26', '2026-10-26')).toBe('26 oct 2026')
+  })
+
+  it('shows the month and year once within the same month', () => {
+    expect(fmtRangeLabel('2026-10-01', '2026-10-31')).toBe('1 – 31 oct 2026')
+  })
+
+  it('shows the year once within the same year', () => {
+    expect(fmtRangeLabel('2026-08-01', '2026-10-31')).toBe('1 ago – 31 oct 2026')
+  })
+
+  it('shows both years across years', () => {
+    expect(fmtRangeLabel('2025-11-01', '2026-10-31')).toBe('1 nov 2025 – 31 oct 2026')
   })
 })

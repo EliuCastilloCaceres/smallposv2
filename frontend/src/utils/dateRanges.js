@@ -10,6 +10,7 @@ import {
   format, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subMonths,
   differenceInCalendarDays,
 } from 'date-fns'
+import { es } from 'date-fns/locale'
 
 const APP_TIMEZONE = import.meta.env?.VITE_TIMEZONE || 'America/Mexico_City'
 
@@ -95,3 +96,16 @@ export const rangeDays = (start, end) =>
 export const autoGranularity = (days) => (days <= 31 ? 'day' : days <= 183 ? 'week' : 'month')
 
 export const fitsGranularity = (granularity, days) => days <= GRANULARITY_LIMITS[granularity]
+
+// Fechas que cubre un rango, para mostrarlas junto a los presets
+// (specs/08-rediseno-ventas-y-tendencia.md, requisito 4): "26 oct 2026",
+// "1 – 31 oct 2026", "1 nov – 31 dic 2026" o "1 nov 2025 – 31 oct 2026".
+export const fmtRangeLabel = (start, end) => {
+  const fmt = (iso, pattern) => format(parseISO(`${iso}T12:00:00`), pattern, { locale: es }).replace(/\./g, '')
+  if (start === end) return fmt(start, 'd MMM yyyy')
+  const sameYear  = start.slice(0, 4) === end.slice(0, 4)
+  const sameMonth = sameYear && start.slice(5, 7) === end.slice(5, 7)
+  if (sameMonth) return `${fmt(start, 'd')} – ${fmt(end, 'd MMM yyyy')}`
+  if (sameYear)  return `${fmt(start, 'd MMM')} – ${fmt(end, 'd MMM yyyy')}`
+  return `${fmt(start, 'd MMM yyyy')} – ${fmt(end, 'd MMM yyyy')}`
+}

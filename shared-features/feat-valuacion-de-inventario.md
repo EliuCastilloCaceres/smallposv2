@@ -16,6 +16,7 @@ Agrega al módulo de Reportes la pestaña **Valuación de inventario**, con el p
 - **Desglose:** "Ver por" producto (las variantes se suman en su producto), categoría, proveedor y sucursal (solo el admin central), ordenable con un clic en los encabezados (en móvil, con un selector) y paginado.
 - **Filtros,** arriba: búsqueda por nombre o SKU (también de variante), sucursal, categoría, proveedor y "Excluir del cálculo": **categorías** (por ejemplo, Recargas; solo con "Todas las categorías") y **productos sin costo**, apagado por defecto. El aviso de sin costo va junto a la utilidad, con "Excluirlos" o "Incluirlos". En móvil, los filtros se abren con un botón que dice cuántos hay activos.
 - **Revisar captura:** accesos de sin costo, precio menor al costo e inactivos con stock. Al darles clic, el desglose muestra solo esos artículos, con un aviso y "Ver todos"; el de sin costo vuelve a incluirlos si estaban excluidos. Los inactivos no entran en el resumen.
+- **Editar productos:** al ver por producto (también en las vistas de "Revisar captura"), cada fila tiene un botón Editar que abre el mismo formulario de Productos. Solo lo ve quien tiene `products.update`. Al guardar, la valuación se vuelve a pedir con los mismos filtros, orden y página.
 
 Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-inventario.md).
 
@@ -41,7 +42,7 @@ Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-
 | `backend/src/routes/report_routes.js` | `GET /reports/inventory` con `reports.inventory`. |
 | `frontend/src/components/Reports/reportTabs.js` | Pestaña Valuación de inventario después de Tendencia de ventas. |
 | `frontend/src/components/Reports/Reports.jsx` | Contenido de la pestaña nueva. |
-| `frontend/src/components/Reports/reports.css` | Estilos `rpt-inv-*` de los filtros, el resumen, "Revisar captura" y el desglose; encabezados ordenables (`rpt-sort`), costo 0 en naranja y margen negativo en rojo. |
+| `frontend/src/components/Reports/reports.css` | Estilos `rpt-inv-*` de los filtros, el resumen, "Revisar captura" y el desglose; encabezados ordenables (`rpt-sort`), botón Editar de cada fila (`rpt-row-edit`), costo 0 en naranja y margen negativo en rojo. |
 | `frontend/src/components/Settings/modals/PermissionsModal.jsx` | La acción `inventory` se muestra como "Inventario". |
 | `frontend/src/components/Reports/Reports.test.jsx` | La pestaña aparece con `reports.inventory`, también para un almacenista que solo tiene ese permiso de reportes. |
 | `frontend/src/components/App.test.jsx` | Reportes aparece en el menú con solo `reports.inventory`. |
@@ -54,13 +55,14 @@ Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-
 | `backend/tests/integration/migrations/005-add-reports-inventory-permission.test.js` | Los roles que reciben el permiso. |
 | `backend/tests/integration/reports/inventory.test.js` | KPIs, consolidado, apartado y total, sin costo, filtros, las cuatro agrupaciones, orden, paginación, alertas, alcance por sucursal y respuestas 400/403. |
 | `frontend/src/components/Reports/tabs/InventoryTab.jsx` | La pestaña. |
-| `frontend/src/components/Reports/tabs/InventoryTab.test.jsx` | Resumen, aviso y filtro de sin costo, columnas por agrupación, orden desde los encabezados, filtros, exclusión de categorías y "Revisar captura", con la API simulada. |
+| `frontend/src/components/Reports/tabs/InventoryTab.test.jsx` | Resumen, aviso y filtro de sin costo, columnas por agrupación, orden desde los encabezados, filtros, exclusión de categorías, "Revisar captura" y la edición de productos (con el formulario simulado), con la API simulada. |
 
 ## Tareas realizadas
 
 - [x] Permiso `reports.inventory` por migración, con su etiqueta en Permisos.
 - [x] Endpoint `GET /api/reports/inventory`. La vista de una alerta muestra lo mismo que cuenta su tarjeta, así que no la cambia "Excluir productos sin costo".
 - [x] Pestaña Valuación de inventario. La tabla se dibuja con la agrupación de las filas que ya llegaron: al cambiarla, las filas anteriores fallaban con las columnas nuevas. La primera versión resultó confusa (la tabla quedaba hasta abajo y los valores del disponible se repetían tres veces) y se reestructuró en filtros, resumen, "Revisar captura" y desglose.
+- [x] Editar productos desde el desglose con `Products/modals/ProductModal.jsx`. Sus estilos viven en `products.css`, con las variables dentro de `.prd-root`, así que la pestaña importa ese CSS y envuelve el formulario en un `div.prd-root`.
 
 ## Criterios de aceptación
 
@@ -80,6 +82,7 @@ Revisado contra el código de smallpos-saas el 2026-10-23 (`db79cc7`).
   - **Menú:** se agrega `'reports.inventory'` al `anyOf` de Reportes en `frontend/src/auth/modules.js`. El Almacenista de saas tampoco tiene hoy ningún permiso de reportes, así que empezará a ver el menú Reportes.
   - **Ruta:** `router.get('/inventory', { perm: 'reports.inventory', branch: 'scope' }, reportController.getInventoryReport)`.
   - **Etiquetas:** el modal de permisos de saas muestra la descripción del catálogo, así que el cambio de `PermissionsModal.jsx` no se porta.
+- **Editar productos:** saas tiene el mismo `ProductModal` (`product`, `categories`, `providers`, `onSaved`, `onClose`) y el mismo `products.css` con sus variables en `.prd-root`, así que se reutiliza igual. El botón usa `can('products.update')` en lugar de `hasPermission('products', 'update')`.
 - **Varias sucursales por usuario (Spec 12 de saas):**
   - `getInventoryReport` recibe `branchIds` (de `scopeBranchIds(req.branchScope)`, `null` para todas) y filtra con `IN (?)`: `i.branch_id` en el stock y `l.branch_id` en los apartados.
   - La agrupación **por sucursal** tiene sentido cuando el alcance cubre más de una sucursal (`scope.isAll` o varias `branchIds`), no solo para el "administrador central". La validación del backend (`isCentral`) debe seguir esa regla.

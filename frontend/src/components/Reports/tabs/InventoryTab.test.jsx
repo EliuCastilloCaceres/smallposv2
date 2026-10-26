@@ -6,9 +6,23 @@ import api from '../../../services/api'
 import InventoryTab from './InventoryTab'
 
 let isCentralAdmin = false
+let permissions = []
 
 vi.mock('../../../services/api', () => ({ default: { get: vi.fn() } }))
-vi.mock('../../../context/UserContext', () => ({ useUser: () => ({ isCentralAdmin }) }))
+vi.mock('../../../context/UserContext', () => ({
+  useUser: () => ({ isCentralAdmin, hasPermission: (module, action) => permissions.includes(`${module}.${action}`) }),
+}))
+// El formulario de producto se prueba en Products; aquí solo importa qué
+// producto recibe y qué pasa al guardar
+vi.mock('../../Products/modals/ProductModal', () => ({
+  default: ({ product, onSaved, onClose }) => (
+    <div role="dialog" aria-label="Formulario de producto">
+      <span>Editando {product.name}</span>
+      <button onClick={() => onSaved(product)}>Guardar</button>
+      <button onClick={onClose}>Cancelar</button>
+    </div>
+  ),
+}))
 
 const totals = (items, units, costValue, saleValue, margin) => ({
   items, units, costValue, saleValue, profit: saleValue - costValue, margin,
@@ -56,6 +70,9 @@ const mockApi = (summary = SUMMARY) => {
     if (url.startsWith('categories')) {
       return Promise.resolve({ data: { data: [{ category_id: 2, name: 'Abarrotes' }, { category_id: 13, name: 'Recargas' }] } })
     }
+    if (url.startsWith('products/')) {
+      return Promise.resolve({ data: { data: { product_id: Number(url.split('/')[1]), name: 'Bolsa de regalo (detalle)', purchase_price: 76, sale_price: 2 } } })
+    }
     if (url.startsWith('providers')) {
       return Promise.resolve({ data: { data: [{ provider_id: 1, name: 'Proveedor generico' }, { provider_id: 7, name: 'Distribuidora Sur' }] } })
     }
@@ -89,6 +106,7 @@ const noCostToggle = () => screen.getByRole('button', { name: 'Productos sin cos
 describe('InventoryTab', () => {
   beforeEach(() => {
     isCentralAdmin = false
+    permissions = ['reports.inventory', 'products.update']
     api.get.mockReset()
     mockApi()
   })
@@ -187,7 +205,8 @@ describe('InventoryTab', () => {
       const headers = () => within(screen.getByRole('table', { name: 'Valuación por grupo' }))
         .getAllByRole('columnheader').map(th => th.textContent)
 
-      expect(headers()).toEqual(['Producto', 'Unidades', 'Valor al costo', 'Valor a venta', 'Utilidad', 'Margen'])
+      // La última columna es la del botón Editar
+      expect(headers()).toEqual(['Producto', 'Unidades', 'Valor al costo', 'Valor a venta', 'Utilidad', 'Margen', ''])
       expect(tableRow('Queso')).toHaveTextContent('2.5 kg')
       expect(tableRow('Muestra')).toHaveTextContent('3 sin unidad')
       expect(screen.getByText('1,967 productos')).toBeInTheDocument()
@@ -369,6 +388,71 @@ describe('InventoryTab', () => {
 
       await waitFor(() => expect(lastParams().get('group_by')).toBe('category'))
       expect(lastParams().has('alert')).toBe(false)
+    })
+  })
+
+  describe('editing products', () => {
+    const inventoryCalls = () => api.get.mock.calls.map(([u]) => u).filter(u => u.startsWith('reports/inventory'))
+
+    it('shows an edit button on each product, also in the view of an alert', async () => {
+      await renderTab()
+      expect(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' })).toBeInTheDocument()
+
+      fireEvent.click(alertButton('Precio menor al costo'))
+      await waitFor(() => expect(lastParams().get('alert')).toBe('below_cost'))
+
+      expect(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' })).toBeInTheDocument()
+    })
+
+    it('hides the edit button without products.update', async () => {
+      permissions = ['reports.inventory']
+      await renderTab()
+
+      expect(screen.queryByRole('button', { name: /^Editar / })).toBeNull()
+    })
+
+    it('hides the edit button when viewing by category', async () => {
+      await renderTab()
+
+      fireEvent.click(viewBy('Categoría'))
+      await screen.findByText('Recargas', { selector: '.rpt-table .rpt-folio' })
+
+      expect(screen.queryByRole('button', { name: /^Editar / })).toBeNull()
+    })
+
+    it('opens the product form with the full product', async () => {
+      await renderTab()
+
+      fireEvent.click(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' }))
+
+      const form = await screen.findByRole('dialog', { name: 'Formulario de producto' })
+      expect(api.get).toHaveBeenCalledWith('products/2')
+      expect(form).toHaveTextContent('Editando Bolsa de regalo (detalle)')
+    })
+
+    it('closes the form and asks for the valuation again with the same parameters after saving', async () => {
+      await renderTab()
+      fireEvent.click(within(screen.getByRole('table', { name: 'Valuación por grupo' })).getByText(/Margen/).closest('button'))
+      await waitFor(() => expect(lastParams().get('sort_by')).toBe('margin'))
+      const before = inventoryCalls()
+
+      fireEvent.click(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' }))
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Guardar' }))
+
+      await waitFor(() => expect(inventoryCalls()).toHaveLength(before.length + 1))
+      expect(inventoryCalls().at(-1)).toBe(before.at(-1))
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('closes the form without asking for the valuation again when cancelled', async () => {
+      await renderTab()
+      const before = inventoryCalls().length
+
+      fireEvent.click(within(tableRow('Bolsa de regalo')).getByRole('button', { name: 'Editar Bolsa de regalo' }))
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
+
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(inventoryCalls()).toHaveLength(before)
     })
   })
 })

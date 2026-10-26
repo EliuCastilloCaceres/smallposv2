@@ -6,10 +6,15 @@
 //
 // De arriba abajo: filtros (cambian todo lo de abajo), resumen, "Revisar
 // captura" y desglose. Cada dato aparece una sola vez (requisito 11).
+// Al ver por producto, cada fila se edita con el formulario de Productos
+// (requisito 33).
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { fmtDateTime } from '../../../utils/dateFormatter'
+import ProductModal from '../../Products/modals/ProductModal'
+// Estilos del formulario de producto; sus variables viven en .prd-root
+import '../../Products/products.css'
 
 const PAGE_SIZE = 20
 const SEARCH_DELAY_MS = 300
@@ -91,6 +96,16 @@ const NoCostFlag = ({ row, isProduct }) => !isProduct && row.noCostItems > 0 && 
   </span>
 )
 
+const EditButton = ({ row, onEdit }) => (
+  <button
+    type="button" className="rpt-btn rpt-btn--ghost rpt-btn--icon rpt-row-edit"
+    aria-label={`Editar ${row.name}`} title="Editar producto"
+    onClick={() => onEdit(row.groupId)}
+  >
+    <i className="bi bi-pencil" />
+  </button>
+)
+
 // Encabezado que ordena la tabla: un clic ordena de mayor a menor, otro invierte
 const SortHeader = ({ sort, sortBy, sortDir, onSort }) => {
   const active = sortBy === sort.id
@@ -106,7 +121,8 @@ const SortHeader = ({ sort, sortBy, sortDir, onSort }) => {
 }
 
 const InventoryTab = () => {
-  const { isCentralAdmin } = useUser()
+  const { isCentralAdmin, hasPermission } = useUser()
+  const canEditProducts = hasPermission('products', 'update')
   const breakdownRef = useRef(null)
 
   const [rows,        setRows]        = useState([])
@@ -130,6 +146,10 @@ const InventoryTab = () => {
   const [excludeNoCost,    setExcludeNoCost]    = useState(false)
   const [page,             setPage]             = useState(1)
   const [showFilters,      setShowFilters]      = useState(false)
+  // Producto abierto en el formulario, y un contador para volver a pedir la
+  // valuación con los mismos parámetros después de guardarlo
+  const [editing,          setEditing]          = useState(null)
+  const [reloadKey,        setReloadKey]        = useState(0)
 
   const [branches,   setBranches]   = useState([])
   const [categories, setCategories] = useState([])
@@ -193,7 +213,18 @@ const InventoryTab = () => {
       })
       .finally(() => { if (!ignore) setIsLoading(false) })
     return () => { ignore = true }
-  }, [query])
+  }, [query, reloadKey])
+
+  // El formulario necesita el producto completo, como al editar desde Productos
+  const openEdit = (productId) => {
+    api.get(`products/${productId}`)
+      .then(({ data }) => setEditing(data.data))
+      .catch((err) => setError(err.response?.data?.message ?? 'No se pudo abrir el producto'))
+  }
+  const handleProductSaved = () => {
+    setEditing(null)
+    setReloadKey(k => k + 1)
+  }
 
   // Cambiar cualquier filtro regresa a la página 1
   const withPageReset = (setter) => (value) => { setter(value); setPage(1) }
@@ -241,6 +272,7 @@ const InventoryTab = () => {
   const clearAlert = () => { setAlertView(null); setPage(1) }
 
   const isProduct    = rowsGroupBy === 'product'
+  const showEdit     = isProduct && canEditProducts
   const activeAlert  = ALERTS.find(a => a.id === alertView)
   const categoryName = (id) => categories.find(c => String(c.category_id) === id)?.name ?? `Categoría ${id}`
   const excludable   = categories.filter(c => !excludedIds.includes(String(c.category_id)))
@@ -504,6 +536,7 @@ const InventoryTab = () => {
                     {SORTS.map(s => (
                       <SortHeader key={s.id} sort={s} sortBy={sortBy} sortDir={sortDir} onSort={sortByColumn} />
                     ))}
+                    {showEdit && <th aria-label="Acciones" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -521,6 +554,11 @@ const InventoryTab = () => {
                       <td className="num">{money(r.saleValue)}</td>
                       <td className="num"><Profit value={r.profit} /></td>
                       <td className="num"><Margin value={r.margin} /></td>
+                      {showEdit && (
+                        <td className="num">
+                          <EditButton row={r} onEdit={openEdit} />
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -534,6 +572,7 @@ const InventoryTab = () => {
                   <div className="rpt-card__top">
                     <span className="rpt-folio">{r.name}</span>
                     <NoCostFlag row={r} isProduct={isProduct} />
+                    {showEdit && <EditButton row={r} onEdit={openEdit} />}
                   </div>
                   <div className="rpt-card__meta">
                     <span className="rpt-muted">
@@ -571,6 +610,18 @@ const InventoryTab = () => {
           </>
         )}
       </section>
+
+      {editing && (
+        <div className="prd-root">
+          <ProductModal
+            product={editing}
+            categories={categories}
+            providers={providers}
+            onSaved={handleProductSaved}
+            onClose={() => setEditing(null)}
+          />
+        </div>
+      )}
     </div>
   )
 }

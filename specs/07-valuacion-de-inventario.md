@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-23 | 2026-10-23 |
+| **Terminada** | 2026-10-23 | 2026-10-26 |
 
 ## Objetivo
 
@@ -47,7 +47,8 @@ Es la **spec 3** del orden de [`docs/reportes-borrador.md`](../docs/reportes-bor
   - filtros arriba: sucursal, categoría, proveedor, búsqueda y "Excluir del cálculo" (categorías y productos sin costo);
   - resumen del inventario disponible, con lo apartado y el total en tienda;
   - sección "Revisar captura", con accesos que filtran la tabla;
-  - desglose agrupable por producto, categoría, proveedor y sucursal, ordenable desde los encabezados.
+  - desglose agrupable por producto, categoría, proveedor y sucursal, ordenable desde los encabezados;
+  - editar un producto desde el desglose, con el mismo formulario de Productos.
 - Tests de todo lo anterior.
 - **Documentación en `shared-features/`:** sí, como `feat-valuacion-de-inventario.md` (decisión del usuario, 2026-10-23).
 
@@ -162,6 +163,14 @@ Es la **spec 3** del orden de [`docs/reportes-borrador.md`](../docs/reportes-bor
 ### Documentación
 32. `shared-features/feat-valuacion-de-inventario.md` documenta la spec con la estructura de `sf-index.md` y se agrega al índice. Sus notas para portar cubren el permiso en el catálogo de smallpos-saas y el alcance de varias sucursales por usuario.
 
+### Editar productos
+33. Al ver por producto, incluidas las vistas de "Revisar captura", cada fila tiene un botón **Editar** que abre el mismo formulario de crear o editar producto de Productos (`Products/modals/ProductModal.jsx`), con sus validaciones. Así se capturan los costos que faltan y se corrigen precios sin salir del reporte.
+    - El botón solo lo ve quien tiene `products.update`. El guardado usa `PUT /api/products/:id`, que ya pide ese permiso; no cambia ningún permiso.
+    - El formulario se llena con el producto completo (`GET /api/products/:id`), igual que al editar desde Productos.
+    - Al guardar, se cierra el formulario y la valuación se vuelve a pedir con los mismos filtros, orden y página, así que el resumen, las alertas y la fila reflejan el cambio.
+    - En las demás agrupaciones (categoría, proveedor y sucursal) no hay botón, porque cada fila junta varios productos.
+    - Esta edición se pidió después de aprobar la spec (decisión 9 de esta spec).
+
 ## Tareas
 
 - [x] **T1. Permiso `reports.inventory`** (requisitos 1 y 2).
@@ -188,22 +197,28 @@ Es la **spec 3** del orden de [`docs/reportes-borrador.md`](../docs/reportes-bor
   - **Alertas:** al darle clic a un acceso se agrupa por producto y se manda `alert`; "Ver todos" la quita; un acceso en 0 está deshabilitado. Con "Productos sin costo" excluido, el clic en "Sin costo" lo vuelve a incluir.
 - [x] **T4. Documentación en `shared-features/`** (requisito 32).
   — tests: no lleva tests de código.
+- [x] **T5. Editar productos desde la valuación** (requisito 33). Incluye agregarlo a `shared-features/feat-valuacion-de-inventario.md`.
+  — tests, con la API simulada:
+  - el botón Editar aparece al ver por producto y en la vista de una alerta, y no aparece sin `products.update` ni al ver por categoría;
+  - abre el formulario con el producto que devuelve `GET /api/products/:id`;
+  - al guardar, se cierra el formulario y la valuación se vuelve a pedir con los mismos parámetros.
 
 ## Criterios de aceptación
 
 | # | Criterio | Evidencia |
 |---|---|---|
-| 1 | Un supervisor y un almacenista ven la pestaña Valuación de inventario; un cajero no. En la base de desarrollo, `reports.inventory` lo tienen superadmin, admin, supervisor y almacenista, y en Configuración → Roles aparece "Inventario" dentro de Reportes. | _(se llena al cerrar)_ |
-| 2 | En la base de desarrollo, los artículos, las unidades, el valor al costo y el valor a venta coinciden con un cálculo SQL, y las unidades de una sucursal sin categorías ocultas coinciden con el stock de Inventario. | _(se llena al cerrar)_ |
-| 3 | Cada variante cuenta como un artículo en los KPIs, y al agrupar por producto se suma en su producto. | _(se llena al cerrar)_ |
-| 4 | Lo apartado aparece en su renglón, valorado con el costo y el precio actuales, y el total en tienda es disponible + apartado. | _(se llena al cerrar)_ |
-| 5 | Con artículos sin costo aparece el aviso, y con "Excluir productos sin costo" dejan de contar en los KPIs, el resumen y la tabla, sin cambiar la alerta. | _(se llena al cerrar)_ |
-| 6 | Cada tarjeta de alerta muestra su conteo y, al darle clic, la tabla muestra solo esos artículos. Los inactivos con stock no cuentan en los KPIs. | _(se llena al cerrar)_ |
-| 7 | Los filtros de categoría, proveedor, búsqueda y categorías excluidas cambian los KPIs, el resumen, las alertas y la tabla. | _(se llena al cerrar)_ |
-| 8 | Un usuario con sucursal asignada no ve el inventario de otra sucursal, ni mandando otro `branch_id`. El administrador central ve el consolidado y el desglose por sucursal. | _(se llena al cerrar)_ |
-| 9 | La pestaña se ve y se usa bien en móvil. | _(se llena al cerrar)_ |
-| 10 | `shared-features/feat-valuacion-de-inventario.md` existe y está en el índice. | _(se llena al cerrar)_ |
-| 11 | Los tests del backend y del frontend pasan. | _(se llena al cerrar)_ |
+| 1 | Un supervisor y un almacenista ven la pestaña Valuación de inventario; un cajero no. En la base de desarrollo, `reports.inventory` lo tienen superadmin, admin, supervisor y almacenista, y en Configuración → Roles aparece "Inventario" dentro de Reportes. | 2026-10-26, en la base de desarrollo con la copia de producción (`marksexpressv2`), después de la migración `005`: `reports.inventory` lo tienen superadmin, admin, supervisor y almacenista; Cajero, Supervisor_Ventas y Cajero N3 no. La API responde 200 a un supervisor y a un almacenista, y 403 a un cajero (probados con tokens firmados para la prueba, porque la copia no tiene usuarios activos con esos roles). `PermissionsModal.jsx` muestra `inventory` como "Inventario". Tests `005-add-reports-inventory-permission.test.js`, `Reports.test.jsx` (la pestaña aparece con `reports.inventory`, también para un almacenista con solo ese permiso de reportes), `App.test.jsx` y `inventory.test.js` (cajero 403, almacenista 200). |
+| 2 | En la base de desarrollo, los artículos, las unidades, el valor al costo y el valor a venta coinciden con un cálculo SQL, y las unidades de una sucursal sin categorías ocultas coinciden con el stock de Inventario. | 2026-10-26, copia de producción: la API da 2,177 artículos, 17,989 pza · 600 par · 4 paq · 1 kg, $347,926.59 al costo y $633,796.46 a venta, igual que un cálculo SQL sobre `inventory_stock`. Las 18,594 unidades coinciden con la suma que hace `getStockByBranch` (Inventario) en la sucursal 1, que no tiene categorías ocultas. Por categoría también coincide con SQL; por ejemplo, Abarrotes: 630 artículos y $40,217.03. |
+| 3 | Cada variante cuenta como un artículo en los KPIs, y al agrupar por producto se suma en su producto. | 2026-10-26, copia de producción: el producto 10109 tiene 8 tallas con stock. Buscándolo, los KPIs cuentan 8 artículos y la tabla por producto tiene una sola fila con sus 10 unidades. En total hay 2,177 artículos en 1,967 filas de producto. Test `inventory.test.js` (la talla 28 inactiva no cuenta y la fila sin variante de un producto variable tampoco). |
+| 4 | Lo apartado aparece en su renglón, valorado con el costo y el precio actuales, y el total en tienda es disponible + apartado. | 2026-10-26: la copia de producción no tiene apartados, así que el resumen dice "Sin apartados activos" y no repite el total en tienda. Test `inventory.test.js`: con un apartado activo en cada sucursal, otro liquidado y otro cancelado, el apartado da 3 artículos, 3 pza + 1 kg, $340 al costo y $660 a venta con el costo y el precio de hoy (no los del apartado), y el total en tienda, 6 artículos, $1,588 y $2,900. Test `InventoryTab.test.jsx`: muestra el apartado y el total, o "Sin apartados activos" sin el total. |
+| 5 | Con artículos sin costo aparece el aviso, y con "Excluir productos sin costo" dejan de contar en los KPIs, el resumen y la tabla, sin cambiar la alerta. | 2026-10-26, copia de producción: el aviso dice que la utilidad incluye 940 artículos sin costo, que valen $254,570.00 a precio de venta. Al excluirlos, el resumen pasa a 1,237 artículos, $347,926.59 al costo, $379,226.46 a venta y 8.25% de margen (antes 45.1%), y la alerta sigue en 940. Tests `inventory.test.js` y `InventoryTab.test.jsx` ("Excluirlos" e "Incluirlos"). |
+| 6 | Cada tarjeta de alerta muestra su conteo y, al darle clic, la tabla muestra solo esos artículos. Los inactivos con stock no cuentan en los KPIs. | 2026-10-26, copia de producción: sin costo 940 artículos ($254,570.00 a venta), precio menor al costo 8 ($38,481.50 al costo) e inactivos con stock 158 ($10,107.37 al costo). La vista de inactivos tiene 157 filas de producto y el resumen sigue en 2,177 artículos. Revisado en pantalla (Edge sin ventana, 1366 px): al tocar "Precio menor al costo" la pantalla baja al desglose, que muestra los 8 productos con el aviso "Mostrando solo" y "Ver todos". Tests `inventory.test.js` y `InventoryTab.test.jsx`. |
+| 7 | Los filtros de categoría, proveedor, búsqueda y categorías excluidas cambian los KPIs, el resumen, las alertas y la tabla. | 2026-10-26, copia de producción: categoría Abarrotes, 630 artículos y $40,217.03 (14 inactivos); proveedor Barcel, 43 artículos y $2,070.64 (7 inactivos); búsqueda "10109", 8 artículos; excluyendo Recargas, 1,926 artículos, $338,393.71 al costo y 778 sin costo. Tests `inventory.test.js` (filtros sobre el resumen, el apartado, las alertas y la tabla) y `InventoryTab.test.jsx` (parámetros, página 1 y exclusiones solo con "Todas las categorías"). |
+| 8 | Un usuario con sucursal asignada no ve el inventario de otra sucursal, ni mandando otro `branch_id`. El administrador central ve el consolidado y el desglose por sucursal. | 2026-10-26, copia de producción: un supervisor de la sucursal 1 que manda `branch_id=5` recibe lo mismo que la sucursal 1 vista por el administrador central (2,177 artículos, $347,926.59), y responde 400 si pide agrupar por sucursal. El administrador central ve el consolidado; por sucursal, una fila (Sucursal Central), y la sucursal 5 (Sucursal Norte, inactiva y sin stock) da 0. Test `inventory.test.js` con stock en dos sucursales. |
+| 9 | La pestaña se ve y se usa bien en móvil. | 2026-10-26: revisado en Edge sin ventana con el ancho de un teléfono (390 px) sobre la copia de producción: la búsqueda y el botón "Filtros" arriba, el resumen en dos columnas, los accesos de "Revisar captura" apilados y el desglose como tarjetas, con el selector "Ordenar". No se revisó en un teléfono real. |
+| 10 | `shared-features/feat-valuacion-de-inventario.md` existe y está en el índice. | 2026-10-26: el archivo existe, está en la tabla del índice (`sf-index.md`) y describe también la pantalla reestructurada y la edición de productos. |
+| 11 | Los tests del backend y del frontend pasan. | 2026-10-26: backend 147/147 (22 archivos), frontend 133/133 (19 archivos); `vite build` compila. |
+| 12 | Con `products.update`, un producto se edita desde el desglose con el formulario de Productos y, al guardar, la valuación se actualiza; sin ese permiso no aparece el botón. | 2026-10-26: revisado en pantalla sobre la copia de producción: cada fila por producto tiene el botón Editar, y en "bolsa de regalo desc suelt" abre el formulario de Productos con su información completa y el aviso "Vendiendo a pérdida". No se guardó ningún cambio en la copia. Test `InventoryTab.test.jsx`: el botón aparece al ver por producto y en la vista de una alerta, no aparece sin `products.update` ni al ver por categoría, abre el producto de `GET /api/products/:id`, y al guardar se cierra el formulario y la valuación se vuelve a pedir con los mismos parámetros. |
 
 ## Dudas abiertas
 
@@ -222,3 +237,7 @@ Es la **spec 3** del orden de [`docs/reportes-borrador.md`](../docs/reportes-bor
 | 2026-10-23 | T3 terminada: `Reports/tabs/InventoryTab.jsx` y la pestaña en `reportTabs.js`. Los tests encontraron un error: al cambiar la agrupación, la tabla se volvía a dibujar con las filas anteriores antes de que llegara la respuesta y fallaba. Ahora se dibuja con la agrupación de las filas que ya llegaron. | Usuario |
 | 2026-10-23 | T4 terminada: `shared-features/feat-valuacion-de-inventario.md`, agregado al índice. Sus notas para portar se revisaron contra smallpos-saas: depende de la spec 04 por las pestañas de Reportes, no de la 03, y el permiso va también en la plantilla de Almacenista. | Usuario |
 | 2026-10-23 | Reestructuración de la pantalla a pedido del usuario, que la encontró confusa: la tabla quedaba hasta abajo, los valores del disponible se repetían tres veces (tarjetas, renglón "Disponible" y "Total en tienda" sin apartados), los filtros estaban a la mitad aunque cambian todo lo de arriba y las alertas se veían como KPIs. Ahora van, de arriba abajo, filtros, un resumen con el valor al costo como cifra principal (con el aviso de sin costo, el apartado y el total), "Revisar captura" y el desglose con "Ver por" y orden desde los encabezados. En móvil, los filtros se abren con un botón. No cambian el endpoint ni los cálculos. Se actualizan el alcance, los requisitos 10–12, 16, 18, 19, 23, 25 y 27–29, y los tests de T3. | Usuario |
+| 2026-10-26 | Se agrega la edición de productos desde el desglose (requisito 33, T5 y criterio 12), a pedido del usuario. Se resolvieron 2 dudas:<br>9. Se edita con el mismo formulario de Productos, con un botón Editar por producto, solo con `products.update`; al guardar, la valuación se recalcula.<br>10. El rediseño de las pestañas Ventas y utilidad y Tendencia de ventas, pedido en el mismo mensaje, va en su propia spec (08), después de cerrar esta. | Usuario |
+| 2026-10-26 | T5 terminada: botón Editar en cada producto del desglose, que abre `Products/modals/ProductModal.jsx` y al guardar vuelve a pedir la valuación. Como las variables de `products.css` viven en `.prd-root`, la pestaña importa ese CSS y envuelve el formulario en un `div.prd-root`, para que se vea igual que en Productos. Agregado a `shared-features/feat-valuacion-de-inventario.md`. | Usuario |
+| 2026-10-26 | Se llena la evidencia de los 12 criterios de aceptación con la copia de la base de producción. Queda en **Lista** hasta que el usuario apruebe pasarla a Terminada. | — |
+| 2026-10-26 | Se aprueba el cierre: pasa a **Terminada**. | Usuario |

@@ -463,6 +463,28 @@
 .rpt-row-edit:hover { border-color: var(--rpt-border); background: var(--rpt-surface); color: var(--rpt-accent); }
 .rpt-card__top .rpt-row-edit { margin-left: auto; }
 
+/* ── Rotación de inventario ─────────────────────────────────── */
+/* Los botones de días no se recortan: en móvil sin la etiqueta "Sin venta
+   en", y en desktop la búsqueda y los selectores toman el resto de la fila */
+@media (max-width: 479px) { .rpt-rot .rpt-button-group__caption { display: none; } }
+@media (min-width: 768px) { .rpt-rot .rpt-filter-card__top { flex: 0 0 auto; } }
+.rpt-rot-table td { vertical-align: top; }
+.rpt-rot-table td.num { white-space: nowrap; }
+.rpt-rot-sku { display: block; }
+/* Sugerencias de cada producto: traspaso, rebaja y promoción */
+.rpt-rot-suggestions {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px;
+  min-width: 240px; font-size: 12px; color: var(--rpt-text);
+}
+.rpt-rot-suggestions li { display: flex; align-items: baseline; gap: 6px; }
+.rpt-rot-suggestions li > i { flex-shrink: 0; font-size: 12px; color: var(--rpt-accent); }
+.rpt-rot-suggestions li.rpt-rot-muted, .rpt-rot-suggestions li.rpt-rot-muted > i { color: var(--rpt-muted); }
+.rpt-rot-name {
+  display: inline-block; max-width: 16ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  vertical-align: bottom;
+}
+.rpt-card .rpt-rot-suggestions { min-width: 0; padding-top: 8px; border-top: 1px solid var(--rpt-border); }
+
 /* ── Tendencia de ventas: tarjeta de la gráfica ──────────────── */
 /* De arriba abajo: métrica, granularidad y comparación; título; KPIs;
    aviso de ventas sin costo y gráfica (spec 08, requisito 13) */

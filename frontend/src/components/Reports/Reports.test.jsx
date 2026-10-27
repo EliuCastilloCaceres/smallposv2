@@ -15,6 +15,7 @@ vi.mock('./tabs/CashSessionsTab', () => ({ default: () => <p>contenido sesiones<
 vi.mock('./tabs/ProfitTab',       () => ({ default: () => <p>contenido utilidad</p> }))
 vi.mock('./tabs/TrendTab',        () => ({ default: () => <p>contenido tendencia</p> }))
 vi.mock('./tabs/InventoryTab',    () => ({ default: () => <p>contenido inventario</p> }))
+vi.mock('./tabs/RotationTab',     () => ({ default: () => <p>contenido rotación</p> }))
 
 const renderReports = () => render(
   <MemoryRouter initialEntries={['/reports']}>
@@ -88,14 +89,18 @@ describe('Reports module access', () => {
     expect(screen.getByText('contenido tendencia')).toBeInTheDocument()
   })
 
-  it('shows the inventory tab last with every report permission', () => {
-    permissions = ['reports.basic', 'reports.profit', 'reports.trend', 'reports.inventory']
+  it('shows the rotation tab last with every report permission', () => {
+    permissions = ['reports.basic', 'reports.profit', 'reports.trend', 'reports.inventory', 'reports.rotation']
 
     renderReports()
 
-    expect(tabNames()).toEqual(['Sesiones de caja', 'Ventas y utilidad', 'Tendencia de ventas', 'Valuación de inventario'])
+    expect(tabNames()).toEqual([
+      'Sesiones de caja', 'Ventas y utilidad', 'Tendencia de ventas', 'Valuación de inventario', 'Rotación de inventario',
+    ])
     fireEvent.click(screen.getByRole('tab', { name: 'Valuación de inventario' }))
     expect(screen.getByText('contenido inventario')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Rotación de inventario' }))
+    expect(screen.getByText('contenido rotación')).toBeInTheDocument()
   })
 
   it('opens on the inventory tab for a storekeeper with only reports.inventory', () => {
@@ -105,5 +110,14 @@ describe('Reports module access', () => {
 
     expect(tabNames()).toEqual(['Valuación de inventario'])
     expect(screen.getByText('contenido inventario')).toBeInTheDocument()
+  })
+
+  it('opens on the rotation tab when it is the only one allowed', () => {
+    permissions = ['inventory.read', 'reports.rotation']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Rotación de inventario'])
+    expect(screen.getByText('contenido rotación')).toBeInTheDocument()
   })
 })

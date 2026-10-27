@@ -41,4 +41,11 @@ router.get(
   reportController.getInventoryReport
 );
 
+// GET /reports/rotation?days=&branch_id=&category_id=&provider_id=&search=&exclude_category_ids=&exclude_no_cost=&sort_by=&sort_dir=&page=&limit=
+router.get(
+  '/rotation',
+  requirePermission('reports', 'rotation'),
+  reportController.getRotationReport
+);
+
 module.exports = router;

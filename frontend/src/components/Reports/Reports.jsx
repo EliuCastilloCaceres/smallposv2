@@ -6,6 +6,7 @@ import CashSessionsTab from './tabs/CashSessionsTab'
 import ProfitTab from './tabs/ProfitTab'
 import TrendTab from './tabs/TrendTab'
 import InventoryTab from './tabs/InventoryTab'
+import RotationTab from './tabs/RotationTab'
 import { getVisibleReportTabs } from './reportTabs'
 import './reports.css'
 
@@ -15,6 +16,7 @@ const TAB_CONTENT = {
   profit:          ProfitTab,
   trend:           TrendTab,
   inventory:       InventoryTab,
+  rotation:        RotationTab,
 }
 
 const Reports = () => {

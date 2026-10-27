@@ -1050,4 +1050,290 @@ const getInventoryReport = async ({
   };
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport };
+// ─── Rotación de inventario ────────────────────────────────────────────────
+
+// Productos con stock que llevan N días o más sin venderse en su sucursal,
+// con sugerencias para moverlos (specs/10-rotacion-de-inventario.md). Cada
+// fila es un producto en una sucursal, con sus variantes sumadas: las ventas
+// anteriores a 2026-08-25 no guardan la variante.
+//   última venta = orden no cancelada o apartado activo de la sucursal. Sale
+//                  de orders y layaways, no de inventory_movements, que
+//                  empieza el 2026-08-25.
+//   nunca vendido = se cuenta desde el primer movimiento en la sucursal, o
+//                  desde el alta del producto si no hay movimientos o el
+//                  primero ya encontró existencias (stock cargado antes de
+//                  que se registraran movimientos).
+// El stock es el disponible de Valuación (INVENTORY_SOURCES.stock).
+
+const ROTATION_DAYS  = [30, 60, 90, 180];
+const ROTATION_SORTS = ['cost_value', 'days'];
+const PROMOTION_SIZE = 3;
+
+// Rebaja según días sin venta (decisión 5 de la spec); nunca baja del costo
+const discountPercentFor = (days) => (days < 60 ? 10 : days < 90 ? 20 : 30);
+
+// Ventas que cuentan para la última venta y el traspaso: órdenes no
+// canceladas y apartados activos (decisión 6 de la spec). ref distingue una
+// orden de un apartado para contarlos por separado. branchId limita a una
+// sucursal; from (hora del servidor), a las ventas desde esa hora.
+const rotationSalesQuery = ({ branchId = null, from = null } = {}) => {
+  const half = (alias, baseWhere) => {
+    const where  = [baseWhere];
+    const params = [];
+    if (branchId !== null) { where.push(`${alias}.branch_id = ?`);  params.push(branchId); }
+    if (from !== null)     { where.push(`${alias}.created_at >= ?`); params.push(from); }
+    return { where: where.join(' AND '), params };
+  };
+  const orders   = half('o', SOLD_STATUSES_SQL);
+  const layaways = half('l', "l.status = 'active'");
+  return {
+    sql: `
+      SELECT o.branch_id, od.product_id, o.created_at AS sold_at, CONCAT('o', o.order_id) AS ref
+        FROM order_details od
+        JOIN orders o ON o.order_id = od.order_id
+       WHERE ${orders.where}
+      UNION ALL
+      SELECT l.branch_id, ld.product_id, l.created_at AS sold_at, CONCAT('l', l.layaway_id) AS ref
+        FROM layaway_details ld
+        JOIN layaways l ON l.layaway_id = ld.layaway_id
+       WHERE ${layaways.where}
+    `,
+    params: [...orders.params, ...layaways.params],
+  };
+};
+
+const discountFor = ({ days, costPrice, salePrice }) => {
+  if (costPrice === 0) return { reason: 'no_cost' };
+  if (salePrice <= costPrice) return { reason: 'price_not_above_cost' };
+  const percent = discountPercentFor(days);
+  // En centavos enteros para que el redondeo al centavo no dependa de floats
+  const priceCents     = Math.round(salePrice * 100);
+  const discountedCents = Math.round(priceCents * (100 - percent) / 100);
+  const costCents      = Math.round(costPrice * 100);
+  if (discountedCents >= costCents) {
+    return { reason: null, percent, price: salePrice, suggestedPrice: discountedCents / 100, cappedByCost: false };
+  }
+  return {
+    reason:         null,
+    percent:        round2((priceCents - costCents) / priceCents * 100),
+    price:          salePrice,
+    suggestedPrice: costCents / 100,
+    cappedByCost:   true,
+  };
+};
+
+const compareText = (a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' });
+
+// Traspaso y promoción de las filas de una página. periodFrom: inicio del
+// periodo en hora del servidor.
+const rotationSuggestions = async (rows, periodFrom) => {
+  if (rows.length === 0) return rows;
+
+  const productIds = [...new Set(rows.map(r => r.productId))];
+  const pairs = [...new Map(
+    rows.filter(r => r.categoryId !== null).map(r => [`${r.branchId}|${r.categoryId}`, [r.branchId, r.categoryId]])
+  ).values()];
+
+  const sales = rotationSalesQuery({ from: periodFrom });
+  const [[transfers], [partners]] = await Promise.all([
+    // Ventas del periodo en sucursales activas
+    db.query(
+      `SELECT s.product_id, s.branch_id, b.name, COUNT(DISTINCT s.ref) AS sales
+         FROM (${sales.sql}) s
+         JOIN branches b ON b.branch_id = s.branch_id AND b.is_active = 1
+        WHERE s.product_id IN (?)
+        GROUP BY s.product_id, s.branch_id, b.name`,
+      [...sales.params, productIds]
+    ),
+    // Los más vendidos del periodo por sucursal y categoría, activos y con
+    // stock disponible en esa sucursal
+    pairs.length === 0
+      ? [[]]
+      : db.query(
+        `SELECT o.branch_id, p.category_id, p.product_id, p.name, COUNT(DISTINCT o.order_id) AS sales
+           FROM order_details od
+           JOIN orders o   ON o.order_id   = od.order_id
+           JOIN products p ON p.product_id = od.product_id AND p.is_active = 1
+          WHERE ${SOLD_STATUSES_SQL}
+            AND o.created_at >= ?
+            AND (o.branch_id, p.category_id) IN (?)
+            AND EXISTS (
+              SELECT 1
+                FROM inventory_stock i
+                LEFT JOIN product_variants v ON v.variant_id = i.variant_id
+               WHERE i.branch_id = o.branch_id AND i.product_id = p.product_id
+                 AND ${INVENTORY_SOURCES.stock.where.join(' AND ')}
+                 AND ${ACTIVE_ITEM_SQL}
+            )
+          GROUP BY o.branch_id, p.category_id, p.product_id, p.name`,
+        [periodFrom, pairs]
+      ),
+  ]);
+
+  const bySales = (a, b) => b.sales - a.sales || compareText(a.name, b.name);
+
+  return rows.map(r => {
+    const transfer = transfers
+      .filter(t => t.product_id === r.productId && t.branch_id !== r.branchId)
+      .map(t => ({ branchId: t.branch_id, name: t.name, sales: Number(t.sales) }))
+      .sort(bySales)[0] ?? null;
+    const promotion = partners
+      .filter(p => p.branch_id === r.branchId && p.category_id === r.categoryId && p.product_id !== r.productId)
+      .map(p => ({ productId: p.product_id, name: p.name, sales: Number(p.sales) }))
+      .sort(bySales)
+      .slice(0, PROMOTION_SIZE)
+      .map(({ productId, name }) => ({ productId, name }));
+    return { ...r, suggestions: { transfer, discount: discountFor(r), promotion } };
+  });
+};
+
+// today: fecha de hoy en México, 'YYYY-MM-DD'. branchId = null → consolidado
+// (admin central); un usuario con sucursal llega con la suya ya forzada.
+const getRotationReport = async ({
+  today,
+  days = 30,
+  branchId = null,
+  categoryId = null,
+  providerId = null,
+  search = '',
+  excludeCategoryIds = '',
+  excludeNoCost = false,
+  sortBy = 'cost_value',
+  sortDir = 'desc',
+  page = 1,
+  limit = 20,
+}) => {
+  if (!ROTATION_DAYS.includes(days)) throw new ValidationError('days debe ser 30, 60, 90 o 180');
+  if (branchId !== null && !isPositiveInt(branchId))     throw new ValidationError('branch_id inválido');
+  if (categoryId !== null && !isPositiveInt(categoryId)) throw new ValidationError('category_id inválido');
+  if (providerId !== null && !isPositiveInt(providerId)) throw new ValidationError('provider_id inválido');
+  const excludedIds = parseIdList(excludeCategoryIds);
+  if (excludedIds === null) throw new ValidationError('exclude_category_ids debe ser una lista de ids separados por coma');
+  if (categoryId !== null && excludedIds.length > 0) {
+    throw new ValidationError('Para excluir categorías hay que ver todas las categorías (sin category_id)');
+  }
+  if (!ROTATION_SORTS.includes(sortBy)) throw new ValidationError('sort_by debe ser cost_value o days');
+  if (sortDir !== 'asc' && sortDir !== 'desc') throw new ValidationError('sort_dir debe ser asc o desc');
+
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+
+  const filters = {
+    branchId, categoryId, providerId, excludeCategoryIds: excludedIds, search: String(search).trim(),
+  };
+  const items = inventoryItemsQuery('stock', filters, [ACTIVE_ITEM_SQL]);
+  const sales = rotationSalesQuery({ branchId });
+
+  // Todo el disponible, con su última venta y su llegada. Se filtra por días
+  // aquí y no en SQL porque el valor de todo el disponible es el denominador
+  // de "parte del inventario".
+  const arrivalSql = 'CASE WHEN fm.created_at IS NULL OR fm.quantity_before > 0 THEN p.created_at ELSE fm.created_at END';
+  const [stockRows] = await db.query(
+    `SELECT a.branch_id, b.name AS branch_name, a.product_id, p.name, p.sku, p.uom, p.category_id,
+            a.quantity, p.purchase_price, p.sale_price,
+            DATE_FORMAT(${createdAtMx('ls.sold_at')}, '%Y-%m-%d') AS last_sale,
+            DATEDIFF(?, DATE(${createdAtMx(`COALESCE(ls.sold_at, ${arrivalSql})`)})) AS days
+       FROM (
+         SELECT t.branch_id, t.product_id, SUM(t.quantity) AS quantity
+           FROM (${items.sql}) t
+          GROUP BY t.branch_id, t.product_id
+       ) a
+       JOIN products p ON p.product_id = a.product_id
+       JOIN branches b ON b.branch_id = a.branch_id
+       LEFT JOIN (
+         SELECT s.branch_id, s.product_id, MAX(s.sold_at) AS sold_at
+           FROM (${sales.sql}) s
+          GROUP BY s.branch_id, s.product_id
+       ) ls ON ls.branch_id = a.branch_id AND ls.product_id = a.product_id
+       LEFT JOIN (
+         SELECT m.branch_id, m.product_id, m.created_at, m.quantity_before
+           FROM inventory_movements m
+           JOIN (
+             SELECT branch_id, product_id, MIN(movement_id) AS movement_id
+               FROM inventory_movements
+              GROUP BY branch_id, product_id
+           ) f ON f.movement_id = m.movement_id
+       ) fm ON fm.branch_id = a.branch_id AND fm.product_id = a.product_id`,
+    [today, ...items.params, ...sales.params]
+  );
+
+  const all = stockRows.map(r => ({
+    branchId:   r.branch_id,
+    branchName: r.branch_name,
+    productId:  r.product_id,
+    name:       r.name,
+    sku:        r.sku,
+    uom:        r.uom,
+    categoryId: r.category_id,
+    units:      round3(r.quantity),
+    costPrice:  Number(r.purchase_price),
+    salePrice:  Number(r.sale_price),
+    costValue:  Number(r.quantity) * Number(r.purchase_price),
+    saleValue:  Number(r.quantity) * Number(r.sale_price),
+    lastSale:   r.last_sale,
+    neverSold:  r.last_sale === null,
+    // Sin venta ni fecha de alta no hay desde cuándo contar: no entra
+    days:       r.days === null ? null : Number(r.days),
+  }));
+  const counted  = excludeNoCost ? all.filter(r => r.costPrice > 0) : all;
+  const stale    = (list) => list.filter(r => r.days !== null && r.days >= days);
+  const rows     = stale(counted);
+  const noCost   = stale(all).filter(r => r.costPrice === 0);
+
+  const sum = (list, key) => list.reduce((acc, r) => acc + r[key], 0);
+  const units = new Map();
+  for (const r of rows) {
+    const uom = r.uom?.trim() || null;
+    units.set(uom, (units.get(uom) ?? 0) + r.units);
+  }
+  const costValue      = sum(rows, 'costValue');
+  const availableValue = sum(counted, 'costValue');
+
+  // El nombre y luego la sucursal y el id desempatan para que la paginación
+  // sea estable
+  const dir = sortDir === 'asc' ? 1 : -1;
+  const primary = sortBy === 'days'
+    ? (a, b) => dir * (a.days - b.days)
+    : (a, b) => dir * (a.costValue - b.costValue) || b.days - a.days;
+  rows.sort((a, b) =>
+    primary(a, b) || compareText(a.name, b.name) || compareText(a.branchName, b.branchName) || a.productId - b.productId);
+
+  const pageRows = rows.slice((safePage - 1) * safeLimit, safePage * safeLimit);
+  const periodFrom = await toServerDayStart(periods.addDays(today, -(days - 1)));
+  const data = (await rotationSuggestions(pageRows, periodFrom)).map(({ categoryId: _, ...r }) => ({
+    ...r,
+    costValue: round2(r.costValue),
+    saleValue: round2(r.saleValue),
+  }));
+
+  return {
+    data,
+    pagination: {
+      page:  safePage,
+      limit: safeLimit,
+      total: rows.length,
+      totalPages: Math.max(1, Math.ceil(rows.length / safeLimit)),
+    },
+    summary: {
+      days,
+      today,
+      products:  rows.length,
+      neverSold: rows.filter(r => r.neverSold).length,
+      units: [...units.entries()]
+        .map(([uom, quantity]) => ({ uom, quantity: round3(quantity) }))
+        .sort((a, b) => b.quantity - a.quantity || compareText(a.uom ?? '', b.uom ?? '')),
+      costValue:          round2(costValue),
+      saleValue:          round2(sum(rows, 'saleValue')),
+      availableCostValue: round2(availableValue),
+      share:              round2(availableValue) === 0 ? null : round2(costValue / availableValue * 100),
+      noCost: {
+        products:  noCost.length,
+        saleValue: round2(sum(noCost, 'saleValue')),
+      },
+    },
+  };
+};
+
+module.exports = {
+  getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
+};

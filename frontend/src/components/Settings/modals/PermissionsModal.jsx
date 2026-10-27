@@ -38,6 +38,7 @@ const ACTION_LABELS = {
   profit:   'Utilidad',
   trend:    'Tendencia',
   inventory: 'Inventario',
+  rotation:  'Rotación',
 }
 
 const MODULE_ICONS = {

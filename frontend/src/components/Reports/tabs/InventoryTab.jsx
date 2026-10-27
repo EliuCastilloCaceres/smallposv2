@@ -12,13 +12,11 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { fmtDateTime } from '../../../utils/dateFormatter'
-import ProductModal from '../../Products/modals/ProductModal'
 import FilterCard from '../components/FilterCard'
 import ButtonGroup from '../components/ButtonGroup'
 import SummaryNote from '../components/SummaryNote'
 import { SortHeader, SortSelect, nextSort } from '../components/Sorting'
-// Estilos del formulario de producto; sus variables viven en .prd-root
-import '../../Products/products.css'
+import { EditButton, useProductEdit } from '../components/ProductEdit'
 
 const PAGE_SIZE = 20
 const SEARCH_DELAY_MS = 300
@@ -100,16 +98,6 @@ const NoCostFlag = ({ row, isProduct }) => !isProduct && row.noCostItems > 0 && 
   </span>
 )
 
-const EditButton = ({ row, onEdit }) => (
-  <button
-    type="button" className="rpt-btn rpt-btn--ghost rpt-btn--icon rpt-row-edit"
-    aria-label={`Editar ${row.name}`} title="Editar producto"
-    onClick={() => onEdit(row.groupId)}
-  >
-    <i className="bi bi-pencil" />
-  </button>
-)
-
 const InventoryTab = () => {
   const { isCentralAdmin, hasPermission } = useUser()
   const canEditProducts = hasPermission('products', 'update')
@@ -135,9 +123,8 @@ const InventoryTab = () => {
   const [sortDir,          setSortDir]          = useState('desc')
   const [excludeNoCost,    setExcludeNoCost]    = useState(false)
   const [page,             setPage]             = useState(1)
-  // Producto abierto en el formulario, y un contador para volver a pedir la
-  // valuación con los mismos parámetros después de guardarlo
-  const [editing,          setEditing]          = useState(null)
+  // Contador para volver a pedir la valuación con los mismos parámetros
+  // después de guardar un producto
   const [reloadKey,        setReloadKey]        = useState(0)
 
   const [branches,   setBranches]   = useState([])
@@ -204,16 +191,9 @@ const InventoryTab = () => {
     return () => { ignore = true }
   }, [query, reloadKey])
 
-  // El formulario necesita el producto completo, como al editar desde Productos
-  const openEdit = (productId) => {
-    api.get(`products/${productId}`)
-      .then(({ data }) => setEditing(data.data))
-      .catch((err) => setError(err.response?.data?.message ?? 'No se pudo abrir el producto'))
-  }
-  const handleProductSaved = () => {
-    setEditing(null)
-    setReloadKey(k => k + 1)
-  }
+  const { openEdit, editForm } = useProductEdit({
+    categories, providers, onSaved: () => setReloadKey(k => k + 1), onError: setError,
+  })
 
   // Cambiar cualquier filtro regresa a la página 1
   const withPageReset = (setter) => (value) => { setter(value); setPage(1) }
@@ -505,7 +485,7 @@ const InventoryTab = () => {
                       <td className="num"><Margin value={r.margin} /></td>
                       {showEdit && (
                         <td className="num">
-                          <EditButton row={r} onEdit={openEdit} />
+                          <EditButton name={r.name} onClick={() => openEdit(r.groupId)} />
                         </td>
                       )}
                     </tr>
@@ -521,7 +501,7 @@ const InventoryTab = () => {
                   <div className="rpt-card__top">
                     <span className="rpt-folio">{r.name}</span>
                     <NoCostFlag row={r} isProduct={isProduct} />
-                    {showEdit && <EditButton row={r} onEdit={openEdit} />}
+                    {showEdit && <EditButton name={r.name} onClick={() => openEdit(r.groupId)} />}
                   </div>
                   <div className="rpt-card__meta">
                     <span className="rpt-muted">
@@ -560,17 +540,7 @@ const InventoryTab = () => {
         )}
       </section>
 
-      {editing && (
-        <div className="prd-root">
-          <ProductModal
-            product={editing}
-            categories={categories}
-            providers={providers}
-            onSaved={handleProductSaved}
-            onClose={() => setEditing(null)}
-          />
-        </div>
-      )}
+      {editForm}
     </div>
   )
 }

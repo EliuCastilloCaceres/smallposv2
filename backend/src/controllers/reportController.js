@@ -142,4 +142,42 @@ const getInventoryReport = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport };
+// GET /reports/rotation
+const getRotationReport = async (req, res, next) => {
+  try {
+    const {
+      days,
+      category_id: categoryId,
+      provider_id: providerId,
+      search,
+      exclude_category_ids: excludeCategoryIds,
+      exclude_no_cost: excludeNoCost,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+      page,
+      limit,
+    } = req.query;
+
+    const result = await reportService.getRotationReport({
+      today:              todayInMexico(),
+      // Sin parseInt: "30x" no es un periodo válido
+      days:               days === undefined || days === '' ? 30 : Number(days),
+      branchId:           resolveOptionalBranchId(req),
+      categoryId:         intOrNull(categoryId),
+      providerId:         intOrNull(providerId),
+      search:             search ? String(search) : '',
+      excludeCategoryIds: excludeCategoryIds ? String(excludeCategoryIds) : '',
+      excludeNoCost:      excludeNoCost === 'true' || excludeNoCost === '1',
+      sortBy:             sortBy  || 'cost_value',
+      sortDir:            sortDir || 'desc',
+      page:  intOrNull(page)  ?? 1,
+      limit: intOrNull(limit) ?? 20,
+    });
+
+    res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
+module.exports = {
+  getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
+};

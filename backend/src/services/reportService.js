@@ -8,15 +8,15 @@
 // solo que aquí se calcula para cualquier sesión ya cerrada (o abierta),
 // no solo en el momento del cierre:
 //
-//   esperado    = open_amount + SUM(cash_movements IN sale/income/
-//                 credit_payment/layaway_payment)
-//                 − SUM(cash_movements IN expense/return)
+//   esperado    = open_amount + SUM(movimientos que suman)
+//                 − SUM(movimientos que restan)
 //   diferencia  = close_amount − esperado
 //
-// El retiro de efectivo (withdrawAmt) no se pierde: closeRegister ya lo
-// inserta como un movimiento 'expense' en cash_movements ANTES de cerrar,
-// así que total_out de aquí ya lo trae contado — no hace falta guardarlo
-// aparte.
+// Qué tipos suman y cuáles restan vive en helpers/cashMovements.js (spec 12).
+//
+// El retiro de efectivo (withdrawAmt) no se pierde: el POS lo inserta como
+// un movimiento 'withdrawal' en cash_movements ANTES de cerrar, así que
+// total_out de aquí ya lo trae contado — no hace falta guardarlo aparte.
 
 const db = require('../config/db');
 const { NotFoundError, ValidationError } = require('../errors/AppError');
@@ -25,6 +25,7 @@ const {
 } = require('../helpers/soldLines');
 const { ORDER_REFUNDS_JOIN_SQL, ORDER_NET_SALE_SQL } = require('../helpers/orderNet');
 const periods = require('../utils/periods');
+const { CASH_IN_SQL, CASH_OUT_SQL, sumCashMovements } = require('../helpers/cashMovements');
 // FIX: dateFrom/dateTo llegan del frontend como fecha "de pared" en México
 // (ej. "2026-08-24"), pero se comparaban directo contra s.opened_at /
 // s.closed_at, que son hora del SERVIDOR (2h adelantada sobre México) —
@@ -91,8 +92,8 @@ const getCashSessions = async ({
      JOIN users u           ON s.user_id            = u.user_id
      LEFT JOIN (
        SELECT session_id,
-              SUM(CASE WHEN movement_type IN ('sale','income','credit_payment','layaway_payment') THEN amount ELSE 0 END) AS total_in,
-              SUM(CASE WHEN movement_type IN ('expense','return') THEN amount ELSE 0 END) AS total_out
+              SUM(CASE WHEN movement_type IN (${CASH_IN_SQL}) THEN amount ELSE 0 END) AS total_in,
+              SUM(CASE WHEN movement_type IN (${CASH_OUT_SQL}) THEN amount ELSE 0 END) AS total_out
        FROM cash_movements
        GROUP BY session_id
      ) mv ON mv.session_id = s.session_id
@@ -246,14 +247,7 @@ const getCashSessionDetail = async ({ sessionId, branchId = null }) => {
     [session.session_id]
   );
 
-  const totals = movements.reduce((acc, m) => {
-    if (['sale', 'income', 'credit_payment', 'layaway_payment'].includes(m.movement_type)) {
-      acc.total_in += Number(m.amount);
-    } else {
-      acc.total_out += Number(m.amount);
-    }
-    return acc;
-  }, { total_in: 0, total_out: 0 });
+  const totals = sumCashMovements(movements);
   const expected = +(Number(session.open_amount) + totals.total_in - totals.total_out).toFixed(2);
   const difference = session.close_amount === null ? null : +(session.close_amount - expected).toFixed(2);
 

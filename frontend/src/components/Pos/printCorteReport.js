@@ -19,12 +19,16 @@ const fmtFileDate = (d) => {
   return `${dd}${mm}${yyyy}${hh}${min}`
 }
 
-const MOVEMENT_LABELS = {
+// Tipos de movimiento de caja (specs/12-modulo-de-gastos.md, requisito 15)
+export const MOVEMENT_LABELS = {
   sale:            'Venta',
   income:          'Ingreso manual',
   credit_payment:  'Abono a crédito',
   layaway_payment: 'Abono a apartado',
-  expense:         'Retiro manual',
+  withdrawal:      'Retiro',
+  expense:         'Gasto',
+  expense_refund:  'Reingreso de gasto',
+  legacy_expense:  'Salida de caja (histórico)',
   return:          'Devolución',
 }
 

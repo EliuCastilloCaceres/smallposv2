@@ -28,6 +28,8 @@ const categoriesRoutes    = require('./src/routes/category_routes');
 const { router: roleRoutes, permissionsRouter } = require('./src/routes/role_routes');
 const paymentMethodRoutes = require('./src/routes/payment_method_routes');
 const uploadRoutes        = require('./src/routes/upload_routes');
+const expenseRoutes       = require('./src/routes/expense_routes');
+const expenseCategoryRoutes = require('./src/routes/expense_category_routes');
 
 const app = express();
 
@@ -73,6 +75,8 @@ app.use('/api/roles',          roleRoutes);
 app.use('/api/permissions',    permissionsRouter);
 app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/upload',         uploadRoutes);          // ← rutas de upload de imágenes
+app.use('/api/expenses',       expenseRoutes);
+app.use('/api/expense-categories', expenseCategoryRoutes);
 
 // ─── 404 para rutas no existentes ────────────────────────────────────────────
 app.use((req, res) => {

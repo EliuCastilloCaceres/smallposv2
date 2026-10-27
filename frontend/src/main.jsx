@@ -22,6 +22,7 @@ import Providers          from './components/Providers/Providers.jsx'
 import Reports            from './components/Reports/Reports.jsx'
 import Pos                from './components/Pos/Pos.jsx'
 import Orders from './components/Orders/Orders.jsx'
+import Expenses           from './components/Expenses/Expenses.jsx'
 // Módulos nuevos
 //import Reports            from './components/Reports/Reports.jsx'
 
@@ -43,6 +44,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <Route path='layaways'                        element={<Layaways/>}/>
             <Route path='credits'                        element={<Credits/>}/>
             <Route path='returns'                        element={<Returns/>}/>
+            <Route path='expenses'                        element={<Expenses />} />
             <Route path='providers'                        element={<Providers/>}/>
             <Route path='users'                           element={<Users />} />
             <Route path='settings'                        element={<Settings/>}/>

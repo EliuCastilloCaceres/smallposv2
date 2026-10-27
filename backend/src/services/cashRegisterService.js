@@ -3,6 +3,9 @@
 
 const db = require('../config/db');
 const { NotFoundError, ValidationError, ConflictError } = require('../errors/AppError');
+const {
+  CASH_IN_SQL, CASH_OUT_SQL, MANUAL_MOVEMENT_TYPES, sumCashMovements,
+} = require('../helpers/cashMovements');
 
 // ─── Cajas ────────────────────────────────────────────────────────────────────
 
@@ -186,8 +189,8 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, cashCounted, wi
 
     const [movs] = await conn.query(
       `SELECT
-         COALESCE(SUM(CASE WHEN movement_type IN ('sale','income','credit_payment','layaway_payment') THEN amount ELSE 0 END), 0) AS total_in,
-         COALESCE(SUM(CASE WHEN movement_type IN ('expense','return') THEN amount ELSE 0 END), 0) AS total_out
+         COALESCE(SUM(CASE WHEN movement_type IN (${CASH_IN_SQL}) THEN amount ELSE 0 END), 0) AS total_in,
+         COALESCE(SUM(CASE WHEN movement_type IN (${CASH_OUT_SQL}) THEN amount ELSE 0 END), 0) AS total_out
        FROM cash_movements WHERE session_id = ?`,
       [session.session_id]
     );
@@ -344,9 +347,14 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, cashCounted, wi
 
 // ─── Movimientos manuales ─────────────────────────────────────────────────────
 
+// Ingreso o retiro manual del POS. Los retiros (manual y del corte) tienen
+// su propio tipo, withdrawal; los gastos pagados desde caja se registran como
+// gastos (expenseService), que crean su propio movimiento (spec 12, req. 17).
 const createMovement = async ({ cashRegisterId, branchId, userId, movementType, amount, description }) => {
-  if (!['income', 'expense'].includes(movementType)) {
-    throw new ValidationError('El tipo de movimiento debe ser "income" o "expense"');
+  if (!MANUAL_MOVEMENT_TYPES.includes(movementType)) {
+    throw new ValidationError(
+      'El tipo de movimiento debe ser "income" o "withdrawal". Los gastos se registran como gastos.'
+    );
   }
   if (amount <= 0) throw new ValidationError('El monto debe ser mayor a 0');
 
@@ -394,14 +402,7 @@ const getSessionStatus = async ({ cashRegisterId, branchId }) => {
   [session.session_id]
 );
 
-  const totals = movements.reduce((acc, m) => {
-    if (['sale', 'income', 'credit_payment', 'layaway_payment'].includes(m.movement_type)) {
-      acc.total_in += m.amount;
-    } else {
-      acc.total_out += m.amount;
-    }
-    return acc;
-  }, { total_in: 0, total_out: 0 });
+  const totals = sumCashMovements(movements);
 
   const expectedClose = +(session.open_amount + totals.total_in - totals.total_out).toFixed(2);
 

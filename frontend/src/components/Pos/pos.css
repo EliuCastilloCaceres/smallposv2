@@ -1153,7 +1153,12 @@
   padding: 12px; border: 1.5px solid var(--pos-border); border-radius: var(--pos-radius);
 }
 .pos-cashmov-form__type { display: flex; gap: 8px; }
-.pos-cashmov-form__type .pos-btn { flex: 1; }
+.pos-cashmov-form__type .pos-btn { flex: 1; padding-left: 8px; padding-right: 8px; }
+/* Gasto desde el POS (spec 12): campos de texto y selects más chicos que
+   el monto, y la nota de que se paga con el efectivo de la caja */
+.pos-cashmov-form__input { font-size: 14px; font-weight: 400; }
+.pos-cashmov-form__file { font-size: 13px; }
+.pos-cashmov-form__hint { margin: 0; font-size: 12px; color: var(--pos-muted); }
 
 .pos-cashmov-list { display: flex; flex-direction: column; gap: 2px; }
 .pos-cashmov-row {

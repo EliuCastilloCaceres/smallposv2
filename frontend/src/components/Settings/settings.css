@@ -599,3 +599,21 @@ select.set-field__input { cursor: pointer; padding-right: 32px; }
   gap: 8px;
   padding-top: 8px;
 }
+/* ── Casilla con descripción (categorías de gasto, spec 12) ── */
+.set-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--set-text);
+}
+.set-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  accent-color: var(--set-accent);
+  flex-shrink: 0;
+}
+.set-check > span { display: flex; flex-direction: column; gap: 2px; }
+.set-field__hint { font-size: 12px; font-weight: 400; color: var(--set-muted); }

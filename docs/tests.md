@@ -105,6 +105,7 @@ backend/
 - **Candado:** si el nombre de la base no termina en `_test`, los tests se niegan a correr. Así es imposible borrar por error la base de desarrollo o la de producción.
 - **Configuración:** vive en `backend/tests/helpers/database.js`. Host, puerto y nombre se pueden cambiar con `TEST_DB_HOST`, `TEST_DB_PORT` y `TEST_DB_NAME`.
 - **Sin `.env`:** los tests nunca leen `backend/.env`. `dotenv` se reemplaza por un stub y `tests/setup/env.js` fija las variables que lee el backend (`DB_*`, `JWT_SECRET`, `NODE_ENV=test`).
+- **Comprobantes de gastos:** `tests/setup/env.js` fija `EXPENSE_RECEIPTS_DIR` en una carpeta temporal del sistema, para que los tests no escriban en `backend/storage/`.
 
 ## 4. Escribir un test
 
@@ -167,6 +168,9 @@ Para consultar o preparar datos directo en la base, usa el mismo pool del backen
 | `openTestRegister({ userId, cashRegisterId, openAmount })` | `tests/helpers/sales.js` | Abre una caja con una sesión a nombre de `userId` (por defecto, la Caja 1 de la sucursal 1), para poder vender por la API. |
 | `createTestProduct({ purchasePrice, salePrice, stock, branchId, variants })` | `tests/helpers/sales.js` | Crea un producto activo con stock en la sucursal (por defecto, 10 unidades en la 1). Con `variants` (etiquetas) crea un producto variable con ese stock en cada variante. Devuelve `{ productId, variantIds, purchasePrice, salePrice }`. |
 | `paymentMethodId(code)` | `tests/helpers/sales.js` | `payment_method_id` de un método de los seeds por su código: `cash`, `card`, `transfer` o `credit`. |
+| `expenseCategoryId(name)` | `tests/helpers/expenses.js` | `expense_category_id` de una categoría de gasto por su nombre (p. ej. `Renta`). |
+| `insertExpense({ expenseDate, categoryId, amount, paymentMethodId, userId, … })` | `tests/helpers/expenses.js` | Guarda un gasto directo en la BD, sin la API, para preparar listas y filtros. Devuelve su `expense_id`. |
+| `PNG_BYTES`, `PDF_BYTES` | `tests/helpers/expenses.js` | Contenido mínimo de un PNG y de un PDF, para subir comprobantes con `.attach('receipt', …)`. |
 
 > `requirePermission` deja pasar siempre al `superadmin`. Para probar un 403, usa un usuario con otro rol creado con `createTestUser`.
 

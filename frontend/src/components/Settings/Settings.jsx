@@ -7,6 +7,7 @@ import CashTab       from './tabs/CashTab'
 import CategoriesTab from './tabs/CategoriesTab'
 import RolesTab      from './tabs/RolesTab'
 import PaymentMethodsTab from './tabs/PaymentMethodsTab'
+import ExpenseCategoriesTab from './tabs/ExpenseCategoriesTab'
 import './settings.css'
 
 const Settings = () => {
@@ -28,6 +29,8 @@ const Settings = () => {
     { id: 'category',        icon: 'bi-bookmark',    label: 'Categorías',      show: hasPermission('settings', 'read') },
     { id: 'roles',           icon: 'bi-shield-lock', label: 'Roles',           show: hasPermission('settings', 'read') },
     { id: 'payment-methods', icon: 'bi-credit-card', label: 'Métodos de pago', show: hasPermission('settings', 'read') },  // ← nuevo, solo admin
+    // Categorías de gasto (specs/12-modulo-de-gastos.md, requisito 3)
+    { id: 'expense-categories', icon: 'bi-wallet2',  label: 'Categorías de gasto', show: hasPermission('expenses', 'categories') },
   ].filter(t => t.show)
 
   const [activeTab, setActiveTab] = useState(tabs[0]?.id)
@@ -66,6 +69,7 @@ const Settings = () => {
         {activeTab === 'category'  && <CategoriesTab  isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
         {activeTab === 'roles' && <RolesTab isCentralAdmin={isCentralAdmin} branchId={user?.branch_id} />}
         {activeTab === 'payment-methods' && <PaymentMethodsTab isCentralAdmin={isCentralAdmin} />}
+        {activeTab === 'expense-categories' && <ExpenseCategoriesTab />}
       </div>
     </div>
   )

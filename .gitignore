@@ -49,6 +49,8 @@ backend/coverage/
 backend/.env
 backend/logs/
 backend/uploads/temp/
+# Comprobantes de gastos (privados, spec 12)
+backend/storage/
 backend/dumps
 
 # ============================================

@@ -6,12 +6,16 @@ import { fmtDateTime } from '../../../utils/dateFormatter'
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
 
+// Tipos de movimiento de caja (specs/12-modulo-de-gastos.md, requisito 15)
 const MOVEMENT_LABELS = {
   sale:            'Venta',
   income:          'Ingreso manual',
   credit_payment:  'Abono de crédito',
   layaway_payment: 'Abono de apartado',
-  expense:         'Retiro / gasto',
+  withdrawal:      'Retiro',
+  expense:         'Gasto',
+  expense_refund:  'Reingreso de gasto',
+  legacy_expense:  'Salida de caja (histórico)',
   return:          'Devolución / reversa',
 }
 
@@ -22,7 +26,10 @@ const MOVEMENT_AMOUNT_CLASS = {
   income:          'rpt-detail-list__amt--in',
   credit_payment:  'rpt-detail-list__amt--in',
   layaway_payment: 'rpt-detail-list__amt--in',
+  expense_refund:  'rpt-detail-list__amt--in',
+  withdrawal:      'rpt-detail-list__amt--out',
   expense:         'rpt-detail-list__amt--out',
+  legacy_expense:  'rpt-detail-list__amt--out',
   return:          'rpt-detail-list__amt--out',
 }
 

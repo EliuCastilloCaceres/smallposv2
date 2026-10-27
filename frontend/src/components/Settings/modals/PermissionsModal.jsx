@@ -14,6 +14,7 @@ const MODULE_LABELS = {
   credit:          'Crédito',
   layaway:         'Apartados',
   returns:         'Devoluciones',
+  expenses:        'Gastos',
   reports:         'Reportes',
   users:           'Usuarios',
   roles:           'Roles y permisos',
@@ -39,6 +40,7 @@ const ACTION_LABELS = {
   trend:    'Tendencia',
   inventory: 'Inventario',
   rotation:  'Rotación',
+  categories: 'Categorías',
 }
 
 const MODULE_ICONS = {
@@ -52,6 +54,7 @@ const MODULE_ICONS = {
   credit:          'bi-clock-history',
   layaway:         'bi-bookmark-check',
   returns:         'bi-arrow-return-left',
+  expenses:        'bi-wallet2',
   reports:         'bi-bar-chart-line',
   users:           'bi-person',
   roles:           'bi-shield-check',

@@ -9,6 +9,7 @@ const { ValidationError } = require('../errors/AppError');
 const { createdAtMx, toServerRange } = require('../utils/timezone');
 const { SOLD_STATUSES_SQL } = require('../helpers/soldLines');
 const { ORDER_REFUNDS_JOIN_SQL, ORDER_NET_SALE_SQL } = require('../helpers/orderNet');
+const { CASH_IN_SQL, CASH_OUT_SQL } = require('../helpers/cashMovements');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -377,9 +378,9 @@ const getOpenCashRegisters = async ({ branchId }) => {
     `SELECT cr.cash_register_id, cr.name AS register_name,
             u.first_name, u.last_name,
             s.opened_at, s.open_amount,
-            COALESCE(SUM(CASE WHEN cm.movement_type IN ('sale','income','credit_payment','layaway_payment')
+            COALESCE(SUM(CASE WHEN cm.movement_type IN (${CASH_IN_SQL})
                          THEN cm.amount ELSE 0 END), 0) AS total_in,
-            COALESCE(SUM(CASE WHEN cm.movement_type IN ('expense','return')
+            COALESCE(SUM(CASE WHEN cm.movement_type IN (${CASH_OUT_SQL})
                          THEN cm.amount ELSE 0 END), 0) AS total_out
             ${branchNameCol}
      FROM cash_registers cr

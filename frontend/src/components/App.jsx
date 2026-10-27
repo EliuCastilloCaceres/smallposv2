@@ -39,6 +39,7 @@ function App() {
     { to: '/layaways',           icon: 'bi-bookmark-check',        label: 'Apartados',    perm: ['layaway',   'read']  },
     { to: '/credits',            icon: 'bi-clock-history',         label: 'Créditos',     perm: ['credit',    'read']  },
      { to: '/returns',           icon: 'bi-arrow-return-left',     label: 'Devoluciones', perm: ['returns',    'read']  },
+    { to: '/expenses',           icon: 'bi-wallet2',               label: 'Gastos',       perm: ['expenses',  'read']  },
     // Reportes: con al menos un permiso de reportes (ver Reports/reportTabs.js)
     { to: '/reports',            icon: 'bi-bar-chart-line',        label: 'Reportes',     allowed: getVisibleReportTabs(hasPermission).length > 0 },
     { to: '/users',              icon: 'bi-person',                label: 'Usuarios',     perm: ['users',     'read']  },

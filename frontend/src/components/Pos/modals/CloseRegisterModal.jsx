@@ -5,7 +5,7 @@
 // verificación visual contra la terminal/registro externo, no se guardan.
 //
 // "Retirar efectivo": resta del saldo final mostrado y, al confirmar, se
-// registra como un movimiento real de retiro (expense) ANTES de cerrar la
+// registra como un movimiento real de retiro (withdrawal) ANTES de cerrar la
 // caja — así el backend recalcula el esperado ya neto del retiro y la
 // diferencia sigue cuadrando correctamente.
 
@@ -84,7 +84,7 @@ const CloseRegisterModal = ({ onClose }) => {
     try {
       if (withdrawAmt > 0) {
         await createCashMovement({
-          movementType: 'expense',
+          movementType: 'withdrawal',
           amount:       withdrawAmt,
           description:  'Retiro en corte de caja',
         })

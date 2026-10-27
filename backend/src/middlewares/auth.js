@@ -2,6 +2,7 @@
 // - verifyToken: valida el JWT y adjunta req.user
 // - hasPermission: query reutilizable module.action contra la BD
 // - requirePermission(module, action): middleware que usa hasPermission
+// - requireAnyPermission([module, action], ...): pasa con cualquiera de ellos
 // - requireBranchAccess: restricción de sucursal
 
 const jwt = require('jsonwebtoken');
@@ -101,4 +102,19 @@ const requirePermission = (module, action) => {
   };
 };
 
-module.exports = { verifyToken, getPermissionsForRole, hasPermission, requirePermission };
+// ─── 4. Verifica que tenga AL MENOS UNO de varios permisos ────────────────────
+// Para rutas que comparten dos permisos, p. ej. GET /expenses/options, que
+// usan quien registra gastos (expenses.create) y quien los consulta
+// (expenses.read). Usa req.user.permissions, que verifyToken ya leyó de la BD
+// en este mismo request. Mismo bypass de superadmin que requirePermission.
+const requireAnyPermission = (...perms) => (req, res, next) => {
+  if (req.user?.role_name === 'superadmin') return next();
+  const allowed = perms.some(([module, action]) => req.user?.permissions?.includes(`${module}.${action}`));
+  if (!allowed) {
+    const list = perms.map(([module, action]) => `${module}.${action}`).join(' o ');
+    return next(new ForbiddenError(`Sin permiso para ${list}`));
+  }
+  next();
+};
+
+module.exports = { verifyToken, getPermissionsForRole, hasPermission, requirePermission, requireAnyPermission };

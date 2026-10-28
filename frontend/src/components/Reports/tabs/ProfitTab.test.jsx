@@ -8,9 +8,12 @@ import { fmtRangeLabel, getPresetRange } from '../../../utils/dateRanges'
 import ProfitTab from './ProfitTab'
 
 let isCentralAdmin = false
+let permissions = []
 
 vi.mock('../../../services/api', () => ({ default: { get: vi.fn() } }))
-vi.mock('../../../context/UserContext', () => ({ useUser: () => ({ isCentralAdmin }) }))
+vi.mock('../../../context/UserContext', () => ({
+  useUser: () => ({ isCentralAdmin, hasPermission: (module, action) => permissions.includes(`${module}.${action}`) }),
+}))
 
 const money = (n) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -61,6 +64,7 @@ const renderTab = async () => {
 describe('ProfitTab', () => {
   beforeEach(() => {
     isCentralAdmin = false
+    permissions = ['reports.profit']
     api.get.mockReset()
     mockApi()
   })
@@ -234,5 +238,125 @@ describe('ProfitTab', () => {
       await waitFor(() => expect(lastProfitParams().get('branch_id')).toBe('2'))
       expect(viewBy('Sucursal')).toBeNull()
     })
+  })
+})
+
+// Utilidad neta (spec 13, T5)
+describe('ProfitTab net profit', () => {
+  const NET = { expenses: 150, netProfit: 60, netMargin: 20.69, firstExpenseDate: '2026-01-05' }
+  const BRANCH_REPORT = {
+    data: [
+      { groupId: 1, name: 'Sucursal Central', productCount: 2, netSales: 290, cost: 80, profit: 210, margin: 72.41,
+        noCost: { lines: 0, netSales: 0 }, net: { expenses: 100, netProfit: 110 } },
+      { groupId: 3, name: 'Sucursal Sur', productCount: 0, netSales: 0, cost: 0, profit: 0, margin: null,
+        noCost: { lines: 0, netSales: 0 }, net: { expenses: 50, netProfit: -50 } },
+    ],
+    pagination: { page: 1, limit: 20, total: 2, totalPages: 1 },
+    summary: { ...PRODUCT_REPORT.summary, net: NET },
+  }
+
+  // Igual que mockApi, pero reports/profit trae la utilidad neta
+  const mockNetApi = (net = NET) => {
+    api.get.mockImplementation((url) => {
+      if (url.startsWith('branches')) {
+        return Promise.resolve({ data: { data: [{ branch_id: 1, name: 'Sucursal Central' }, { branch_id: 2, name: 'Sucursal Norte' }] } })
+      }
+      if (url.startsWith('categories')) {
+        return Promise.resolve({ data: { data: [{ category_id: 2, name: 'Abarrotes' }] } })
+      }
+      const params = new URLSearchParams(url.split('?')[1])
+      if (params.get('category_id')) return Promise.resolve({ data: CATEGORY_REPORT })
+      if (params.get('group_by') === 'branch') return Promise.resolve({ data: BRANCH_REPORT })
+      return Promise.resolve({ data: { ...PRODUCT_REPORT, summary: { ...PRODUCT_REPORT.summary, net } } })
+    })
+  }
+
+  const stat = (label) => screen.getByText(label, { selector: '.rpt-stat__label' }).closest('.rpt-stat')
+
+  beforeEach(() => {
+    isCentralAdmin = false
+    permissions = ['reports.profit', 'reports.expenses']
+    api.get.mockReset()
+  })
+
+  it('continues the summary as gross profit − expenses = net profit, with the net margin as the main figure', async () => {
+    mockNetApi()
+    await renderTab()
+
+    expect(within(stat('Gastos')).getByText(money(150))).toBeInTheDocument()
+    expect(within(stat('Utilidad neta')).getByText(money(60))).toBeInTheDocument()
+    expect(within(stat('Utilidad neta')).getByText('Margen neto 20.7%')).toBeInTheDocument()
+    expect(stat('Utilidad neta')).toHaveClass('rpt-stat--hero')
+    expect(stat('Utilidad bruta')).not.toHaveClass('rpt-stat--hero')
+  })
+
+  it('keeps the summary as today when the API sends no net profit', async () => {
+    mockApi()
+    await renderTab()
+
+    expect(screen.queryByText('Utilidad neta')).not.toBeInTheDocument()
+    expect(stat('Utilidad bruta')).toHaveClass('rpt-stat--hero')
+  })
+
+  it('shows the expenses and the net profit of each branch', async () => {
+    isCentralAdmin = true
+    mockNetApi()
+    await renderTab()
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Ver por' })).getByRole('button', { name: 'Sucursal' }))
+
+    const south = (await screen.findByText('Sucursal Sur', { selector: 'td span' })).closest('tr')
+    expect(screen.getByRole('columnheader', { name: 'Gastos' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Utilidad neta' })).toBeInTheDocument()
+    expect(within(south).getByText(money(50))).toBeInTheDocument()
+    expect(within(south).getByText(money(-50))).toHaveClass('rpt-diff--neg')
+    expect(screen.getByText('2 sucursales con ventas o gastos')).toBeInTheDocument()
+  })
+
+  it('explains why there is no net profit with a category filter, and removes the filter', async () => {
+    mockNetApi()
+    await renderTab()
+
+    await screen.findByRole('option', { name: 'Abarrotes' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Categoría' }), { target: { value: '2' } })
+
+    expect(await screen.findByText(/La utilidad neta se calcula con todas las categorías/)).toBeInTheDocument()
+    expect(screen.queryByText('Utilidad neta', { selector: '.rpt-stat__label' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar el filtro' }))
+    await waitFor(() => expect(lastProfitParams().has('category_id')).toBe(false))
+  })
+
+  it('does not explain the category filter to a user without reports.expenses', async () => {
+    permissions = ['reports.profit']
+    mockApi()
+    await renderTab()
+
+    await screen.findByRole('option', { name: 'Abarrotes' })
+    fireEvent.change(screen.getByRole('combobox', { name: 'Categoría' }), { target: { value: '2' } })
+
+    await waitFor(() => expect(lastProfitParams().get('category_id')).toBe('2'))
+    expect(screen.queryByText(/La utilidad neta se calcula/)).not.toBeInTheDocument()
+  })
+
+  it('warns when the period starts before the first registered expense', async () => {
+    mockNetApi({ ...NET, firstExpenseDate: '2099-01-15' })
+    await renderTab()
+
+    expect(await screen.findByText(/El primer gasto registrado es del 15 ene 2099/)).toBeInTheDocument()
+  })
+
+  it('warns when there are no expenses yet', async () => {
+    mockNetApi({ expenses: 0, netProfit: 210, netMargin: 72.41, firstExpenseDate: null })
+    await renderTab()
+
+    expect(await screen.findByText(/Todavía no hay gastos registrados/)).toBeInTheDocument()
+  })
+
+  it('does not warn when the period starts after the first expense', async () => {
+    mockNetApi()
+    await renderTab()
+
+    expect(screen.queryByText(/El primer gasto registrado/)).not.toBeInTheDocument()
   })
 })

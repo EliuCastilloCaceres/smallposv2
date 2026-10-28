@@ -9,6 +9,7 @@ export const REPORT_TABS = [
   { id: 'trend',         icon: 'bi-activity',   label: 'Tendencia de ventas', perm: ['reports', 'trend'] },
   { id: 'inventory',     icon: 'bi-box-seam',   label: 'Valuación de inventario', perm: ['reports', 'inventory'] },
   { id: 'rotation',      icon: 'bi-arrow-repeat', label: 'Rotación de inventario', perm: ['reports', 'rotation'] },
+  { id: 'expenses',      icon: 'bi-wallet2',    label: 'Gastos',            perm: ['reports', 'expenses'] },
 ]
 
 // hasPermission: el de useUser()

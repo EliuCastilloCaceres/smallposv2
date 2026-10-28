@@ -7,6 +7,11 @@
 // De arriba abajo (specs/08-rediseno-ventas-y-tendencia.md): filtros (cambian
 // todo lo de abajo), resumen como una cuenta (ventas − costo = utilidad) y
 // desglose con sus controles encima.
+//
+// Utilidad neta (specs/13-reporte-de-gastos-y-utilidad-neta.md): si la API
+// manda summary.net, la cuenta sigue (utilidad bruta − gastos = utilidad
+// neta), y al ver por sucursal cada fila trae sus gastos (row.net). La API
+// solo la manda con reports.expenses y sin filtro de categoría.
 import { useState, useEffect, useMemo } from 'react'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
@@ -50,6 +55,9 @@ const fmtProductCount = (n) => `${n} producto${n !== 1 ? 's' : ''}`
 
 const fmtLines = (n) => `${n} línea${n !== 1 ? 's' : ''}`
 
+// 'YYYY-MM-DD' → "27 oct 2026"
+const fmtDay = (iso) => fmtRangeLabel(iso, iso)
+
 // El SKU no se repite si es igual al nombre
 const showSku = (row) => row.sku && row.sku.trim().toLowerCase() !== row.name.trim().toLowerCase()
 
@@ -72,7 +80,8 @@ const CostValue = ({ row }) =>
     : money(row.cost)
 
 const ProfitTab = () => {
-  const { isCentralAdmin } = useUser()
+  const { isCentralAdmin, hasPermission } = useUser()
+  const canSeeExpenses = hasPermission('reports', 'expenses')
 
   const [rows,        setRows]        = useState([])
   const [rowsGroupBy, setRowsGroupBy] = useState('product')
@@ -164,6 +173,8 @@ const ProfitTab = () => {
   const sortByColumn = (id) => changeSort(nextSort({ sortBy, sortDir }, id))
 
   const isProduct     = rowsGroupBy === 'product'
+  const net           = summary.net
+  const rowsWithNet   = rows.some(r => r.net)
   const activeFilters = [selectedBranchId, categoryId].filter(Boolean).length + (excludeNoCost ? 1 : 0)
   const sortProps     = { sortBy, sortDir, onSort: sortByColumn }
 
@@ -262,11 +273,26 @@ const ProfitTab = () => {
             <span className="rpt-stat__value">{money(summary.cost)}</span>
           </div>
           <span className="rpt-summary__op" aria-hidden="true">=</span>
-          <div className="rpt-stat rpt-stat--hero">
+          <div className={`rpt-stat ${net ? '' : 'rpt-stat--hero'}`}>
             <span className="rpt-stat__label">Utilidad bruta</span>
             <span className="rpt-stat__value"><Profit value={summary.profit} /></span>
             <span className="rpt-stat__sub">Margen {fmtMargin(summary.margin)}</span>
           </div>
+          {net && (
+            <>
+              <span className="rpt-summary__op" aria-hidden="true">−</span>
+              <div className="rpt-stat">
+                <span className="rpt-stat__label">Gastos</span>
+                <span className="rpt-stat__value">{money(net.expenses)}</span>
+              </div>
+              <span className="rpt-summary__op" aria-hidden="true">=</span>
+              <div className="rpt-stat rpt-stat--hero">
+                <span className="rpt-stat__label">Utilidad neta</span>
+                <span className="rpt-stat__value"><Profit value={net.netProfit} /></span>
+                <span className="rpt-stat__sub">Margen neto {fmtMargin(net.netMargin)}</span>
+              </div>
+            </>
+          )}
         </div>
 
         {!excludeNoCost && summary.noCost.lines > 0 && (
@@ -281,6 +307,22 @@ const ProfitTab = () => {
             No se están contando las ventas sin costo.
           </SummaryNote>
         )}
+        {canSeeExpenses && categoryId && (
+          <SummaryNote tone="info" actionLabel="Quitar el filtro" onAction={() => changeCategory('')}>
+            La utilidad neta se calcula con todas las categorías. Quita el filtro de categoría para verla.
+          </SummaryNote>
+        )}
+        {net && net.firstExpenseDate === null && (
+          <SummaryNote tone="info">
+            Todavía no hay gastos registrados, así que la utilidad neta es igual a la bruta.
+          </SummaryNote>
+        )}
+        {net && net.firstExpenseDate !== null && start < net.firstExpenseDate && (
+          <SummaryNote tone="info">
+            El primer gasto registrado es del {fmtDay(net.firstExpenseDate)}; antes de esa fecha la utilidad
+            neta no incluye gastos.
+          </SummaryNote>
+        )}
       </section>
 
       {/* ── 3. Desglose ── */}
@@ -290,7 +332,9 @@ const ProfitTab = () => {
           <ButtonGroup label="Ver por" options={groups} value={groupBy} onChange={changeGroupBy} />
           <span className="rpt-section__count">
             {pagination.total.toLocaleString('es-MX')}{' '}
-            {pagination.total === 1 ? group.label.toLowerCase() : group.plural} con ventas
+            {pagination.total === 1 ? group.label.toLowerCase() : group.plural}
+            {/* Con utilidad neta, por sucursal entran también las que solo tienen gastos */}
+            {rowsWithNet ? ' con ventas o gastos' : ' con ventas'}
           </span>
           <SortSelect sorts={SORTS} sortBy={sortBy} sortDir={sortDir} onChange={changeSort} />
         </div>
@@ -325,6 +369,8 @@ const ProfitTab = () => {
                     <th className="num">Costo</th>
                     <SortHeader sort={sortColumn('profit')} {...sortProps} />
                     <SortHeader sort={sortColumn('margin')} {...sortProps} />
+                    {rowsWithNet && <th className="num">Gastos</th>}
+                    {rowsWithNet && <th className="num">Utilidad neta</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -339,6 +385,8 @@ const ProfitTab = () => {
                       <td className="num"><CostValue row={r} /></td>
                       <td className="num"><Profit value={r.profit} /></td>
                       <td className="num">{fmtMargin(r.margin)}</td>
+                      {rowsWithNet && <td className="num">{money(r.net.expenses)}</td>}
+                      {rowsWithNet && <td className="num"><Profit value={r.net.netProfit} /></td>}
                     </tr>
                   ))}
                 </tbody>
@@ -365,6 +413,12 @@ const ProfitTab = () => {
                     <span className="rpt-muted">Utilidad · {fmtMargin(r.margin)}</span>
                     <strong><Profit value={r.profit} /></strong>
                   </div>
+                  {r.net && (
+                    <div className="rpt-card__total">
+                      <span className="rpt-muted">Gastos {money(r.net.expenses)} · Utilidad neta</span>
+                      <strong><Profit value={r.net.netProfit} /></strong>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

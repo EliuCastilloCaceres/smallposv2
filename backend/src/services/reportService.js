@@ -358,6 +358,13 @@ const getCashSessionDetail = async ({ sessionId, branchId = null }) => {
 //   margen     = utilidad ÷ venta neta × 100; null si la venta neta es 0
 // Una línea con od.purchase_price = 0 es "sin costo" (spec 03): se cuenta y
 // se marca, o se excluye de todo con excludeNoCost.
+//
+// Con includeNet (specs/13-reporte-de-gastos-y-utilidad-neta.md, requisitos
+// 10–15 y 20), el resumen agrega `net`: los gastos que cuentan en la utilidad
+// neta, la utilidad neta y el margen neto. Al agrupar por sucursal, cada fila
+// agrega sus gastos y su utilidad neta, y entran también las sucursales con
+// gastos y sin ventas. El controller decide includeNet: pide reports.expenses
+// y que no haya filtro de categoría de producto.
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -402,6 +409,7 @@ const getProfitReport = async ({
   sortBy = 'profit',
   sortDir = 'desc',
   excludeNoCost = false,
+  includeNet = false,
   page = 1,
   limit = 20,
 }) => {
@@ -455,8 +463,8 @@ const getProfitReport = async ({
 
   // Sin margen ("—") siempre al final, en cualquier dirección; group_id
   // desempata para que la paginación sea estable.
-  const [rows] = await db.query(
-    `SELECT t.*, ${group.cols}
+  const rowsSql = `
+    SELECT t.*, ${group.cols}
        FROM (
          SELECT l.group_id,
                 ${totalsCols},
@@ -466,9 +474,15 @@ const getProfitReport = async ({
           GROUP BY l.group_id
        ) t
        ${group.join}
-      ORDER BY (t.${sortColumn} IS NULL), t.${sortColumn} ${sortDir.toUpperCase()}, t.group_id
-      LIMIT ? OFFSET ?`,
-    [...params, safeLimit, (safePage - 1) * safeLimit]
+      ORDER BY (t.${sortColumn} IS NULL), t.${sortColumn} ${sortDir.toUpperCase()}, t.group_id`;
+
+  // Por sucursal con utilidad neta, las filas se completan en JS con las
+  // sucursales que solo tienen gastos; son pocas, así que se traen todas y se
+  // pagina después
+  const netByBranch = includeNet && groupBy === 'branch';
+  const [rows] = await db.query(
+    netByBranch ? rowsSql : `${rowsSql} LIMIT ? OFFSET ?`,
+    netByBranch ? params : [...params, safeLimit, (safePage - 1) * safeLimit]
   );
 
   const [[{ total }]] = await db.query(
@@ -495,7 +509,7 @@ const getProfitReport = async ({
     },
   });
 
-  const data = rows.map(r => ({
+  let data = rows.map(r => ({
     groupId: r.group_id,
     name:    r.name,
     ...(groupBy === 'product'
@@ -503,17 +517,72 @@ const getProfitReport = async ({
       : { productCount: Number(r.product_count) }),
     ...toAmounts(r),
   }));
+  let groupCount = Number(total);
+
+  const result = { summary: toAmounts(summary) };
+
+  if (includeNet) {
+    const expensesByBranch = await netProfitExpensesByBranch({ startDate, endDate, branchId });
+    const expenses = round2([...expensesByBranch.values()].reduce((sum, value) => sum + value, 0));
+    result.summary.net = {
+      ...netOf(result.summary, expenses),
+      firstExpenseDate: await getFirstExpenseDate(branchId),
+    };
+
+    if (netByBranch) {
+      // Sucursales con gastos y sin ventas: venta, costo y utilidad en 0
+      const missing = [...expensesByBranch.keys()].filter(id => !data.some(r => r.groupId === id));
+      if (missing.length > 0) {
+        const [branches] = await db.query('SELECT branch_id, name FROM branches WHERE branch_id IN (?)', [missing]);
+        data.push(...branches.map(b => ({
+          groupId: b.branch_id, name: b.name, productCount: 0,
+          netSales: 0, cost: 0, profit: 0, margin: null, noCost: { lines: 0, netSales: 0 },
+        })));
+      }
+      data = data
+        .map(r => {
+          const { expenses: branchExpenses, netProfit } = netOf(r, expensesByBranch.get(r.groupId) ?? 0);
+          return { ...r, net: { expenses: branchExpenses, netProfit } };
+        })
+        .sort(compareProfitRows(sortColumn, sortDir));
+      groupCount = data.length;
+      data = data.slice((safePage - 1) * safeLimit, safePage * safeLimit);
+    }
+  }
 
   return {
     data,
     pagination: {
       page:  safePage,
       limit: safeLimit,
-      total: Number(total),
-      totalPages: Math.max(1, Math.ceil(Number(total) / safeLimit)),
+      total: groupCount,
+      totalPages: Math.max(1, Math.ceil(groupCount / safeLimit)),
     },
-    summary: toAmounts(summary),
+    ...result,
   };
+};
+
+// Gastos, utilidad neta y margen neto de un resumen o una fila ya en pesos
+const netOf = ({ netSales, profit }, expenses) => {
+  const netProfit = round2(profit - expenses);
+  return {
+    expenses:  round2(expenses),
+    netProfit,
+    netMargin: round2(netSales) === 0 ? null : round2(netProfit / netSales * 100),
+  };
+};
+
+// El mismo orden que el ORDER BY de las filas: sin valor al final en
+// cualquier dirección y group_id para desempatar
+const PROFIT_ROW_FIELDS = { net_sales: 'netSales', profit: 'profit', margin: 'margin' };
+const compareProfitRows = (sortColumn, sortDir) => (a, b) => {
+  const field = PROFIT_ROW_FIELDS[sortColumn];
+  const va = a[field];
+  const vb = b[field];
+  if (va === null && vb !== null) return 1;
+  if (vb === null && va !== null) return -1;
+  if (va !== vb) return sortDir === 'asc' ? va - vb : vb - va;
+  return a.groupId - b.groupId;
 };
 
 // ─── Tendencia de ventas ───────────────────────────────────────────────────
@@ -1328,6 +1397,156 @@ const getRotationReport = async ({
   };
 };
 
+// ─── Gastos ────────────────────────────────────────────────────────────────
+
+// Gasto de un periodo, agrupado por categoría, sucursal, proveedor o método
+// de pago (specs/13-reporte-de-gastos-y-utilidad-neta.md). Cuentan los gastos
+// activos (no cancelados) cuya fecha del gasto cae en el periodo. La fecha
+// del gasto ya es un día de México sin hora, así que se compara directo, sin
+// pasar por utils/timezone.js. El resumen separa lo que cuenta en la utilidad
+// neta según la marca ACTUAL de cada categoría.
+
+const EXPENSE_GROUPS = {
+  category: {
+    key:  'e.expense_category_id',
+    join: 'JOIN expense_categories g ON g.expense_category_id = t.group_id',
+    cols: 'g.name AS name, g.counts_in_net_profit',
+  },
+  branch: {
+    key:  'e.branch_id',
+    join: 'JOIN branches g ON g.branch_id = t.group_id',
+    cols: 'g.name AS name',
+  },
+  provider: {
+    key:  'e.provider_id',
+    join: 'LEFT JOIN providers g ON g.provider_id = t.group_id',
+    cols: "COALESCE(g.name, 'Sin proveedor') AS name",
+  },
+  payment_method: {
+    key:  'e.payment_method_id',
+    join: 'JOIN payment_methods g ON g.payment_method_id = t.group_id',
+    cols: 'g.name AS name',
+  },
+};
+
+// WHERE de los gastos activos del periodo y la sucursal (null = todas)
+const activeExpensesWhere = ({ startDate, endDate, branchId = null }) => {
+  const where  = ["e.status = 'active'", 'e.expense_date BETWEEN ? AND ?'];
+  const params = [startDate, endDate];
+  if (branchId !== null) { where.push('e.branch_id = ?'); params.push(branchId); }
+  return { whereSql: where.join(' AND '), params };
+};
+
+// Fecha ('YYYY-MM-DD') del gasto activo más antiguo de la sucursal (null =
+// todas), o null si no hay ninguno. Para el aviso de los periodos que empiezan
+// antes de que se registraran gastos (requisitos 16–18).
+const getFirstExpenseDate = async (branchId = null) => {
+  const [[row]] = await db.query(
+    `SELECT DATE_FORMAT(MIN(e.expense_date), '%Y-%m-%d') AS first_date
+       FROM expenses e
+      WHERE e.status = 'active' ${branchId !== null ? 'AND e.branch_id = ?' : ''}`,
+    branchId !== null ? [branchId] : []
+  );
+  return row.first_date;
+};
+
+// Gastos que restan de la utilidad neta (categorías que cuentan en ella),
+// por sucursal: Map branch_id → total
+const netProfitExpensesByBranch = async ({ startDate, endDate, branchId = null }) => {
+  const { whereSql, params } = activeExpensesWhere({ startDate, endDate, branchId });
+  const [rows] = await db.query(
+    `SELECT e.branch_id, SUM(e.amount) AS total
+       FROM expenses e
+       JOIN expense_categories ec ON ec.expense_category_id = e.expense_category_id
+      WHERE ${whereSql} AND ec.counts_in_net_profit = 1
+      GROUP BY e.branch_id`,
+    params
+  );
+  return new Map(rows.map(r => [r.branch_id, Number(r.total)]));
+};
+
+const getExpenseReport = async ({
+  startDate,
+  endDate,
+  branchId = null,
+  groupBy = 'category',
+  page = 1,
+  limit = 20,
+}) => {
+  if (!DATE_RE.test(startDate ?? '') || !DATE_RE.test(endDate ?? '')) {
+    throw new ValidationError('start_date y end_date son requeridos, formato YYYY-MM-DD');
+  }
+  if (startDate > endDate) throw new ValidationError('start_date no puede ser posterior a end_date');
+  if (branchId !== null && !isPositiveInt(branchId)) throw new ValidationError('branch_id inválido');
+  const group = EXPENSE_GROUPS[groupBy];
+  if (!group) throw new ValidationError('group_by debe ser category, branch, provider o payment_method');
+
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+  const { whereSql, params } = activeExpensesWhere({ startDate, endDate, branchId });
+
+  const [[summary]] = await db.query(
+    `SELECT COUNT(*) AS count,
+            COALESCE(SUM(e.amount), 0) AS total,
+            COALESCE(SUM(CASE WHEN ec.counts_in_net_profit = 1 THEN e.amount ELSE 0 END), 0) AS in_net_profit
+       FROM expenses e
+       JOIN expense_categories ec ON ec.expense_category_id = e.expense_category_id
+      WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(summary.total);
+  const count = Number(summary.count);
+
+  // Mayor total primero; group_id desempata para que la paginación sea
+  // estable (los gastos sin proveedor tienen group_id NULL y van al final
+  // de su empate)
+  const [rows] = await db.query(
+    `SELECT t.*, ${group.cols}
+       FROM (
+         SELECT ${group.key} AS group_id, COUNT(*) AS count, SUM(e.amount) AS total
+           FROM expenses e
+          WHERE ${whereSql}
+          GROUP BY ${group.key}
+       ) t
+       ${group.join}
+      ORDER BY t.total DESC, (t.group_id IS NULL), t.group_id
+      LIMIT ? OFFSET ?`,
+    [...params, safeLimit, (safePage - 1) * safeLimit]
+  );
+
+  const [[{ groups }]] = await db.query(
+    `SELECT COUNT(DISTINCT ${group.key}) + MAX(${group.key} IS NULL) AS \`groups\`
+       FROM expenses e WHERE ${whereSql}`,
+    params
+  );
+
+  return {
+    data: rows.map(r => ({
+      groupId: r.group_id,
+      name:    r.name,
+      count:   Number(r.count),
+      total:   round2(r.total),
+      share:   total === 0 ? null : round2(Number(r.total) / total * 100),
+      ...(groupBy === 'category' ? { countsInNetProfit: r.counts_in_net_profit === 1 } : {}),
+    })),
+    pagination: {
+      page:       safePage,
+      limit:      safeLimit,
+      total:      Number(groups ?? 0),
+      totalPages: Math.max(1, Math.ceil(Number(groups ?? 0) / safeLimit)),
+    },
+    summary: {
+      total:          round2(total),
+      count,
+      average:        count === 0 ? null : round2(total / count),
+      inNetProfit:    round2(summary.in_net_profit),
+      outOfNetProfit: round2(total - Number(summary.in_net_profit)),
+    },
+    firstExpenseDate: await getFirstExpenseDate(branchId),
+  };
+};
+
 module.exports = {
   getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
+  getExpenseReport,
 };

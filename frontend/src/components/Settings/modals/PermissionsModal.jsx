@@ -41,6 +41,7 @@ const ACTION_LABELS = {
   inventory: 'Inventario',
   rotation:  'Rotación',
   categories: 'Categorías',
+  expenses:   'Gastos',
 }
 
 const MODULE_ICONS = {

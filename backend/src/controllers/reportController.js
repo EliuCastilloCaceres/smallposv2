@@ -13,6 +13,12 @@ const { todayInMexico } = require('../utils/timezone');
 
 const intOrNull = (value) => (value ? parseInt(value) : null);
 
+// La utilidad neta de Ventas y utilidad muestra el total de gastos, así que
+// pide también reports.expenses (specs/13-reporte-de-gastos-y-utilidad-neta.md,
+// requisito 15). Mismo bypass de superadmin que requirePermission.
+const canSeeExpenses = (user) =>
+  user.role_name === 'superadmin' || user.permissions.includes('reports.expenses');
+
 // GET /reports/cash-sessions
 const getCashSessions = async (req, res, next) => {
   try {
@@ -70,11 +76,15 @@ const getProfitReport = async (req, res, next) => {
       limit,
     } = req.query;
 
+    // Con una categoría de producto, la utilidad bruta es solo la de esa
+    // categoría y los gastos son de todo el negocio: no hay utilidad neta
+    // (requisito 13)
     const result = await reportService.getProfitReport({
       startDate,
       endDate,
       branchId:      resolveOptionalBranchId(req),
       categoryId:    intOrNull(categoryId),
+      includeNet:    canSeeExpenses(req.user) && !intOrNull(categoryId),
       groupBy:       groupBy || 'product',
       sortBy:        sortBy  || 'profit',
       sortDir:       sortDir || 'desc',
@@ -178,6 +188,25 @@ const getRotationReport = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// GET /reports/expenses
+const getExpenseReport = async (req, res, next) => {
+  try {
+    const { start_date: startDate, end_date: endDate, group_by: groupBy, page, limit } = req.query;
+
+    const result = await reportService.getExpenseReport({
+      startDate,
+      endDate,
+      branchId: resolveOptionalBranchId(req),
+      groupBy:  groupBy || 'category',
+      page:  intOrNull(page)  ?? 1,
+      limit: intOrNull(limit) ?? 20,
+    });
+
+    res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
+  getExpenseReport,
 };

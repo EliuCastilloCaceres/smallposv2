@@ -313,7 +313,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
 4. **Rotación de inventario,** con sugerencias.
 5. **Módulo de gastos,** dividido en dos specs:
    - **spec 12 (Terminada):** categorías, separación de retiros y del histórico, opción "pagado desde caja" y gasto desde el POS;
-   - **spec 13 (pendiente):** reporte de gastos (`reports.expenses`) y **utilidad neta** en el reporte de la spec 1, contando solo las categorías que cuentan en la utilidad neta.
+   - **spec 13 (Terminada):** reporte de gastos (`reports.expenses`) y **utilidad neta** en el reporte de la spec 1, contando solo las categorías que cuentan en la utilidad neta.
 6. **Módulo de compras:**
    - costo promedio ponderado;
    - se quita el motivo "Compra a proveedor" de Inventario;

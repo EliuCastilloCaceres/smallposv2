@@ -148,12 +148,14 @@ describe('GET /api/reports/profit', () => {
       const res = await getProfit(adminToken);
 
       expect(res.status).toBe(200);
+      // Sin gastos registrados, la utilidad neta es la bruta (spec 13)
       expect(res.body.summary).toEqual({
         netSales: 525,
         cost:     170,
         profit:   355,
         margin:   67.62,
         noCost:   { lines: 1, netSales: 90 },
+        net:      { expenses: 0, netProfit: 355, netMargin: 67.62, firstExpenseDate: null },
       });
     });
 
@@ -205,6 +207,7 @@ describe('GET /api/reports/profit', () => {
         profit:   265,
         margin:   60.92,
         noCost:   { lines: 0, netSales: 0 },
+        net:      { expenses: 0, netProfit: 265, netMargin: 60.92, firstExpenseDate: null },
       });
       expect(res.body.data.map(r => r.groupId)).not.toContain(products.C.productId);
     });
@@ -225,8 +228,8 @@ describe('GET /api/reports/profit', () => {
       const res = await getProfit(adminToken, { group_by: 'branch' });
 
       expect(res.body.data).toEqual([
-        { groupId: 1,       name: 'Sucursal Central', productCount: 4, netSales: 425, cost: 130, profit: 295, margin: 69.41, noCost: { lines: 1, netSales: 90 } },
-        { groupId: branch2, name: 'Sucursal Norte',   productCount: 1, netSales: 100, cost: 40,  profit: 60,  margin: 60,    noCost: { lines: 0, netSales: 0 } },
+        { groupId: 1,       name: 'Sucursal Central', productCount: 4, netSales: 425, cost: 130, profit: 295, margin: 69.41, noCost: { lines: 1, netSales: 90 }, net: { expenses: 0, netProfit: 295 } },
+        { groupId: branch2, name: 'Sucursal Norte',   productCount: 1, netSales: 100, cost: 40,  profit: 60,  margin: 60,    noCost: { lines: 0, netSales: 0 }, net: { expenses: 0, netProfit: 60 } },
       ]);
     });
 

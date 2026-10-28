@@ -48,4 +48,11 @@ router.get(
   reportController.getRotationReport
 );
 
+// GET /reports/expenses?start_date=&end_date=&branch_id=&group_by=&page=&limit=
+router.get(
+  '/expenses',
+  requirePermission('reports', 'expenses'),
+  reportController.getExpenseReport
+);
+
 module.exports = router;

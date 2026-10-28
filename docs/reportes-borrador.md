@@ -5,6 +5,8 @@
 > Mientras tanto no se escribe código.
 >
 > **Estado: dudas resueltas** (2026-10-17). Las 39 dudas y sus derivadas (6b, 8b, 10b…) tienen respuesta en [§8](#8-dudas-abiertas). Las secciones 2 a 6 ya reflejan esas decisiones.
+>
+> **Actualización del 2026-10-27:** la [spec 12](../specs/12-modulo-de-gastos.md) (módulo de gastos) cambió las decisiones #2, #4, #8, #9, #33 y #34. Los cambios están en §3.1, §5, §6 y §8.
 
 ## 1. Contexto
 
@@ -77,17 +79,18 @@ Todo esto iría en el módulo de **Reportes**, que ya existe.
 - Para responder "en qué gasto" hacen falta **categorías**. Con los datos actuales solo se puede responder "cuánto saqué de caja", agrupado por descripción libre.
 - Los retiros de caja tienen que dejar de contarse como gasto.
 
-**Decisiones** (ver #1–#4, #8, #8b y #33–#38)
+**Decisiones** (ver #1–#4, #8, #8b y #33–#38; el módulo se hizo en la spec 12)
 - **Qué se registra:** todo gasto del negocio, dentro o fuera de caja.
-- **Módulo nuevo de gastos,** con menú propio y permisos `expenses.read/create/cancel`. Cada gasto lleva:
+- **Módulo nuevo de gastos,** con menú propio y permisos `expenses.read/create/cancel`, más `expenses.categories` para administrar las categorías. Cada gasto lleva:
   - fecha, **categoría** (editable), monto y descripción;
   - sucursal y método de pago (los activos, sin "Crédito");
   - proveedor opcional;
   - folio y comprobante adjunto.
+- **Categorías:** cada una tiene la marca **"cuenta en la utilidad neta"**. "Pago a proveedor (mercancía)" no cuenta: mientras no exista Compras, los pagos de mercancía se registran en Gastos con esa categoría (#8).
 - **Pagado desde caja:** si el gasto se paga con efectivo de la caja abierta, se genera solo la salida de caja ligada al gasto.
 - **Retiros:** pasan a un tipo propio y no cuentan como gasto.
-- **Histórico:** las salidas viejas se migran con regla; los retiros del corte se separan y el resto queda "Sin categoría".
-- **Cancelación:** un gasto no se edita; se cancela con motivo.
+- **Histórico:** el retiro del corte pasa a retiro y las demás salidas quedan como "Salida de caja (histórico)", fuera de los gastos (#4, cambió en la spec 12).
+- **Cancelación:** un gasto no se edita; se cancela con motivo. Si se pagó desde caja, el reingreso se registra solo si su sesión sigue abierta (#34).
 
 ### 3.2 A quién le compro más / con quién gasto más (3)
 
@@ -289,7 +292,7 @@ Reglas para todas las pestañas:
 - **Exportación:** no hay (#30).
 
 Además de las pestañas, hay dos **menús nuevos** de captura (#33):
-- **Gastos:** `expenses.read/create/cancel`.
+- **Gastos:** `expenses.read/create/cancel`, más `expenses.categories` (spec 12).
 - **Compras:** `purchases.read/create/cancel`.
 
 ## 6. Orden de las specs
@@ -308,12 +311,9 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
 2. **Tendencia de ventas,** con Recharts.
 3. **Valuación del inventario.**
 4. **Rotación de inventario,** con sugerencias.
-5. **Módulo de gastos:**
-   - categorías;
-   - separación de retiros y migración del histórico;
-   - opción "pagado desde caja";
-   - reporte de gastos;
-   - **utilidad neta** en el reporte de la spec 1.
+5. **Módulo de gastos,** dividido en dos specs:
+   - **spec 12 (Terminada):** categorías, separación de retiros y del histórico, opción "pagado desde caja" y gasto desde el POS;
+   - **spec 13 (pendiente):** reporte de gastos (`reports.expenses`) y **utilidad neta** en el reporte de la spec 1, contando solo las categorías que cuentan en la utilidad neta.
 6. **Módulo de compras:**
    - costo promedio ponderado;
    - se quita el motivo "Compra a proveedor" de Inventario;
@@ -331,10 +331,12 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
 ### Gastos
 1. ~~¿Qué cuenta como gasto?~~ → **Respondida: todo gasto del negocio.** Incluye el efectivo que sale de caja y los gastos pagados fuera de caja (renta, luz, nómina por transferencia o tarjeta). Un gasto debe poder registrarse sin sesión de caja.
 2. ~~¿Se crea un módulo de gastos con categorías?~~ → **Respondida: sí, con categorías editables.** El admin puede crear, editar y desactivar categorías. Se siembran unas iniciales: Renta, Servicios, Nómina, Insumos, Mantenimiento y Otros.
+   - **Ajustada en la spec 12:** se administran en Configuración → Categorías de gasto, con el permiso `expenses.categories` (admin y superadmin). Cada categoría tiene la marca "cuenta en la utilidad neta", y se siembra también **"Pago a proveedor (mercancía)"**, que no cuenta (#8).
 3. ~~¿Se separan los retiros de caja de los gastos?~~ → **Respondida: sí.** Los retiros, tanto del corte de caja como los manuales, pasan a un tipo propio y no cuentan como gasto. El cuadre de caja no cambia: los dos siguen restando del efectivo esperado.
-4. ~~¿Qué pasa con los gastos ya registrados?~~ → **Respondida: migrar con regla.**
+4. ~~¿Qué pasa con los gastos ya registrados?~~ → **Respondida: migrar con regla. Cambió en la spec 12 (decisión 1).**
    - Las salidas con descripción `'Retiro en corte de caja'` se convierten en retiros.
-   - El resto pasa al módulo de gastos como **"Sin categoría"**, para recategorizarlas a mano si se quiere.
+   - ~~El resto pasa al módulo de gastos como "Sin categoría", para recategorizarlas a mano si se quiere.~~ El resto queda como **"Salida de caja (histórico)"** (`legacy_expense`) y **no** se convierte en gasto. De las 343 salidas de producción, unas 271 (~$202,866) eran pagos de mercancía, que ya cuentan como costo al venderse; contarlas como gasto daba una utilidad neta de unos −$202,000.
+   - La utilidad neta solo cuenta lo que se registra en Gastos desde la spec 12.
 
 ### Compras y proveedores
 5. ~~¿Se crea un módulo de compras?~~ → **Respondida: sí.**
@@ -349,6 +351,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
    - Las compras de mercancía **no** son gastos: son inventario, y su costo entra a la utilidad cuando se vende.
    - "A quién le compro más" se calcula con compras.
    - "Con quién gasto más" suma compras y los gastos que tengan proveedor, así que los gastos llevan **proveedor opcional**.
+   - **Mientras no exista Compras** (spec 12, decisión 2): un pago de mercancía a un proveedor se registra en Gastos con la categoría "Pago a proveedor (mercancía)", que no cuenta en la utilidad neta.
 8b. ~~¿Cómo afecta al corte de caja un gasto o compra pagado con efectivo de caja?~~ → **Respondida: opción "pagado desde caja".**
    - Al registrar un gasto o una compra se elige el método de pago.
    - Si se paga con efectivo de la caja abierta, se genera automáticamente la salida de caja ligada a ese gasto o compra. Así el corte cuadra sin capturar dos veces.
@@ -357,6 +360,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
 9. ~~¿Utilidad bruta o neta?~~ → **Respondida: las dos.**
    - **Bruta** = ventas netas − costo de lo vendido.
    - **Neta** = bruta − gastos del periodo. Aparece cuando exista el módulo de gastos.
+   - **Ajustada en la spec 12:** solo restan los gastos activos de las categorías que cuentan en la utilidad neta. Va en la spec 13.
 10. ~~¿Se valida el costo en el servidor? ¿Qué pasa con el histórico en 0?~~ → **Respondida: fix + marcar histórico.**
     - Primero va un `fix-`: el servidor toma el costo de `products` al vender y deja de confiar en el que manda el POS.
     - Las ventas históricas con costo 0 se muestran marcadas como "sin costo", y un filtro permite excluirlas del cálculo.
@@ -464,10 +468,11 @@ Estas dudas surgieron al decidir crear los dos módulos (#2 y #5).
       - **Supervisor:** todo.
       - **Cajero:** puede registrar gastos pagados desde su caja.
       - **Almacenista:** puede registrar compras.
+    - **Ajustada en la spec 12:** se agrega `expenses.categories`, para administrar las categorías de gasto, que solo tienen admin y superadmin. El cajero tiene `expenses.create` sin `expenses.read`: registra gastos desde el POS, pagados desde su caja, y no ve el menú Gastos.
 34. ~~¿Se pueden editar o cancelar?~~ → **Respondida: solo cancelar, con motivo.**
     - No se editan: se cancelan y se vuelven a capturar.
     - Cancelar una compra revierte la entrada de inventario, si hay stock suficiente.
-    - Si el dinero salió de caja, se registra el reingreso.
+    - Si el dinero salió de caja, se registra el reingreso. **Ajustada en la spec 12 (decisión 5):** solo si su sesión de caja sigue abierta; si ya se cerró, se cancela sin reingreso y la pantalla avisa que se registre como Ingreso manual.
     - El costo promedio no se recalcula hacia atrás.
 35. ~~¿Qué pasa con la entrada "Compra a proveedor" de Inventario?~~ → **Respondida: se quita ese motivo.**
     - Las compras solo se registran en Compras.

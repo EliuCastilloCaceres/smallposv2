@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | fix | smallposv2 | smallpos-saas | `c4c34d5`–`265e89f` | 2026-10-19 |
+| **Implementada** | fix | smallposv2 | smallpos-saas | `c4c34d5`–`265e89f` | 2026-10-19 |
 
 ## Resumen
 
@@ -59,7 +59,25 @@ La revocación masiva además reescribía `revoked_at` de los tokens que ya esta
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 13 (`specs/13-session-reload-fix.md`), el 2026-10-27.
+
+- [x] Recargar la página 10 veces seguidas, con `React.StrictMode`, no cierra la sesión y sale un solo `POST /api/auth/refresh` por recarga.
+  - Prueba manual del usuario en el navegador (2026-10-27).
+  - Test `sends a single refresh under StrictMode and loads the user (Spec 13)` (`UserContext.test.jsx`). Fallaba con el código anterior (2 refresh) y pasa con el nuevo (1).
+- [x] Reenviar a propósito un refresh token ya rotado responde 401 y revoca las sesiones del usuario; el token rotado conserva su `revoked_at`.
+  - Verificado contra el backend de desarrollo, en el tenant `marksexpress`, con un usuario temporal que después se borró.
+  - El token rotado conservó la hora de su rotación (22:56:46). Las otras dos sesiones se revocaron al reenviarlo (22:56:49), y los reenvíos posteriores (22:56:51) ya no cambiaron nada.
+- [x] Sin cookie o con una cookie inválida, cargar la app manda al login, como antes.
+  - Prueba manual del usuario en el navegador (2026-10-27).
+  - Backend: sin cookie, 401 "Refresh token no proporcionado"; con una cookie inválida, 401 "Refresh token inválido o expirado".
+- [x] Con el token de acceso vencido, la app lo renueva sola y sigue funcionando.
+  - Prueba manual del usuario (2026-10-27), con el token de acceso a 1 minuto de forma temporal, sin commit. Se regresó a 15 minutos.
+- [x] Los tests del backend y del frontend pasan: backend 818/818 (41 suites) y frontend 331/331 (35 archivos), en Docker.
+
+**Diferencias con smallposv2:**
+- **Eventos fuera del refresh compartido:** `services/session.js` solo hace la petición y guarda el token. `api.js` conserva un envoltorio propio (`renewSession`) que emite `auth:session` y `auth:logout` una sola vez por refresh.
+- **Al cargar sin sesión:** `UserContext` no emite `auth:logout`, así que el estado del POS en `localStorage` se conserva.
+- **Tests del backend:** usan la BD simulada de `authSession.test.js`.
 
 ## Notas para portar a smallpos-saas
 

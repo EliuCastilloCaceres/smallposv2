@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | fix | smallposv2 | smallpos-saas | `deb907d`–`5e756ea` | 2026-10-20 |
+| **Implementada** | fix | smallposv2 | smallpos-saas | `deb907d`–`5e756ea` | 2026-10-20 |
 
 ## Resumen
 
@@ -78,7 +78,44 @@ Spec completa: [`specs/03-fix-costos-e-indices.md`](../specs/03-fix-costos-e-ind
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 14 (`specs/14-sale-cost-and-migrations.md`), el 2026-10-27.
+
+- [x] El script de migraciones simula, aplica y no repite: `migrate-tenants.js --dry-run` lista las pendientes de `marksexpress` y `rbac09demo` sin aplicar nada, la corrida real las aplica y las registra en `tenant_migrations`, y una segunda corrida dice "al día".
+  - Con un backup antes de cada una. La `001` se aplicó primero y la `002` después, junto con el código de apartados.
+  - En `marksexpress`, con 90 360 ventas, la `001` tardó 4.8 s.
+- [x] Una base creada desde cero, como la crea `createTenant` (`01-schema.sql`, `02-seeds.sql`, el catálogo RBAC y las migraciones), tiene las mismas columnas e índices que `marksexpress` migrado en `orders`, `inventory_movements`, `returns` y `layaway_details`.
+  - Las 79 líneas de columnas e índices son idénticas. La base de prueba se borró.
+- [x] Una venta que manda un costo falso por la API queda con el costo del catálogo.
+  - En `rbac09demo`, con un usuario temporal: la venta 6 mandó 999 y guardó 5.00. Después se canceló (el stock volvió de 7 a 8), se cerró la caja y el usuario quedó desactivado.
+  - Una venta con un producto que no existe respondió 400 "Producto no encontrado (ID 9999)" y no creó nada.
+  - Test `stores the catalog cost and ignores the cost sent by the client` (`saleCost.test.js`).
+- [x] Un apartado cuyo producto cambia de costo antes de liquidarse genera una venta con el costo original.
+  - Prueba del usuario en el POS (2026-10-27): el apartado #1 congeló costo 55; después el costo del producto pasó a 40, y la venta 90366 quedó con 55.
+  - El stock se reservó una vez (10 → 9) y no se volvió a descontar al liquidar.
+- [x] Los 7 índices existen en los dos tenants, y `EXPLAIN` de las consultas de rango de fechas de Dashboard y Ventas los usa.
+  - En `marksexpress`, con un mes de rango, las 4 consultas (consolidadas y de una sucursal) usan `idx_orders_created` o `idx_orders_branch_created`, con acceso por rango.
+- [x] En el POS se vende (contado, mixto y crédito), se aparta y se liquida igual que antes.
+  - Prueba del usuario (2026-10-27): contado (90363), mixta con efectivo y tarjeta (90364), crédito (90365, crédito activo de $180) y el apartado #1 liquidado como venta 90366.
+  - Cada línea guardó el costo del catálogo, y el backend no registró errores.
+- [x] Siguiendo el runbook se escribe y aplica una migración de prueba.
+  - `003-add-runbook-check-table.sql` se simuló, se aplicó, la segunda corrida dijo "al día", y se verificó con el comando del runbook. Después se borraron la tabla, su registro y el archivo.
+- [x] Los tests del backend y del frontend pasan, en Docker: backend 861/861 (46 suites) y frontend 333/333 (36 archivos).
+
+**Diferencias con smallposv2:**
+- **Registro:** las migraciones se registran en `tenant_migrations`, la tabla que ya usaban los pasos `rbac_*` de `migrate-rbac.js`, con el nombre del archivo como `id`. No hay `schema_migrations`.
+- **Cuándo se aplican:**
+  - El backend no las aplica al arrancar.
+  - Los tenants existentes las reciben con `scripts/migrate-tenants.js`, que acepta `--dry-run` y `--subdomain`, sigue con los demás si un tenant falla y sale con código 1.
+  - Un tenant nuevo las recibe al crearse, después del catálogo RBAC y antes del Propietario.
+  - Un dump importado, después de la migración RBAC.
+  - No hay `npm run migrate`.
+- **Tenant sin `tenant_migrations`:** no recibe nada, y se le pide correr primero `migrate-rbac.js`.
+- **`01-schema.sql`:** saas lo editaba con cada cambio de esquema (RBAC). Desde aquí queda como base fija, como en smallposv2.
+- **Documentación:** `docs/runbook-tenant-migrations.md` en lugar de `docs/migraciones.md`.
+- **Tests:**
+  - usan la BD simulada;
+  - el contenido de cada migración se revisa leyendo su SQL (`migrationFiles.test.js`);
+  - la prueba contra MySQL es aplicarla a los tenants locales.
 
 ## Notas para portar a smallpos-saas
 

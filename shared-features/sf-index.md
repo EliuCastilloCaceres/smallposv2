@@ -41,7 +41,7 @@ Si se decide **no** implementarla, se anota en el resumen del archivo y se deja 
 
 | Archivo | Tipo | Estado | Origen | Resumen |
 |---|---|---|---|---|
-| [feat-filtro-metodo-pago-ventas.md](feat-filtro-metodo-pago-ventas.md) | feat | Borrador | smallposv2 · `60aa180` | Filtro por método de pago en Ventas; el pie suma solo el método filtrado. |
+| [feat-filtro-metodo-pago-ventas.md](feat-filtro-metodo-pago-ventas.md) | feat | Implementada | smallposv2 · `60aa180` | Filtro por método de pago en Ventas; el pie suma solo el método filtrado. |
 | [feat-totales-credito.md](feat-totales-credito.md) | feat | Implementada | smallposv2 · `60aa180` | Pie de totales (Total, Pagado, Saldo pendiente) en Créditos. |
 | [feat-filtro-cliente-credito.md](feat-filtro-cliente-credito.md) | feat | Implementada | smallposv2 · `60aa180` | Dropdown de clientes con crédito para filtrar el listado de Créditos. |
 | [fix-sesion-al-recargar.md](fix-sesion-al-recargar.md) | fix | Implementada | smallposv2 · `c4c34d5`–`265e89f` | Un solo refresh en curso por pestaña para que recargar no cierre la sesión; la revocación por reutilización conserva `revoked_at`. |

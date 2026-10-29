@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
 
 ## Resumen
 
@@ -51,7 +51,32 @@ Ninguno.
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 16 (`specs/16-sales-payment-method-filter.md`), el 2026-10-29.
+
+- [x] En `marksexpress`, del 2026-09-01 al 2026-10-29, con cada método el conteo de ventas y el pie coinciden con una consulta directa a la base:
+  - Efectivo: 4 786 ventas y $169,605.68;
+  - Tarjeta: 113 ventas y $7,026;
+  - Transferencia Bancaria: 1 venta y $35;
+  - Crédito: 13 ventas y $1,112.
+  - Las ventas mixtas 87957 (tarjeta $20 y efectivo $3) y 90364 (efectivo $150 y tarjeta $200) aparecen una vez con Efectivo, una vez con Tarjeta y ninguna con los otros dos métodos.
+- [x] En todo el historial (90 365 ventas), el pie filtrado por cada método es igual a la fila de ese método en el pie sin filtro: Efectivo $2,855,880.18, Tarjeta $21,248, Crédito $1,112 y Transferencia Bancaria $35.
+- [x] En la app, al filtrar por Tarjeta el 2026-10-27, solo aparece la 90364, con $350 en su fila, y el pie suma $200. Lo probó el usuario (2026-10-29).
+- [x] Un método desactivado sigue en el select, como "Transferencia Bancaria (inactivo)", y su venta (88322, $35) se filtra. Lo probó el usuario.
+- [x] `EXPLAIN` del conteo con el filtro, en todo el historial, usa el índice `fk_op_method` de `order_payments`. Con Tarjeta tarda 16 ms. Con Efectivo, igual que sin filtro, tarda cerca de 1.5 s.
+- [x] Tests en `salesList.test.js` (16) y `SalesTab.test.jsx` (4). Los tests del backend y del frontend pasan, en Docker: backend 893/893 (48 suites) y frontend 342/342 (38 archivos).
+
+**Diferencias con smallposv2:**
+- **Reembolsos con un método que la venta no usó:**
+  - En saas se restan del pie filtrado: las consultas de totales no llevan el `EXISTS` del listado, así que el pie filtrado siempre es igual a la fila de ese método sin filtro.
+  - En smallposv2, los totales solo cuentan las ventas que tienen un pago con el método.
+  - Las dos solo difieren en esos reembolsos.
+- **Métodos desactivados:** aparecen como "Nombre (inactivo)". En smallposv2, solo con el nombre.
+- **`payment_method_id`:** se lee con `parseBranchId`, así que solo cuenta un entero positivo. En smallposv2, `parseInt` deja pasar `1.5` como 1 y `-3` como -3.
+- **Sucursal:**
+  - El filtro respeta el alcance de la Spec 12 de saas (`branchIds` y `X-Branch-Id`), no `resolveOptionalBranchId`.
+  - El método elegido se conserva al cambiar de alcance.
+- **Estilos:** en escritorio, los filtros de Ventas pasan a otra línea cuando no caben (`orders.css`, desde 768 px). Ventas de saas tiene siete controles, contando el selector de alcance, y el último quedaba cortado. En smallposv2, la fila sigue sin salto de línea.
+- **Tests:** saas los agrega.
 
 ## Notas para portar a smallpos-saas
 

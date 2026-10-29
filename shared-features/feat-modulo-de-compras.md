@@ -154,6 +154,7 @@ Revisado contra el código de smallpos-saas el 2026-10-28 (`0014322`).
   - la lista, el detalle, el comprobante y la cancelación filtran con `branchIds`;
   - el registro usa la sucursal del request (`X-Branch-Id`), y la búsqueda de productos muestra el stock de esa sucursal;
   - la caja de la compra pagada desde caja debe ser de esa sucursal.
+- **Compra desde el POS y la sucursal:** el formulario abierto desde el POS (`posRegister`) debe mandar la sucursal de la caja. En smallposv2 no la mandaba, y el administrador central recibía 400 *"branch_id es requerido para el administrador central"* (corregido el 2026-10-29). En saas, revisar que la petición lleve la sucursal del POS (`X-Branch-Id`) con `branch: 'required'`.
 - **POS:** `stockVersion` se agrega al `PosContext` de saas. Revisar que la cuadrícula del POS de saas se lea con un `fetchGrid` parecido.
 - **Etiquetas:** el modal de permisos de saas muestra la descripción del catálogo, así que el cambio de `PermissionsModal.jsx` no se porta.
 - **Tests:** los del backend de saas simulan `db`, así que los de integración se reescriben con esas simulaciones. Los del frontend se adaptan con los códigos de permiso de saas y `useScope`.

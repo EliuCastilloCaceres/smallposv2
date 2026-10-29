@@ -354,6 +354,23 @@ describe('purchase paid from the register', () => {
     });
   });
 
+  // Como lo manda el POS: el admin central no tiene sucursal, así que va la
+  // de la caja
+  it('lets the central admin pay from the register of the branch it sends, and requires the branch', async () => {
+    const product = await createTestProduct({ branchId: branch2, stock: 0 });
+    const items = [{ product_id: product.productId, quantity: 2, unit_cost: 10 }];
+
+    const without = await post(tokens.admin, fromRegister(items, { cash_register_id: register2 }));
+    const north   = await post(tokens.admin, fromRegister(items, { cash_register_id: register2, branch_id: branch2 }));
+
+    expect(without.status).toBe(400);
+    expect(without.body.message).toBe('branch_id es requerido para el administrador central');
+    expect(north.status).toBe(201);
+    expect(north.body.data).toMatchObject({ branch_id: branch2, paid_from_register: true, total: 20 });
+    expect(north.body.data.cash_movement).toMatchObject({ register_name: 'Caja Norte', session_open: true });
+    expect(await stockOf(product.productId, { branchId: branch2 })).toBe(2);
+  });
+
   it('creates no cash movement when not paid from the register', async () => {
     const product = await createTestProduct();
     const [[before]] = await db.query('SELECT COUNT(*) AS n FROM cash_movements');

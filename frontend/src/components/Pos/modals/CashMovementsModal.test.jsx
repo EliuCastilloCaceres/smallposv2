@@ -215,7 +215,7 @@ describe('CashMovementsModal', () => {
       const sent = Object.fromEntries(form.entries())
       expect(url).toBe('purchases')
       expect({ ...sent, items: JSON.parse(sent.items) }).toEqual({
-        provider_id: '4', payment_method_id: '8', paid_from_register: 'true', cash_register_id: '1',
+        branch_id: '1', provider_id: '4', payment_method_id: '8', paid_from_register: 'true', cash_register_id: '1',
         items: [{ product_id: 20, variant_id: null, quantity: 24, unit_cost: 12.5 }],
       })
       expect(await screen.findByText('Compra #31: Pepsi')).toBeInTheDocument()

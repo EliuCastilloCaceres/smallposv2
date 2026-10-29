@@ -210,6 +210,20 @@ describe('PurchaseFormModal', () => {
     expect(api.get).toHaveBeenCalledWith('purchases/products', { params: { search: 'coca', branch_id: '2' } })
   })
 
+  // El backend exige la sucursal al admin central, que también puede comprar
+  // desde el POS
+  it('sends the branch of the POS with its register and cash', async () => {
+    renderForm({ options: OPTIONS, posRegister: { branchId: 2, cashRegisterId: 5, name: 'Caja Norte' } })
+    await pickProduct('coca', /Coca-Cola 600 ml/)
+    change(/Proveedor/, '4')
+
+    fireEvent.click(screen.getByRole('button', { name: /Registrar compra/ }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled())
+    expect(sentForm()).toMatchObject({ branch_id: '2', payment_method_id: '8', paid_from_register: 'true', cash_register_id: '5' })
+    expect(sentForm()).not.toHaveProperty('purchase_date')
+  })
+
   it.each([
     ['without provider', async () => { await pickProduct('coca', /Coca-Cola 600 ml/) }, 'Elige el proveedor'],
     ['without products', async () => { change(/Proveedor/, '4') }, 'Agrega al menos un producto a la compra'],

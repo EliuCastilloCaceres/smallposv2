@@ -86,8 +86,11 @@ const PurchaseFormModal = ({ options, isCentralAdmin, posRegister = null, onSave
     if (fromPos && !cashMethod) { setError('El método Efectivo no está activo'); return }
     if (!fromPos && paidFromRegister && !cashRegisterId) { setError('Elige la caja de la que sale el efectivo'); return }
 
+    // Desde el POS también va la sucursal: el backend se la pide al admin
+    // central, que no tiene una asignada
     const fields = fromPos
       ? {
+        branch_id:          posRegister.branchId,
         provider_id:        providerId,
         payment_method_id:  cashMethod.payment_method_id,
         paid_from_register: true,

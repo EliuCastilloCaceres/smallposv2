@@ -2,7 +2,7 @@
 
 | Estado | Fecha de creación | Última actualización |
 |---|---|---|
-| **Lista** | 2026-10-28 | 2026-10-28 |
+| **Terminada** | 2026-10-28 | 2026-10-29 |
 
 ## Objetivo
 
@@ -141,3 +141,4 @@ Esta spec permite **agregar o reemplazar el comprobante desde el detalle**, en G
 | 2026-10-28 | T3 terminada: `Expenses/ReceiptUploadButton.jsx` (selector de archivos, validación con `receiptError` y confirmación con `ConfirmDialog`), usado por `ExpenseDetailModal` y `PurchaseDetailModal` con las props `canAttach` y `onReceiptSaved`; `uploadRecordReceipt` en `expenseForm.js`. | — |
 | 2026-10-28 | T4 terminada: `shared-features/feat-comprobante-despues-de-guardar.md` y su fila en `sf-index.md`. | — |
 | 2026-10-28 | Verificación en la copia de producción con usuarios temporales (`claude_qa15_admin`, `claude_qa15_sup`, `claude_qa15_alm`, `claude_qa15_caj` y `claude_qa15_caj2`), el rol `qa_cajero_spec15`, las sucursales "Sucursal QA spec 15" y "Sucursal QA spec 15 B", el proveedor "Proveedor QA spec 15" y un producto temporal: 27 revisiones por la API, más 4 con un rol temporal, y 12 en pantalla. En la primera corrida fallaron 2: el cajero cambió el comprobante de un gasto, y por eso la revisión del formato inválido comparaba con un archivo que ya no estaba, con capturas a 1366 y 390 px. **Hallazgo:** el rol "Cajero" de la copia tiene `expenses.read`, `expenses.cancel` y `expenses.categories` (criterio 3). Al terminar se borraron los 6 gastos y las 5 compras de QA con sus líneas, los movimientos y el stock del producto, el producto, los usuarios con sus refresh tokens, el rol, las sucursales, el proveedor y los 8 comprobantes. Los 5 gastos, las 4 compras y los 4 comprobantes reales no cambiaron. Se llena la evidencia de los 7 criterios de aceptación. Queda en **Lista** hasta que el usuario apruebe pasarla a Terminada. | — |
+| 2026-10-29 | Se aprueba el cierre: pasa a **Terminada**. | Usuario |

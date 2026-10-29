@@ -86,6 +86,7 @@ Spec completa: [`specs/14-modulo-de-compras.md`](../specs/14-modulo-de-compras.m
 | `frontend/src/context/PosContext.jsx` | `stockVersion` y `notifyStockChanged`, para que la pantalla de venta relea el stock. |
 | `frontend/src/components/Pos/Pos.jsx` | La cuadrícula se vuelve a leer cuando cambia `stockVersion`. |
 | `frontend/src/components/Pos/modals/CashMovementsModal.jsx` | Opción Compra, etiquetas `purchase` y `purchase_refund`. |
+| `frontend/src/components/Pos/pos.css` | Con cuatro opciones, los botones de Movimientos de efectivo van de dos en dos: no caben en una fila del modal (420 px), ni en escritorio. |
 | `frontend/src/components/Pos/modals/OutOfStockModal.jsx`, `Inventory/drawers/AdjustDrawer.jsx`, `Inventory/modals/BulkAdjustModal.jsx` | Sin el motivo "Compra a proveedor". |
 | `frontend/src/components/Pos/printCorteReport.js`, `Reports/modals/CashSessionDetailModal.jsx` | Etiquetas de los tipos de caja nuevos. |
 | `frontend/src/components/Inventory/tabs/MovementsTab.jsx` | Etiqueta "Compra cancelada" (`purchase_cancelled`). |

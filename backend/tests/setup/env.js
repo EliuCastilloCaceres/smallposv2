@@ -15,6 +15,8 @@ process.env.DB_NAME     = TEST_DB.database;
 process.env.DB_USER     = TEST_DB.user;
 process.env.DB_PASSWORD = TEST_DB.password;
 process.env.JWT_SECRET  = 'test-jwt-secret';
-// Comprobantes de gastos: en una carpeta temporal, no en backend/storage
-process.env.EXPENSE_RECEIPTS_DIR = path.join(os.tmpdir(), 'smallposv2-test-expense-receipts');
+// Comprobantes de gastos y de compras: en carpetas temporales, no en
+// backend/storage
+process.env.EXPENSE_RECEIPTS_DIR  = path.join(os.tmpdir(), 'smallposv2-test-expense-receipts');
+process.env.PURCHASE_RECEIPTS_DIR = path.join(os.tmpdir(), 'smallposv2-test-purchase-receipts');
 delete process.env.CORS_ORIGIN;

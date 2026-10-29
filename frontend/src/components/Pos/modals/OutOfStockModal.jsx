@@ -15,7 +15,9 @@ import { useState } from 'react'
 import { usePos } from '../../../context/PosContext'
 import api from '../../../services/api'
 
-const REASONS = ['Conteo físico', 'Compra a proveedor', 'Otro']
+// Sin "Compra a proveedor": una compra se registra en Movimientos de caja →
+// Compra (specs/14-modulo-de-compras.md, requisitos 23 y 27)
+const REASONS = ['Conteo físico', 'Otro']
 
 const OutOfStockModal = ({ target, onClose, onStockAdded }) => {
   const { branchId, addItem } = usePos()

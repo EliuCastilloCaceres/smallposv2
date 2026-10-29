@@ -2,17 +2,20 @@
 // Detalle de un gasto y su cancelación (specs/12-modulo-de-gastos.md,
 // requisitos 13, 14 y 27). Un gasto no se edita: se cancela con motivo. Si se
 // pagó desde caja, al cancelarlo se registra el reingreso mientras su sesión
-// siga abierta; si ya se cerró, se avisa.
+// siga abierta; si ya se cerró, se avisa. Con expenses.create, el
+// comprobante de un gasto activo se agrega o se reemplaza aquí
+// (specs/15-comprobante-despues-de-guardar.md).
 import { useEffect, useState } from 'react'
 import api from '../../../services/api'
 import { fmtDateTime } from '../../../utils/dateFormatter'
 import { money, fmtExpenseDate, openReceipt, downloadReceipt } from '../expenseForm'
+import ReceiptUploadButton from '../ReceiptUploadButton'
 
 const SESSION_CLOSED_NOTICE =
   'La sesión de caja ya se cerró, así que no se registró el reingreso. ' +
   'Si el dinero regresó, regístralo como Ingreso manual en la caja abierta.'
 
-const ExpenseDetailModal = ({ expenseId, canCancel, onCancelled, onClose }) => {
+const ExpenseDetailModal = ({ expenseId, canCancel, canAttach = false, onCancelled, onReceiptSaved, onClose }) => {
   const [expense,    setExpense]    = useState(null)
   const [isLoading,  setIsLoading]  = useState(true)
   const [error,      setError]      = useState(null)
@@ -64,7 +67,20 @@ const ExpenseDetailModal = ({ expenseId, canCancel, onCancelled, onClose }) => {
     }
   }
 
+  const handleReceiptSaved = (updated) => {
+    setExpense(updated)
+    setError(null)
+    setNotice({ tone: 'ok', text: 'Comprobante guardado.' })
+    onReceiptSaved?.(updated)
+  }
+
+  const handleReceiptError = (message) => {
+    setNotice(null)
+    setError(message)
+  }
+
   const isCancelled = expense?.status === 'cancelled'
+  const canChangeReceipt = canAttach && expense && !isCancelled
 
   return (
     <div className="exp-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
@@ -133,16 +149,37 @@ const ExpenseDetailModal = ({ expenseId, canCancel, onCancelled, onClose }) => {
               <div className="exp-detail__section">
                 <span className="exp-detail__section-title">Comprobante</span>
                 {expense.has_receipt ? (
-                  <div className="exp-detail__actions">
-                    <button type="button" className="exp-btn exp-btn--ghost" onClick={() => handleReceipt('open')}>
-                      <i className="bi bi-eye" /> Ver comprobante
-                    </button>
-                    <button type="button" className="exp-btn exp-btn--ghost" onClick={() => handleReceipt('download')}>
-                      <i className="bi bi-download" /> Descargar
-                    </button>
-                  </div>
+                  <>
+                    <div className="exp-detail__actions">
+                      <button type="button" className="exp-btn exp-btn--ghost" onClick={() => handleReceipt('open')}>
+                        <i className="bi bi-eye" /> Ver comprobante
+                      </button>
+                      <button type="button" className="exp-btn exp-btn--ghost" onClick={() => handleReceipt('download')}>
+                        <i className="bi bi-download" /> Descargar
+                      </button>
+                      {canChangeReceipt && (
+                        <ReceiptUploadButton resource="expenses" recordId={expense.expense_id} hasReceipt
+                          className="exp-btn exp-btn--ghost"
+                          onSaved={handleReceiptSaved} onError={handleReceiptError} />
+                      )}
+                    </div>
+                    {expense.receipt_uploaded_by_name && (
+                      <span className="exp-td-muted">
+                        Subido por {expense.receipt_uploaded_by_name} · {fmtDateTime(expense.receipt_uploaded_at)}
+                      </span>
+                    )}
+                  </>
                 ) : (
-                  <span className="exp-td-muted">Sin comprobante</span>
+                  <>
+                    <span className="exp-td-muted">Sin comprobante</span>
+                    {canChangeReceipt && (
+                      <div className="exp-detail__actions">
+                        <ReceiptUploadButton resource="expenses" recordId={expense.expense_id} hasReceipt={false}
+                          className="exp-btn exp-btn--ghost"
+                          onSaved={handleReceiptSaved} onError={handleReceiptError} />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 

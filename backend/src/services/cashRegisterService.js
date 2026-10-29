@@ -348,12 +348,13 @@ const closeRegister = async ({ cashRegisterId, branchId, userId, cashCounted, wi
 // ─── Movimientos manuales ─────────────────────────────────────────────────────
 
 // Ingreso o retiro manual del POS. Los retiros (manual y del corte) tienen
-// su propio tipo, withdrawal; los gastos pagados desde caja se registran como
-// gastos (expenseService), que crean su propio movimiento (spec 12, req. 17).
+// su propio tipo, withdrawal; los gastos y las compras pagados desde caja se
+// registran en sus módulos (expenseService, purchaseService), que crean su
+// propio movimiento (spec 12, req. 17; spec 14, req. 20).
 const createMovement = async ({ cashRegisterId, branchId, userId, movementType, amount, description }) => {
   if (!MANUAL_MOVEMENT_TYPES.includes(movementType)) {
     throw new ValidationError(
-      'El tipo de movimiento debe ser "income" o "withdrawal". Los gastos se registran como gastos.'
+      'El tipo de movimiento debe ser "income" o "withdrawal". Los gastos se registran como gastos y las compras como compras.'
     );
   }
   if (amount <= 0) throw new ValidationError('El monto debe ser mayor a 0');

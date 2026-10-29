@@ -1,7 +1,8 @@
 // src/components/Expenses/expenseForm.js
 // Piezas que comparten el formulario del módulo Gastos y el gasto del POS
 // (specs/12-modulo-de-gastos.md): validación del comprobante, el FormData de
-// POST /expenses y ver o descargar el comprobante.
+// POST /expenses, ver o descargar el comprobante y agregarlo o reemplazarlo
+// después de guardar (specs/15-comprobante-despues-de-guardar.md).
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import api from '../../services/api'
@@ -38,17 +39,18 @@ export const buildExpenseFormData = (fields, receipt) => {
   return form
 }
 
-const fetchReceipt = async (expenseId) => {
-  const { data } = await api.get(`expenses/${expenseId}/receipt`, { responseType: 'blob' })
+// resource: 'expenses' o 'purchases' (specs/14-modulo-de-compras.md, requisito 13)
+const fetchReceipt = async (resource, id) => {
+  const { data } = await api.get(`${resource}/${id}/receipt`, { responseType: 'blob' })
   return URL.createObjectURL(data)
 }
 
 // Abre el comprobante en una pestaña nueva. La pestaña se abre antes de pedir
 // el archivo, para que el navegador no la bloquee como ventana emergente.
-export const openReceipt = async (expenseId) => {
+export const openRecordReceipt = async (resource, id) => {
   const tab = window.open('', '_blank')
   try {
-    const url = await fetchReceipt(expenseId)
+    const url = await fetchReceipt(resource, id)
     if (tab) tab.location.href = url
     else window.location.href = url
   } catch (err) {
@@ -57,13 +59,27 @@ export const openReceipt = async (expenseId) => {
   }
 }
 
-export const downloadReceipt = async (expenseId, fileName) => {
-  const url = await fetchReceipt(expenseId)
+export const downloadRecordReceipt = async (resource, id, fileName) => {
+  const url = await fetchReceipt(resource, id)
   const link = document.createElement('a')
   link.href = url
-  link.download = fileName || `comprobante-gasto-${expenseId}`
+  link.download = fileName
   document.body.appendChild(link)
   link.click()
   link.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
+
+// Agrega o reemplaza el comprobante de un gasto o de una compra ya
+// guardados. Devuelve su detalle actualizado.
+export const uploadRecordReceipt = async (resource, id, file) => {
+  const form = new FormData()
+  form.append('receipt', file)
+  const { data } = await api.put(`${resource}/${id}/receipt`, form)
+  return data.data
+}
+
+export const openReceipt = (expenseId) => openRecordReceipt('expenses', expenseId)
+
+export const downloadReceipt = (expenseId, fileName) =>
+  downloadRecordReceipt('expenses', expenseId, fileName || `comprobante-gasto-${expenseId}`)

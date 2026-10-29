@@ -40,9 +40,11 @@ services:
     volumes:
       - ./backend/public/images/products:/app/public/images/products
       - ./backend/public/images/receipts:/app/public/images/receipts
-      # Comprobantes de gastos: privados (no se sirven como estáticos), pero
-      # deben sobrevivir a una reconstrucción del contenedor (spec 12)
+      # Comprobantes de gastos y de compras: privados (no se sirven como
+      # estáticos), pero deben sobrevivir a una reconstrucción del contenedor
+      # (specs 12 y 14)
       - ./backend/storage/expense-receipts:/app/storage/expense-receipts
+      - ./backend/storage/purchase-receipts:/app/storage/purchase-receipts
 
   frontend:
     build:

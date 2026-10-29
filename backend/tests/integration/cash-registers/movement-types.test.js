@@ -1,9 +1,10 @@
 // tests/integration/cash-registers/movement-types.test.js
-// Retiros y tipos de movimiento de caja (spec 12, T2): el POS registra los
-// retiros como 'withdrawal', ya no acepta 'expense', y el efectivo esperado
-// resta withdrawal, expense y legacy_expense y suma expense_refund en los
-// cinco cálculos: cierre, estado de la sesión, Sesiones de caja (lista y
-// detalle) y Dashboard.
+// Retiros y tipos de movimiento de caja (spec 12, T2, y spec 14, T3): el POS
+// registra los retiros como 'withdrawal', ya no acepta 'expense' ni
+// 'purchase', y el efectivo esperado resta withdrawal, expense, purchase y
+// legacy_expense y suma expense_refund y purchase_refund en los cinco
+// cálculos: cierre, estado de la sesión, Sesiones de caja (lista y detalle) y
+// Dashboard.
 const request = require('supertest');
 const app     = require('../../../app');
 const db      = require('../../../src/config/db');
@@ -57,25 +58,35 @@ describe('manual cash movements', () => {
     expect(res.status).toBe(400);
     expect(res.body.message).toMatch(/gastos/);
   });
+
+  it('responds 400 to a purchase: purchases are registered as purchases', async () => {
+    const res = await postMovement({ movementType: 'purchase', amount: 20, description: 'Compra' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/compras/);
+  });
 });
 
 describe('expected cash by movement type', () => {
   // 100 de apertura + 50 de ingreso − 30 de retiro (tests de arriba)
   // + 20 de reingreso − 20 de gasto − 5 de salida histórica − 10 de devolución
-  const EXPECTED = 105;
+  // − 25 de compra + 15 de reingreso de compra
+  const EXPECTED = 95;
 
   beforeAll(async () => {
     await insertMovement('expense', 20);
     await insertMovement('expense_refund', 20);
     await insertMovement('legacy_expense', 5);
     await insertMovement('return', 10);
+    await insertMovement('purchase', 25);
+    await insertMovement('purchase_refund', 15);
   });
 
   it('applies to the session status', async () => {
     const res = await auth(request(app).get('/api/cash-registers/1/status'));
 
     expect(res.body.data.summary).toEqual({
-      open_amount: 100, total_in: 70, total_out: 65, expected_close: EXPECTED,
+      open_amount: 100, total_in: 85, total_out: 90, expected_close: EXPECTED,
     });
     const cash = res.body.data.paymentBreakdown.find(m => m.code === 'cash');
     expect(cash.expected).toBe(EXPECTED);
@@ -105,7 +116,7 @@ describe('expected cash by movement type', () => {
 
     expect(withdrawal.status).toBe(201);
     expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ expectedClose: EXPECTED, difference: 0, closeAmount: 65 });
+    expect(res.body.data).toMatchObject({ expectedClose: EXPECTED, difference: 0, closeAmount: 55 });
     expect(res.body.data.movements.at(-1)).toMatchObject({
       movement_type: 'withdrawal', amount: 40, description: 'Retiro en corte de caja',
     });

@@ -1,5 +1,6 @@
 // src/components/Pos/printCorteReport.test.js
-// Etiquetas de los movimientos en el reporte impreso del corte (spec 12, T2).
+// Etiquetas de los movimientos en el reporte impreso del corte (spec 12, T2, y
+// spec 14, T3).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openCorteReportWindow } from './printCorteReport'
 
@@ -15,6 +16,8 @@ const REPORT = {
     { movement_type: 'expense',        amount: 20, description: 'Gasto #3: Servicios – Luz', user_name: 'Ana', created_at: '2026-10-27T18:00:00Z' },
     { movement_type: 'expense_refund', amount: 20, description: 'Reingreso del gasto #3', user_name: 'Ana', created_at: '2026-10-27T19:00:00Z' },
     { movement_type: 'legacy_expense', amount: 5,  description: 'PAGO DE PEPSI', user_name: 'Ana', created_at: '2026-10-27T15:00:00Z' },
+    { movement_type: 'purchase',        amount: 25, description: 'Compra #4: Pepsi', user_name: 'Ana', created_at: '2026-10-27T16:00:00Z' },
+    { movement_type: 'purchase_refund', amount: 25, description: 'Reingreso de la compra #4', user_name: 'Ana', created_at: '2026-10-27T17:00:00Z' },
   ],
 }
 
@@ -32,13 +35,15 @@ const renderReport = (report) => {
 describe('openCorteReportWindow', () => {
   afterEach(() => { vi.restoreAllMocks() })
 
-  it('labels withdrawals, expenses, expense refunds and legacy expenses', () => {
+  it('labels withdrawals, expenses, purchases, their refunds and legacy expenses', () => {
     const html = renderReport(REPORT)
 
     expect(html).toContain('<td>Retiro</td>')
     expect(html).toContain('<td>Gasto</td>')
     expect(html).toContain('<td>Reingreso de gasto</td>')
     expect(html).toContain('<td>Salida de caja (histórico)</td>')
+    expect(html).toContain('<td>Compra</td>')
+    expect(html).toContain('<td>Reingreso de compra</td>')
     expect(html).not.toContain('Retiro manual')
   })
 })

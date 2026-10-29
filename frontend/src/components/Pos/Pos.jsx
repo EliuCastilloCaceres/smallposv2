@@ -179,7 +179,7 @@ const PosInner = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 const SaleScreen = () => {
   const {
-    branchId, cart, subtotal, total, visibleCategories,
+    branchId, cart, subtotal, total, visibleCategories, stockVersion,
     addItem, removeItem, updateQty, updatePrice, setNote, setDiscount, removeDiscount, clearCart,
     suspendedCarts, suspendCart, resumeCart, discardSuspended,
   } = usePos()
@@ -319,7 +319,9 @@ const SaleScreen = () => {
     }
   }, [branchId])
 
-  useEffect(() => { fetchGrid(page) }, [page, fetchGrid])
+  // stockVersion: el stock cambió fuera de una venta (p. ej. una compra desde
+  // Movimientos de caja) y la cuadrícula debe releerlo
+  useEffect(() => { fetchGrid(page) }, [page, fetchGrid, stockVersion])
 
   // Aplana un producto crudo a sus opciones seleccionables (una por variante) —
   // mismo patrón que BulkAdjustModal: cada variante es su propia opción, un

@@ -105,7 +105,7 @@ backend/
 - **Candado:** si el nombre de la base no termina en `_test`, los tests se niegan a correr. Así es imposible borrar por error la base de desarrollo o la de producción.
 - **Configuración:** vive en `backend/tests/helpers/database.js`. Host, puerto y nombre se pueden cambiar con `TEST_DB_HOST`, `TEST_DB_PORT` y `TEST_DB_NAME`.
 - **Sin `.env`:** los tests nunca leen `backend/.env`. `dotenv` se reemplaza por un stub y `tests/setup/env.js` fija las variables que lee el backend (`DB_*`, `JWT_SECRET`, `NODE_ENV=test`).
-- **Comprobantes de gastos:** `tests/setup/env.js` fija `EXPENSE_RECEIPTS_DIR` en una carpeta temporal del sistema, para que los tests no escriban en `backend/storage/`.
+- **Comprobantes de gastos y de compras:** `tests/setup/env.js` fija `EXPENSE_RECEIPTS_DIR` y `PURCHASE_RECEIPTS_DIR` en carpetas temporales del sistema, para que los tests no escriban en `backend/storage/`.
 
 ## 4. Escribir un test
 

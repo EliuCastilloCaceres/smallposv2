@@ -1,18 +1,24 @@
 // src/components/Pos/modals/CashMovementsModal.jsx
 // Movimientos de efectivo de la sesión abierta y registro de un Ingreso, un
-// Retiro o un Gasto (specs/12-modulo-de-gastos.md, requisitos 17 y 20).
+// Retiro, un Gasto o una Compra (specs/12-modulo-de-gastos.md, requisitos 17
+// y 20, y specs/14-modulo-de-compras.md, requisito 27).
 //
 // - Ingreso y Retiro son movimientos manuales de la caja (income y
 //   withdrawal).
 // - Gasto: solo con expenses.create. Es un gasto pagado en efectivo desde la
 //   caja del POS, de hoy (POST /expenses); el backend crea su salida de caja,
 //   que aparece en la lista como "Gasto".
+// - Compra: solo con purchases.create. Abre el formulario de compra con la
+//   caja del POS, en efectivo y de hoy (POST /purchases); el backend crea su
+//   salida de caja ("Compra") y sus entradas al inventario, así que el POS
+//   vuelve a leer el stock.
 import { useState, useEffect, useCallback } from 'react'
 import { usePos } from '../../../context/PosContext'
 import { useUser } from '../../../context/UserContext'
 import api from '../../../services/api'
 import { fmtTime } from '../../../utils/dateFormatter'
 import { RECEIPT_ACCEPT, MAX_RECEIPT_MB, receiptError, buildExpenseFormData } from '../../Expenses/expenseForm'
+import PurchaseFormModal from '../../Purchases/modals/PurchaseFormModal'
 
 const money = (n) => Number(n ?? 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -23,8 +29,10 @@ export const MOVEMENT_LABELS = {
   credit_payment:   { label: 'Abono a crédito',            cls: 'pos-mov--in'  },
   layaway_payment:  { label: 'Abono a apartado',           cls: 'pos-mov--in'  },
   expense_refund:   { label: 'Reingreso de gasto',         cls: 'pos-mov--in'  },
+  purchase_refund:  { label: 'Reingreso de compra',        cls: 'pos-mov--in'  },
   withdrawal:       { label: 'Retiro',                     cls: 'pos-mov--out' },
   expense:          { label: 'Gasto',                      cls: 'pos-mov--out' },
+  purchase:         { label: 'Compra',                     cls: 'pos-mov--out' },
   legacy_expense:   { label: 'Salida de caja (histórico)', cls: 'pos-mov--out' },
   return:           { label: 'Devolución',                 cls: 'pos-mov--out' },
 }
@@ -33,14 +41,24 @@ const TYPES = [
   { id: 'income',     label: 'Ingreso', icon: 'bi-plus-circle',  activeCls: 'pos-btn--primary' },
   { id: 'withdrawal', label: 'Retiro',  icon: 'bi-dash-circle',  activeCls: 'pos-btn--danger'  },
   { id: 'expense',    label: 'Gasto',   icon: 'bi-receipt',      activeCls: 'pos-btn--danger'  },
+  { id: 'purchase',   label: 'Compra',  icon: 'bi-cart-check',   activeCls: 'pos-btn--danger'  },
 ]
+
+// "Registrar ingreso, retiro o gasto", según las opciones del usuario
+const registerLabel = (types) => {
+  const names = types.map(t => t.label.toLowerCase())
+  return `Registrar ${names.slice(0, -1).join(', ')} o ${names.at(-1)}`
+}
 
 const EMPTY_EXPENSE = { categoryId: '', providerId: '', folio: '', receipt: null }
 
 const CashMovementsModal = ({ onClose }) => {
-  const { activeRegister, activeRegisterId, branchId, fetchRegisterStatus, createCashMovement } = usePos()
+  const {
+    activeRegister, activeRegisterId, branchId, fetchRegisterStatus, createCashMovement, notifyStockChanged,
+  } = usePos()
   const { hasPermission } = useUser()
-  const canExpense = hasPermission('expenses', 'create')
+  const canExpense  = hasPermission('expenses', 'create')
+  const canPurchase = hasPermission('purchases', 'create')
 
   const [status,    setStatus]    = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -54,6 +72,9 @@ const CashMovementsModal = ({ onClose }) => {
   const [expense,     setExpense]     = useState(EMPTY_EXPENSE)
   const [options,     setOptions]     = useState(null) // GET /expenses/options, al elegir Gasto
   const [isSaving,    setIsSaving]    = useState(false)
+  // GET /purchases/options, al elegir Compra; con ellas se abre el formulario
+  const [purchaseOptions, setPurchaseOptions] = useState(null)
+  const [showPurchase,    setShowPurchase]    = useState(false)
 
   const loadStatus = useCallback(async () => {
     setIsLoading(true)
@@ -72,12 +93,28 @@ const CashMovementsModal = ({ onClose }) => {
       .catch(err => setError(err.response?.data?.message ?? 'No se pudieron cargar las categorías de gasto'))
   }, [movType, options, branchId])
 
-  const types = TYPES.filter(t => t.id !== 'expense' || canExpense)
+  const types = TYPES.filter(t => (t.id !== 'expense' || canExpense) && (t.id !== 'purchase' || canPurchase))
   const isExpense = movType === 'expense'
   const cashMethod = options?.payment_methods.find(m => m.code === 'cash')
 
   const resetForm = () => {
     setAmount(''); setDescription(''); setExpense(EMPTY_EXPENSE); setShowForm(false)
+  }
+
+  const chooseType = (id) => {
+    setError(null)
+    if (id !== 'purchase') { setMovType(id); return }
+    if (purchaseOptions) { setShowPurchase(true); return }
+    api.get(`purchases/options?branch_id=${branchId}`)
+      .then(({ data }) => { setPurchaseOptions(data.data); setShowPurchase(true) })
+      .catch(err => setError(err.response?.data?.message ?? 'No se pudo abrir el formulario de compra'))
+  }
+
+  const handlePurchaseSaved = async () => {
+    setShowPurchase(false)
+    resetForm()
+    notifyStockChanged()
+    await loadStatus()
   }
 
   const changeReceipt = (file) => {
@@ -164,17 +201,18 @@ const CashMovementsModal = ({ onClose }) => {
               {/* Botón para desplegar formulario */}
               {!showForm && (
                 <button type="button" className="pos-btn pos-btn--ghost pos-btn--block" onClick={() => setShowForm(true)}>
-                  <i className="bi bi-plus-lg" /> {canExpense ? 'Registrar ingreso, retiro o gasto' : 'Registrar ingreso o retiro'}
+                  <i className="bi bi-plus-lg" /> {registerLabel(types)}
                 </button>
               )}
 
               {showForm && (
                 <form className="pos-cashmov-form" onSubmit={handleSubmit}>
-                  <div className="pos-cashmov-form__type" role="group" aria-label="Tipo de movimiento">
+                  <div className={`pos-cashmov-form__type ${types.length > 3 ? 'pos-cashmov-form__type--wrap' : ''}`}
+                    role="group" aria-label="Tipo de movimiento">
                     {types.map(t => (
                       <button key={t.id} type="button" aria-pressed={movType === t.id}
                         className={`pos-btn ${movType === t.id ? t.activeCls : 'pos-btn--ghost'}`}
-                        onClick={() => { setMovType(t.id); setError(null) }}>
+                        onClick={() => chooseType(t.id)}>
                         <i className={`bi ${t.icon}`} /> {t.label}
                       </button>
                     ))}
@@ -279,6 +317,16 @@ const CashMovementsModal = ({ onClose }) => {
           )}
         </div>
       </div>
+
+      {showPurchase && (
+        <PurchaseFormModal
+          options={purchaseOptions}
+          isCentralAdmin={false}
+          posRegister={{ branchId, cashRegisterId: activeRegisterId, name: activeRegister?.name ?? 'la caja' }}
+          onSaved={handlePurchaseSaved}
+          onClose={() => setShowPurchase(false)}
+        />
+      )}
     </div>
   )
 }

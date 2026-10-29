@@ -6,9 +6,11 @@ import { useBranch } from '../../../context/BranchContext'
 import { StockBadge } from '../tabs/StockTab'
 const STEPS = { MODE: 'mode', CSV: 'csv', TABLE: 'table', PREVIEW: 'preview', RESULT: 'result' }
 
+// Sin "Compra a proveedor": las compras se registran en el módulo Compras
+// (specs/14-modulo-de-compras.md, requisito 23)
 const REASONS = [
   'Conteo físico', 'Merma', 'Producto dañado',
-  'Error de registro', 'Compra a proveedor', 'Otro',
+  'Error de registro', 'Otro',
 ]
 
 const BulkAdjustModal = ({ onDone, onClose }) => {

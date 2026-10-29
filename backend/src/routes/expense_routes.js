@@ -1,5 +1,6 @@
 // src/routes/expense_routes.js
-// Gastos (specs/12-modulo-de-gastos.md, requisito 28).
+// Gastos (specs/12-modulo-de-gastos.md, requisito 28, y
+// specs/15-comprobante-despues-de-guardar.md, requisito 4).
 const express = require('express');
 const router  = express.Router();
 const ctrl    = require('../controllers/expenseController');
@@ -22,5 +23,13 @@ router.get('/:id/receipt', requirePermission('expenses', 'read'), ctrl.getReceip
 // Sin expenses.read solo se aceptan gastos pagados desde caja (el service lo valida)
 router.post('/',           requirePermission('expenses', 'create'), uploadExpenseReceipt, ctrl.create);
 router.post('/:id/cancel', requirePermission('expenses', 'cancel'), ctrl.cancel);
+
+// Agregar o reemplazar el comprobante: desde el detalle, así que pide ver y registrar
+router.put('/:id/receipt',
+  requirePermission('expenses', 'read'),
+  requirePermission('expenses', 'create'),
+  uploadExpenseReceipt,
+  ctrl.replaceReceipt
+);
 
 module.exports = router;

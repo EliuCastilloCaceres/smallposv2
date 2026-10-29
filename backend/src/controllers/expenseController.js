@@ -5,6 +5,7 @@
 const expenseService = require('../services/expenseService');
 const { removeFile } = require('../middlewares/uploadImage');
 const { receiptPath } = require('../middlewares/uploadExpenseReceipt');
+const { sendReceipt } = require('../middlewares/uploadReceipt');
 const { resolveBranchId, resolveOptionalBranchId } = require('../helpers/helper');
 
 const canRead = (user) =>
@@ -56,20 +57,7 @@ const getReceipt = async (req, res, next) => {
       expenseId: req.params.id,
       branchId:  resolveOptionalBranchId(req),
     });
-    const name = originalName || fileName;
-    const asciiName = name.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '_');
-    res.sendFile(receiptPath(fileName), {
-      headers: {
-        'Content-Disposition': `inline; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-        'Cache-Control': 'private, no-store',
-      },
-    }, (err) => {
-      if (!err) return;
-      if (err.code === 'ENOENT') {
-        return res.status(404).json({ status: 'error', message: 'No se encontró el archivo del comprobante' });
-      }
-      next(err);
-    });
+    sendReceipt(res, next, { filePath: receiptPath(fileName), fileName, originalName });
   } catch (err) { next(err); }
 };
 
@@ -104,4 +92,25 @@ const cancel = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { list, options, getById, getReceipt, create, cancel };
+// PUT /expenses/:id/receipt (multipart, el comprobante en "receipt"): agrega o
+// reemplaza el comprobante de un gasto activo (specs/15-comprobante-despues-de-guardar.md)
+const replaceReceipt = async (req, res, next) => {
+  let result;
+  try {
+    result = await expenseService.replaceReceipt({
+      expenseId: req.params.id,
+      branchId:  resolveOptionalBranchId(req),
+      userId:    req.user.user_id,
+      receipt:   req.file ? { fileName: req.file.filename, originalName: req.file.originalname } : null,
+    });
+  } catch (err) {
+    // Si no se guardó, el comprobante recién subido sobra
+    if (req.file) removeFile(req.file.path);
+    return next(err);
+  }
+  // El archivo anterior ya no es de ningún gasto
+  if (result.previousFile) removeFile(receiptPath(result.previousFile));
+  res.json({ status: 'success', data: result.expense });
+};
+
+module.exports = { list, options, getById, getReceipt, create, cancel, replaceReceipt };

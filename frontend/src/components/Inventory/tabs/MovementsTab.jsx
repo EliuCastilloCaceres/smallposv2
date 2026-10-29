@@ -5,10 +5,14 @@ import { fmtDateTime } from '../../../utils/dateFormatter'
 
 const PAGE_SIZE = 30
 
+// purchase y purchase_cancelled: entradas de una compra y su reversión al
+// cancelarla (specs/14-modulo-de-compras.md, requisito 22). Las entradas
+// históricas con el motivo "Compra a proveedor" también son 'purchase'.
 const OPERATION_LABELS = {
   entry:             { label: 'Entrada',            cls: 'inv-op--entry'    },
   exit:              { label: 'Salida',             cls: 'inv-op--exit'     },
   purchase:          { label: 'Compra',             cls: 'inv-op--entry'    },
+  purchase_cancelled: { label: 'Compra cancelada',  cls: 'inv-op--exit'     },
   sale:              { label: 'Venta',              cls: 'inv-op--exit'     },
   return:            { label: 'Devolución',         cls: 'inv-op--entry'    },
   layaway_reserve:   { label: 'Apartado',           cls: 'inv-op--exit'    },

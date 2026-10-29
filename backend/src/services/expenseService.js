@@ -4,6 +4,9 @@
 // - Un gasto guarda fecha, categoría, monto, descripción, sucursal, método de
 //   pago (activos, sin Crédito), proveedor y folio opcionales, comprobante
 //   opcional y quién lo registró.
+// - El comprobante se puede agregar o reemplazar después de registrar el
+//   gasto, mientras esté activo (specs/15-comprobante-despues-de-guardar.md);
+//   se guarda quién lo subió y cuándo.
 // - "Pagado desde caja": solo con Efectivo, de hoy y de una caja con sesión
 //   abierta de la sucursal. En la misma transacción se crea su salida en
 //   cash_movements, de tipo 'expense', ligada al gasto (cash_movement_id).
@@ -16,31 +19,20 @@
 const db = require('../config/db');
 const { NotFoundError, ValidationError, ForbiddenError } = require('../errors/AppError');
 const { todayInMexico } = require('../utils/timezone');
-const { toFlag } = require('./expenseCategoryService');
+// Validaciones, caja abierta y reingreso: compartidos con las compras
+const {
+  isValidDate, toId, toFlag, optionalText, parseOptionalText, parseRecordDate,
+  findPaymentMethod, findActiveProvider, assertActiveBranch, lockOpenSession, registerRefund,
+} = require('../helpers/cashOutflows');
 
 const DESCRIPTION_MAX = 255;
 const FOLIO_MAX = 50;
 const REASON_MAX = 255;
 const MOVEMENT_DESCRIPTION_MAX = 100; // cash_movements.description
 const MAX_AMOUNT = 9999999999.99;    // decimal(12,2)
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const STATUSES = ['active', 'cancelled', 'all'];
 
 // ─── Validaciones ─────────────────────────────────────────────────────────────
-
-const isValidDate = (value) => {
-  if (typeof value !== 'string' || !DATE_RE.test(value)) return false;
-  const [y, m, d] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(y, m - 1, d));
-  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
-};
-
-const toId = (value) => {
-  const n = Number(value);
-  return Number.isInteger(n) && n > 0 ? n : null;
-};
-
-const optionalText = (value) => (typeof value === 'string' && value.trim() ? value.trim() : null);
 
 const parseAmount = (value) => {
   const n = Number(value);
@@ -60,22 +52,11 @@ const parseDescription = (value) => {
   return text;
 };
 
-const parseFolio = (value) => {
-  const text = optionalText(value);
-  if (text && text.length > FOLIO_MAX) {
-    throw new ValidationError(`El folio no puede superar los ${FOLIO_MAX} caracteres`);
-  }
-  return text;
-};
+const parseFolio = (value) =>
+  parseOptionalText(value, FOLIO_MAX, `El folio no puede superar los ${FOLIO_MAX} caracteres`);
 
 // Hoy o una fecha pasada, nunca futura (decisión 8). Sin fecha: hoy.
-const parseExpenseDate = (value) => {
-  const today = todayInMexico();
-  if (value === undefined || value === null || value === '') return today;
-  if (!isValidDate(value)) throw new ValidationError('La fecha del gasto no es válida (YYYY-MM-DD)');
-  if (value > today) throw new ValidationError('La fecha del gasto no puede ser futura');
-  return value;
-};
+const parseExpenseDate = (value) => parseRecordDate(value, 'del gasto');
 
 const findActiveCategory = async (conn, id) => {
   const [[row]] = await conn.query(
@@ -84,52 +65,6 @@ const findActiveCategory = async (conn, id) => {
   );
   if (!row) throw new ValidationError('La categoría de gasto no existe o está inactiva');
   return row;
-};
-
-const findPaymentMethod = async (conn, id) => {
-  const [[row]] = await conn.query(
-    'SELECT payment_method_id, code FROM payment_methods WHERE payment_method_id = ? AND is_active = 1',
-    [toId(id)]
-  );
-  if (!row) throw new ValidationError('El método de pago no existe o está inactivo');
-  if (row.code === 'credit') throw new ValidationError('Un gasto no se puede pagar con Crédito');
-  return row;
-};
-
-const findActiveProvider = async (conn, id) => {
-  if (id === undefined || id === null || id === '') return null;
-  const [[row]] = await conn.query(
-    'SELECT provider_id FROM providers WHERE provider_id = ? AND is_active = 1',
-    [toId(id)]
-  );
-  if (!row) throw new ValidationError('El proveedor no existe o está inactivo');
-  return row.provider_id;
-};
-
-const assertActiveBranch = async (conn, branchId) => {
-  const [[row]] = await conn.query(
-    'SELECT branch_id FROM branches WHERE branch_id = ? AND is_active = 1',
-    [branchId]
-  );
-  if (!row) throw new ValidationError('La sucursal no existe o está inactiva');
-};
-
-// Sesión abierta de una caja activa de la sucursal. FOR UPDATE: bloquea la
-// caja como closeRegister, así el gasto y el corte no se cruzan.
-const lockOpenSession = async (conn, { cashRegisterId, branchId }) => {
-  const [[row]] = await conn.query(
-    `SELECT s.session_id
-       FROM cash_register_sessions s
-       JOIN cash_registers cr ON cr.cash_register_id = s.cash_register_id
-      WHERE cr.cash_register_id = ? AND cr.branch_id = ? AND cr.is_active = 1
-        AND s.closed_at IS NULL
-      ORDER BY s.session_id DESC
-      LIMIT 1
-      FOR UPDATE`,
-    [toId(cashRegisterId), branchId]
-  );
-  if (!row) throw new ValidationError('La caja no tiene una sesión abierta en esta sucursal');
-  return row.session_id;
 };
 
 const movementDescription = (expenseId, categoryName, description) =>
@@ -145,6 +80,8 @@ const DETAIL_SQL = `
          e.payment_method_id, pm.name AS payment_method_name, pm.code AS payment_method_code,
          e.provider_id, pv.name AS provider_name,
          e.receipt_file, e.receipt_name,
+         e.receipt_uploaded_by, e.receipt_uploaded_at,
+         CONCAT_WS(' ', ru.first_name, ru.last_name) AS receipt_uploaded_by_name,
          e.created_at, CONCAT_WS(' ', cu.first_name, cu.last_name) AS created_by_name,
          e.cash_movement_id, cm.session_id, cr.name AS register_name, crs.closed_at AS session_closed_at,
          e.cancel_reason, e.cancelled_at, CONCAT_WS(' ', xu.first_name, xu.last_name) AS cancelled_by_name,
@@ -156,6 +93,7 @@ const DETAIL_SQL = `
     LEFT JOIN providers pv     ON pv.provider_id = e.provider_id
     JOIN users cu              ON cu.user_id = e.created_by
     LEFT JOIN users xu         ON xu.user_id = e.cancelled_by
+    LEFT JOIN users ru         ON ru.user_id = e.receipt_uploaded_by
     LEFT JOIN cash_movements cm          ON cm.cash_movement_id = e.cash_movement_id
     LEFT JOIN cash_register_sessions crs ON crs.session_id = cm.session_id
     LEFT JOIN cash_registers cr          ON cr.cash_register_id = crs.cash_register_id
@@ -180,6 +118,8 @@ const toDetail = (r) => ({
   provider_name:       r.provider_name,
   has_receipt:         r.receipt_file !== null,
   receipt_name:        r.receipt_name,
+  receipt_uploaded_at: r.receipt_uploaded_at,
+  receipt_uploaded_by_name: r.receipt_uploaded_by === null ? null : r.receipt_uploaded_by_name,
   created_at:          r.created_at,
   created_by_name:     r.created_by_name,
   paid_from_register:  r.cash_movement_id !== null,
@@ -354,8 +294,9 @@ const createExpense = async ({ branchId, userId, canReadExpenses, data, receipt 
 
     await assertActiveBranch(conn, branchId);
     const category      = await findActiveCategory(conn, data.expense_category_id);
-    const paymentMethod = await findPaymentMethod(conn, data.payment_method_id);
-    const providerId    = await findActiveProvider(conn, data.provider_id);
+    const paymentMethod = await findPaymentMethod(conn, data.payment_method_id, 'Un gasto no se puede pagar con Crédito');
+    const provider      = await findActiveProvider(conn, data.provider_id);
+    const providerId    = provider?.provider_id ?? null;
 
     let sessionId = null;
     if (paidFromRegister) {
@@ -366,15 +307,18 @@ const createExpense = async ({ branchId, userId, canReadExpenses, data, receipt 
       sessionId = await lockOpenSession(conn, { cashRegisterId: data.cash_register_id, branchId });
     }
 
+    // Con comprobante, lo subió quien registra, a la hora del registro
     const [result] = await conn.query(
       `INSERT INTO expenses
          (branch_id, expense_date, expense_category_id, amount, description, payment_method_id,
-          provider_id, folio, receipt_file, receipt_name, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          provider_id, folio, receipt_file, receipt_name, receipt_uploaded_by, receipt_uploaded_at,
+          created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, IF(? IS NULL, NULL, CURRENT_TIMESTAMP), ?)`,
       [
         branchId, expenseDate, category.expense_category_id, amount, description,
         paymentMethod.payment_method_id, providerId, folio,
-        receipt?.fileName ?? null, receipt?.originalName ?? null, userId,
+        receipt?.fileName ?? null, receipt?.originalName ?? null, receipt ? userId : null,
+        receipt?.fileName ?? null, userId,
       ]
     );
     const expenseId = result.insertId;
@@ -428,32 +372,13 @@ const cancelExpense = async ({ expenseId, branchId = null, userId, reason }) => 
     if (!expense) throw new NotFoundError('Gasto no encontrado');
     if (expense.status === 'cancelled') throw new ValidationError('El gasto ya está cancelado');
 
-    let refund = null;
-    let refundMovementId = null;
-    if (expense.cash_movement_id !== null) {
-      // Bloquea la caja de la sesión, como closeRegister, para que el corte
-      // no se cruce con el reingreso
-      const [[session]] = await conn.query(
-        `SELECT s.session_id, s.closed_at
-           FROM cash_movements cm
-           JOIN cash_register_sessions s ON s.session_id = cm.session_id
-           JOIN cash_registers cr        ON cr.cash_register_id = s.cash_register_id
-          WHERE cm.cash_movement_id = ?
-          FOR UPDATE`,
-        [expense.cash_movement_id]
-      );
-      if (session && session.closed_at === null) {
-        const [movement] = await conn.query(
-          `INSERT INTO cash_movements (session_id, movement_type, amount, description, user_id)
-           VALUES (?, 'expense_refund', ?, ?, ?)`,
-          [session.session_id, expense.amount, `Reingreso del gasto #${expense.expense_id}`, userId]
-        );
-        refundMovementId = movement.insertId;
-        refund = 'registered';
-      } else {
-        refund = 'session_closed';
-      }
-    }
+    const { refund, refundMovementId } = await registerRefund(conn, {
+      cashMovementId: expense.cash_movement_id,
+      movementType:   'expense_refund',
+      amount:         expense.amount,
+      description:    `Reingreso del gasto #${expense.expense_id}`,
+      userId,
+    });
 
     await conn.query(
       `UPDATE expenses
@@ -473,6 +398,52 @@ const cancelExpense = async ({ expenseId, branchId = null, userId, reason }) => 
   }
 };
 
+// ─── Comprobante después de registrar ────────────────────────────────────────
+
+// Agrega o reemplaza el comprobante de un gasto activo (spec 15, requisitos
+// 4–7). receipt: { fileName, originalName } del archivo ya guardado. Devuelve
+// el detalle y el archivo anterior (previousFile), que el controller borra
+// después de guardar.
+const replaceReceipt = async ({ expenseId, branchId = null, userId, receipt }) => {
+  if (!receipt) throw new ValidationError('Elige el comprobante.');
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const params = [toId(expenseId)];
+    let branchFilter = '';
+    if (branchId !== null) { branchFilter = 'AND branch_id = ?'; params.push(branchId); }
+    const [[expense]] = await conn.query(
+      `SELECT expense_id, status, receipt_file
+         FROM expenses WHERE expense_id = ? ${branchFilter} FOR UPDATE`,
+      params
+    );
+    if (!expense) throw new NotFoundError('Gasto no encontrado');
+    if (expense.status === 'cancelled') {
+      throw new ValidationError('No se puede cambiar el comprobante de un gasto cancelado.');
+    }
+
+    await conn.query(
+      `UPDATE expenses
+          SET receipt_file = ?, receipt_name = ?, receipt_uploaded_by = ?, receipt_uploaded_at = NOW()
+        WHERE expense_id = ?`,
+      [receipt.fileName, receipt.originalName, userId, expense.expense_id]
+    );
+
+    await conn.commit();
+    return {
+      expense:      toDetail(await findExpense(db, { expenseId: expense.expense_id })),
+      previousFile: expense.receipt_file,
+    };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+};
+
 module.exports = {
-  listExpenses, getExpenseById, getReceipt, getOptions, createExpense, cancelExpense,
+  listExpenses, getExpenseById, getReceipt, getOptions, createExpense, cancelExpense, replaceReceipt,
 };

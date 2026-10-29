@@ -9,17 +9,20 @@
 // efectivo esperado importa de aquí.
 //
 //   Suman:  sale, income, credit_payment, layaway_payment,
-//           expense_refund (reingreso de un gasto cancelado)
+//           expense_refund (reingreso de un gasto cancelado),
+//           purchase_refund (reingreso de una compra cancelada, spec 14)
 //   Restan: withdrawal (retiro manual o del corte),
 //           expense (gasto pagado desde caja, ligado a su gasto),
+//           purchase (compra pagada desde caja, ligada a su compra, spec 14),
 //           legacy_expense (salida de caja anterior a la spec 12),
 //           return
 
-const CASH_IN_TYPES  = ['sale', 'income', 'credit_payment', 'layaway_payment', 'expense_refund'];
-const CASH_OUT_TYPES = ['withdrawal', 'expense', 'legacy_expense', 'return'];
+const CASH_IN_TYPES  = ['sale', 'income', 'credit_payment', 'layaway_payment', 'expense_refund', 'purchase_refund'];
+const CASH_OUT_TYPES = ['withdrawal', 'expense', 'purchase', 'legacy_expense', 'return'];
 
 // Movimientos que el POS registra a mano (POST /cash-registers/:id/movements).
-// Los gastos no: se registran como gastos (POST /expenses).
+// Los gastos y las compras no: se registran en sus módulos (POST /expenses y
+// POST /purchases).
 const MANUAL_MOVEMENT_TYPES = ['income', 'withdrawal'];
 
 // Listas para un IN (...) de SQL. Son constantes de este archivo, no datos

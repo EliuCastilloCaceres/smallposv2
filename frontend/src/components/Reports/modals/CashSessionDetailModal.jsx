@@ -15,6 +15,8 @@ const MOVEMENT_LABELS = {
   withdrawal:      'Retiro',
   expense:         'Gasto',
   expense_refund:  'Reingreso de gasto',
+  purchase:        'Compra',
+  purchase_refund: 'Reingreso de compra',
   legacy_expense:  'Salida de caja (histórico)',
   return:          'Devolución / reversa',
 }
@@ -27,8 +29,10 @@ const MOVEMENT_AMOUNT_CLASS = {
   credit_payment:  'rpt-detail-list__amt--in',
   layaway_payment: 'rpt-detail-list__amt--in',
   expense_refund:  'rpt-detail-list__amt--in',
+  purchase_refund: 'rpt-detail-list__amt--in',
   withdrawal:      'rpt-detail-list__amt--out',
   expense:         'rpt-detail-list__amt--out',
+  purchase:        'rpt-detail-list__amt--out',
   legacy_expense:  'rpt-detail-list__amt--out',
   return:          'rpt-detail-list__amt--out',
 }

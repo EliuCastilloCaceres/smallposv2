@@ -12,17 +12,25 @@ const { toServerRange, todayInMexico } = require('../utils/timezone');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const OPERATION_TYPES = ['entry', 'exit', 'purchase', 'sale', 'return', 'adjustment', 'transfer_out', 'transfer_in'];
+const OPERATION_TYPES = ['entry', 'exit', 'purchase', 'purchase_cancelled', 'sale', 'return', 'adjustment', 'transfer_out', 'transfer_in'];
 
 const ADJUSTMENT_REASONS = [
   'Conteo físico',
   'Merma',
   'Producto dañado',
   'Error de registro',
-  'Compra a proveedor',
   'Devolución de cliente',
   'Otro',
 ];
+
+// Las compras ya no son un ajuste: se registran en el módulo Compras, con su
+// proveedor y su costo (specs/14-modulo-de-compras.md, requisito 24). Se
+// compara sin mayúsculas, para que "Otro" con ese texto tampoco pase.
+const PURCHASE_REASON = 'compra a proveedor';
+const assertNotPurchaseReason = (reason) => {
+  if (reason.trim().toLowerCase() === PURCHASE_REASON)
+    throw new ValidationError('Las compras se registran en el módulo Compras.');
+};
 
 // Verifica que el producto existe (ya no tiene branch_id — catálogo global)
 const assertProductExists = async (productId) => {
@@ -274,6 +282,7 @@ const createAdjustment = async ({
     throw new ValidationError('La cantidad debe ser mayor a 0');
   if (!reason?.trim())
     throw new ValidationError('El motivo del ajuste es requerido');
+  assertNotPurchaseReason(reason);
 
   await assertProductExists(productId);
 
@@ -318,6 +327,7 @@ const bulkAdjustment = async ({ branchId, items, reason, userId }) => {
     throw new ValidationError(`El lote no puede superar ${BULK_ADJ_LIMIT} items`);
   if (!reason?.trim())
     throw new ValidationError('El motivo del ajuste masivo es requerido');
+  assertNotPurchaseReason(reason);
 
   const adjusted = [];
   const failed   = [];

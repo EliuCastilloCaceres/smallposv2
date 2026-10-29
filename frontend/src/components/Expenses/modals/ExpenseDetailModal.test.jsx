@@ -1,12 +1,13 @@
 // src/components/Expenses/modals/ExpenseDetailModal.test.jsx
 // Detalle de un gasto y su cancelación con la API simulada (spec 12, T6),
-// incluido el aviso cuando ya no se puede registrar el reingreso.
+// incluido el aviso cuando ya no se puede registrar el reingreso, y el
+// comprobante después de guardar (spec 15, T3).
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../../../services/api'
 import ExpenseDetailModal from './ExpenseDetailModal'
 
-vi.mock('../../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('../../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }))
 
 const money = (n) => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })
 
@@ -14,6 +15,7 @@ const EXPENSE = {
   expense_id: 5, expense_date: '2026-10-20', amount: 150, description: 'Garrafones', folio: 'T-99',
   status: 'active', branch_name: 'Sucursal Central', category_name: 'Servicios',
   payment_method_name: 'Efectivo', provider_name: 'Pepsi', has_receipt: true, receipt_name: 'ticket.png',
+  receipt_uploaded_by_name: 'Carla Díaz', receipt_uploaded_at: '2026-10-20T16:00:00Z',
   created_at: '2026-10-20T16:00:00Z', created_by_name: 'Ana López', paid_from_register: true,
   cash_movement: { cash_movement_id: 40, session_id: 12, register_name: 'Caja 1', session_open: true },
   cancel_reason: null, cancelled_at: null, cancelled_by_name: null, refund_registered: false,
@@ -24,13 +26,24 @@ const CANCELLED = {
   cancelled_at: '2026-10-20T17:00:00Z', cancelled_by_name: 'Beto Ruiz', refund_registered: true,
 }
 
-const renderDetail = async ({ expense = EXPENSE, canCancel = true } = {}) => {
+const NO_RECEIPT = {
+  ...EXPENSE, has_receipt: false, receipt_name: null, receipt_uploaded_by_name: null, receipt_uploaded_at: null,
+}
+
+const renderDetail = async ({ expense = EXPENSE, canCancel = true, canAttach = false } = {}) => {
   api.get.mockResolvedValue({ data: { data: expense } })
   const onCancelled = vi.fn()
-  render(<ExpenseDetailModal expenseId={expense.expense_id} canCancel={canCancel} onCancelled={onCancelled} onClose={vi.fn()} />)
+  const onReceiptSaved = vi.fn()
+  render(
+    <ExpenseDetailModal expenseId={expense.expense_id} canCancel={canCancel} canAttach={canAttach}
+      onCancelled={onCancelled} onReceiptSaved={onReceiptSaved} onClose={vi.fn()} />
+  )
   await screen.findByText('Garrafones')
-  return { onCancelled }
+  return { onCancelled, onReceiptSaved }
 }
+
+const chooseReceipt = (file) =>
+  fireEvent.change(screen.getByLabelText('Archivo del comprobante'), { target: { files: [file] } })
 
 describe('ExpenseDetailModal', () => {
   beforeEach(() => { vi.clearAllMocks() })
@@ -116,5 +129,67 @@ describe('ExpenseDetailModal', () => {
 
     await waitFor(() => expect(tab.location.href).toBe('blob:comprobante'))
     expect(api.get).toHaveBeenLastCalledWith('expenses/5/receipt', { responseType: 'blob' })
+  })
+
+  describe('receipt after saving', () => {
+    it('shows who uploaded the receipt and when', async () => {
+      await renderDetail()
+
+      expect(screen.getByText(/Subido por Carla Díaz · /)).toBeInTheDocument()
+    })
+
+    it('offers "Agregar comprobante" for an active expense without one, with expenses.create', async () => {
+      await renderDetail({ expense: NO_RECEIPT, canAttach: true })
+
+      expect(screen.getByText('Sin comprobante')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Agregar comprobante/ })).toBeInTheDocument()
+    })
+
+    it('offers "Reemplazar" when the expense already has a receipt', async () => {
+      await renderDetail({ canAttach: true })
+
+      expect(screen.getByRole('button', { name: /Reemplazar/ })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Agregar comprobante/ })).not.toBeInTheDocument()
+    })
+
+    it('does not offer to change the receipt without expenses.create', async () => {
+      await renderDetail({ expense: NO_RECEIPT })
+
+      expect(screen.queryByRole('button', { name: /Agregar comprobante/ })).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Archivo del comprobante')).not.toBeInTheDocument()
+    })
+
+    it('does not offer to change the receipt of a cancelled expense', async () => {
+      await renderDetail({ expense: { ...CANCELLED, has_receipt: false }, canAttach: true })
+
+      expect(screen.queryByRole('button', { name: /Agregar comprobante/ })).not.toBeInTheDocument()
+    })
+
+    it('adds the receipt, updates the detail and asks the list to reload', async () => {
+      const saved = {
+        ...NO_RECEIPT, has_receipt: true, receipt_name: 'factura.pdf',
+        receipt_uploaded_by_name: 'Beto Ruiz', receipt_uploaded_at: '2026-10-28T20:00:00Z',
+      }
+      api.put.mockResolvedValue({ data: { data: saved } })
+      const { onReceiptSaved } = await renderDetail({ expense: NO_RECEIPT, canAttach: true })
+
+      chooseReceipt(new File(['%PDF'], 'factura.pdf', { type: 'application/pdf' }))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Comprobante guardado.')
+      expect(api.put.mock.calls[0][0]).toBe('expenses/5/receipt')
+      expect(screen.getByRole('button', { name: /Ver comprobante/ })).toBeInTheDocument()
+      expect(screen.getByText(/Subido por Beto Ruiz · /)).toBeInTheDocument()
+      expect(onReceiptSaved).toHaveBeenCalledWith(saved)
+    })
+
+    it('shows why the receipt could not be saved', async () => {
+      api.put.mockRejectedValue({ response: { data: { message: 'No se puede cambiar el comprobante de un gasto cancelado.' } } })
+      const { onReceiptSaved } = await renderDetail({ expense: NO_RECEIPT, canAttach: true })
+
+      chooseReceipt(new File(['png'], 'ticket.png', { type: 'image/png' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('No se puede cambiar el comprobante de un gasto cancelado.')
+      expect(onReceiptSaved).not.toHaveBeenCalled()
+    })
   })
 })

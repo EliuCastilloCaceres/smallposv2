@@ -1,6 +1,6 @@
 // src/components/Settings/modals/PermissionsModal.test.jsx
-// Etiquetas del módulo de gastos en la pantalla de permisos (spec 12, T3) y
-// del reporte de gastos (spec 13, T1).
+// Etiquetas del módulo de gastos en la pantalla de permisos (spec 12, T3),
+// del reporte de gastos (spec 13, T1) y del módulo de compras (spec 14, T2).
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import PermissionsModal from './PermissionsModal'
@@ -49,5 +49,24 @@ describe('PermissionsModal', () => {
     expect(screen.getByText('Reportes')).toBeInTheDocument()
     expect(screen.getByText('Gastos')).toBeInTheDocument()
     expect(screen.getByText('Reporte de gastos')).toBeInTheDocument()
+  })
+
+  it('shows the purchases module as "Compras"', () => {
+    const purchases = [
+      { permission_id: 301, module: 'purchases', action: 'read',   description: 'Ver compras' },
+      { permission_id: 302, module: 'purchases', action: 'create', description: 'Registrar compras' },
+      { permission_id: 303, module: 'purchases', action: 'cancel', description: 'Cancelar compras' },
+    ]
+    render(
+      <PermissionsModal
+        role={{ role_id: 3, name: 'supervisor', permissions: [] }}
+        allPermissions={{ flat: purchases, grouped: { purchases } }}
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Compras')).toBeInTheDocument()
+    expect(screen.getByText('Registrar compras')).toBeInTheDocument()
   })
 })

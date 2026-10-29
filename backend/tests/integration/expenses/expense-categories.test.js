@@ -30,8 +30,9 @@ describe('expense categories API', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(7);
+    // Inactiva desde la spec 14 (migración 015): los pagos de mercancía son compras
     const supplier = res.body.data.find(c => c.name === 'Pago a proveedor (mercancía)');
-    expect(supplier).toMatchObject({ counts_in_net_profit: 0, is_active: 1, expense_count: 0 });
+    expect(supplier).toMatchObject({ counts_in_net_profit: 0, is_active: 0, expense_count: 0 });
   });
 
   it('creates a category, counting in the net profit unless told otherwise', async () => {

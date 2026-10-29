@@ -55,7 +55,7 @@ Hoy no hay forma de saber en qué ni cuánto gasta el negocio. La única salida 
 **No incluye**
 - La pestaña de reporte de gastos, el permiso `reports.expenses` y la utilidad neta en Ventas y utilidad: van en la spec 13. Ahí se usa la marca "cuenta en la utilidad neta".
 - El módulo de Compras y las cuentas por pagar (decisiones #5–#7): un pago a proveedor de mercancía se registra mientras tanto con su categoría (requisito 4).
-- Editar un gasto: se cancela y se vuelve a capturar (decisión #34). Tampoco se agrega el comprobante después.
+- Editar un gasto: se cancela y se vuelve a capturar (decisión #34). El comprobante solo se adjunta al registrar; agregarlo o reemplazarlo después lo cubre la [spec 15](15-comprobante-despues-de-guardar.md).
 - Recategorizar o convertir en gastos las salidas de caja históricas (decisión 1).
 - Validar que la caja tenga efectivo suficiente: hoy el retiro manual tampoco lo valida.
 - Gastos recurrentes, presupuestos y exportación (decisión #30).
@@ -273,3 +273,4 @@ Hoy no hay forma de saber en qué ni cuánto gasta el negocio. La única salida 
 | 2026-10-27 | T8 terminada:<br>- volumen `./backend/storage/expense-receipts` en `docker-compose.prod.yml`, y la carpeta fuera de git y de la imagen;<br>- `shared-features/feat-modulo-de-gastos.md`;<br>- helpers nuevos de tests en `docs/tests.md`.<br>**Hallazgo:** el Nginx del frontend de producción acepta 1 MB por petición por defecto y rechazaría un comprobante de 5 MB, así que se subió `client_max_body_size` a 6 MB en `/api/` (requisito 10). | — |
 | 2026-10-27 | Verificación en la copia de producción con usuarios temporales (`claude_qa_admin`, `claude_qa_sup` y `claude_qa_caj`), la caja "Caja QA spec 12" y la sucursal "Sucursal QA spec 12". Al terminar se borraron con sus gastos, la categoría de prueba, los movimientos, las sesiones, los refresh tokens y los comprobantes. Se llena la evidencia de los 10 criterios de aceptación. Queda en **Lista** hasta que el usuario apruebe pasarla a Terminada. | — |
 | 2026-10-27 | Se aprueba el cierre: pasa a **Terminada**. | Usuario |
+| 2026-10-28 | Cambio de alcance: agregar o reemplazar el comprobante después de registrar el gasto, que aquí quedó fuera, lo cubre la [spec 15](15-comprobante-despues-de-guardar.md). | Usuario |

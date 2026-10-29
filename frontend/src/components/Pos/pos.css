@@ -1154,6 +1154,12 @@
 }
 .pos-cashmov-form__type { display: flex; gap: 8px; }
 .pos-cashmov-form__type .pos-btn { flex: 1; padding-left: 8px; padding-right: 8px; }
+/* Con Compra (spec 14) son cuatro opciones: en un teléfono no caben en una
+   fila, así que van de dos en dos */
+@media (max-width: 560px) {
+  .pos-cashmov-form__type--wrap { flex-wrap: wrap; }
+  .pos-cashmov-form__type--wrap .pos-btn { flex: 1 1 calc(50% - 4px); }
+}
 /* Gasto desde el POS (spec 12): campos de texto y selects más chicos que
    el monto, y la nota de que se paga con el efectivo de la caja */
 .pos-cashmov-form__input { font-size: 14px; font-weight: 400; }

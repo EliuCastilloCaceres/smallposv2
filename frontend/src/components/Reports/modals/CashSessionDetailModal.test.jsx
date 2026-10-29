@@ -1,5 +1,6 @@
 // src/components/Reports/modals/CashSessionDetailModal.test.jsx
-// Etiquetas de los movimientos en el detalle de Sesiones de caja (spec 12, T2).
+// Etiquetas de los movimientos en el detalle de Sesiones de caja (spec 12, T2,
+// y spec 14, T3).
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import api from '../../../services/api'
@@ -19,6 +20,8 @@ const SESSION = {
     { movement_type: 'expense',        amount: 20, description: 'Gasto #3: Servicios – Luz' },
     { movement_type: 'expense_refund', amount: 20, description: 'Reingreso del gasto #3' },
     { movement_type: 'legacy_expense', amount: 5,  description: 'PAGO DE PEPSI' },
+    { movement_type: 'purchase',        amount: 25, description: 'Compra #4: Pepsi' },
+    { movement_type: 'purchase_refund', amount: 25, description: 'Reingreso de la compra #4' },
   ],
 }
 
@@ -35,5 +38,7 @@ describe('CashSessionDetailModal', () => {
     expect(row('Gasto')).toHaveClass('rpt-detail-list__amt--out')
     expect(row('Reingreso de gasto')).toHaveClass('rpt-detail-list__amt--in')
     expect(row('Salida de caja (histórico)')).toHaveClass('rpt-detail-list__amt--out')
+    expect(row('Compra')).toHaveClass('rpt-detail-list__amt--out')
+    expect(row('Reingreso de compra')).toHaveClass('rpt-detail-list__amt--in')
   })
 })

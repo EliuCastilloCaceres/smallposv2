@@ -342,7 +342,9 @@ const Expenses = () => {
         <ExpenseDetailModal
           expenseId={detailId}
           canCancel={canCancel}
+          canAttach={canCreate}
           onCancelled={reload}
+          onReceiptSaved={reload}
           onClose={() => setDetailId(null)}
         />
       )}

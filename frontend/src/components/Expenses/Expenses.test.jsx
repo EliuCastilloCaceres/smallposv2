@@ -1,6 +1,8 @@
 // src/components/Expenses/Expenses.test.jsx
 // Módulo Gastos con la API simulada (spec 12, T6): filtros y sus parámetros,
 // lista y estado cancelado, total de los activos y botones según permisos.
+// También que la lista se vuelve a leer al guardar un comprobante desde el
+// detalle (spec 15, T3).
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../../services/api'
@@ -10,7 +12,7 @@ import Expenses from './Expenses'
 let isCentralAdmin = false
 let permissions = []
 
-vi.mock('../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('../../services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }))
 vi.mock('../../context/UserContext', () => ({
   useUser: () => ({
     isCentralAdmin,
@@ -175,5 +177,41 @@ describe('Expenses', () => {
     fireEvent.click(within(screen.getByRole('table')).getByText('Garrafones'))
 
     expect(await screen.findByRole('dialog', { name: 'Gasto #3' })).toBeInTheDocument()
+  })
+
+  it('reloads the list after a receipt is added from the detail', async () => {
+    const detail = { ...LIST.data[0], has_receipt: false, created_by_name: 'Ana', cash_movement: null }
+    api.get.mockImplementation((url) => {
+      if (url === 'expenses/options') return Promise.resolve({ data: { data: OPTIONS } })
+      if (url === 'expenses/3') return Promise.resolve({ data: { data: detail } })
+      return Promise.resolve({ data: LIST })
+    })
+    api.put.mockResolvedValue({ data: { data: { ...detail, has_receipt: true } } })
+    await renderPage()
+    const listCalls = () => api.get.mock.calls.filter(([u]) => u.startsWith('expenses?')).length
+
+    fireEvent.click(within(screen.getByRole('table')).getByText('Garrafones'))
+    await screen.findByRole('button', { name: /Agregar comprobante/ })
+    const before = listCalls()
+    fireEvent.change(screen.getByLabelText('Archivo del comprobante'), {
+      target: { files: [new File(['png'], 'ticket.png', { type: 'image/png' })] },
+    })
+
+    await waitFor(() => expect(listCalls()).toBe(before + 1))
+  })
+
+  it('does not offer to add a receipt without expenses.create', async () => {
+    permissions = ['expenses.read']
+    api.get.mockImplementation((url) => {
+      if (url === 'expenses/options') return Promise.resolve({ data: { data: OPTIONS } })
+      if (url === 'expenses/3') return Promise.resolve({ data: { data: { ...LIST.data[0], has_receipt: false, created_by_name: 'Ana', cash_movement: null } } })
+      return Promise.resolve({ data: LIST })
+    })
+    await renderPage()
+
+    fireEvent.click(within(screen.getByRole('table')).getByText('Garrafones'))
+
+    expect(await screen.findByText('Sin comprobante')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Agregar comprobante/ })).not.toBeInTheDocument()
   })
 })

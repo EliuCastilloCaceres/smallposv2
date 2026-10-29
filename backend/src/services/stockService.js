@@ -27,7 +27,7 @@ const applyStockMovement = async (conn, {
   productId,
   variantId = null,
   delta,           // número, puede ser negativo
-  operationType,   // 'sale','return','purchase','adjustment','transfer_in','transfer_out'
+  operationType,   // 'sale','return','purchase','purchase_cancelled','adjustment','transfer_in','transfer_out'
   reason = null,
   referenceId = null,
   referenceType = null,
@@ -127,10 +127,11 @@ const manualAdjustment = async (conn, {
   userId,
 }) => {
   const delta = operationType === 'entry' ? Math.abs(quantity) : -Math.abs(quantity);
+  // Una entrada ya no puede ser una compra: las compras se registran en el
+  // módulo Compras (specs/14-modulo-de-compras.md, requisito 24)
   let opType;
   if(operationType ==='entry'){
-    if(reason==='Compra a proveedor') opType='purchase'
-    else opType = 'entry'
+    opType = 'entry'
   }else{
     if(reason === 'Devolución de cliente') opType ='return'
     else opType ='exit'

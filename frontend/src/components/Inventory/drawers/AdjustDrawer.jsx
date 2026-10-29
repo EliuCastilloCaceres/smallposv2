@@ -3,12 +3,13 @@ import { useState } from 'react'
 import api from '../../../services/api'
 import { useBranch } from '../../../context/BranchContext'
 
+// Sin "Compra a proveedor": las compras se registran en el módulo Compras,
+// con su proveedor y su costo (specs/14-modulo-de-compras.md, requisito 23)
 const REASONS = [
   'Conteo físico',
   'Merma',
   'Producto dañado',
   'Error de registro',
-  'Compra a proveedor',
   'Devolución de cliente',
   'Otro',
 ]

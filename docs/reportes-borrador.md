@@ -7,6 +7,8 @@
 > **Estado: dudas resueltas** (2026-10-17). Las 39 dudas y sus derivadas (6b, 8b, 10b…) tienen respuesta en [§8](#8-dudas-abiertas). Las secciones 2 a 6 ya reflejan esas decisiones.
 >
 > **Actualización del 2026-10-27:** la [spec 12](../specs/12-modulo-de-gastos.md) (módulo de gastos) cambió las decisiones #2, #4, #8, #9, #33 y #34. Los cambios están en §3.1, §5, §6 y §8.
+>
+> **Actualización del 2026-10-28:** la [spec 14](../specs/14-modulo-de-compras.md) (módulo de compras) cambió las decisiones #8 y #33 y dividió el paso 6 en dos specs. Los cambios están en §3.2, §5, §6 y §8. El reporte de compras quedó en la spec 16, porque la 15 se usó para agregar el comprobante después de guardar un gasto o una compra.
 
 ## 1. Contexto
 
@@ -113,16 +115,17 @@ Todo esto iría en el módulo de **Reportes**, que ya existe.
 - Participación de cada proveedor en el total comprado.
 - "Con quién gasto más": compras más los gastos que tengan proveedor.
 
-**Decisiones** (ver #5–#8b y #33–#38)
+**Decisiones** (ver #5–#8b y #33–#38; el módulo se hace en la spec 14)
 - **Módulo nuevo de compras,** con menú propio y permisos `purchases.read/create/cancel`. Cada compra tiene:
   - **encabezado:** proveedor, fecha, sucursal, método de pago, folio, comprobante y notas;
-  - **líneas:** producto, variante, cantidad y costo unitario.
+  - **líneas:** producto, variante, cantidad y costo unitario (lo que se pagó por unidad, con IVA). El total es la suma de las líneas.
 - **Inventario:** la compra genera la entrada de inventario, ligada a `inventory_movements` con `reference_type = 'purchase'`.
-- **Costo del producto:** se actualiza con **costo promedio ponderado global**, usando el stock de todas las sucursales.
+- **Costo del producto:** se actualiza con **costo promedio ponderado global**, usando el stock de todas las sucursales. Con existencia 0 o costo 0, el producto toma el costo de la compra.
 - **Pago:** toda compra se considera pagada; no hay cuentas por pagar por ahora. También puede pagarse desde caja.
-- **Separación de gastos:** las compras no son gastos.
-- **Cancelación:** solo se cancela, con motivo. Cancelar revierte la entrada si hay stock suficiente.
-- **Inventario:** se quita el motivo "Compra a proveedor".
+- **Cajero:** registra desde el POS las compras que paga con el efectivo de su caja, con sus líneas, y no ve el menú Compras (cambió en la spec 14).
+- **Separación de gastos:** las compras no son gastos. La categoría "Pago a proveedor (mercancía)" se desactiva, y sus gastos no se suman en "con quién gasto más" (cambió en la spec 14).
+- **Cancelación:** solo se cancela, con motivo. Cancelar revierte la entrada si hay stock suficiente en todas las líneas; si no, no se cancela.
+- **Inventario:** se quita el motivo "Compra a proveedor". Las entradas históricas con ese motivo no se convierten en compras.
 
 ### 3.3 Utilidad de las ventas (4)
 
@@ -293,7 +296,7 @@ Reglas para todas las pestañas:
 
 Además de las pestañas, hay dos **menús nuevos** de captura (#33):
 - **Gastos:** `expenses.read/create/cancel`, más `expenses.categories` (spec 12).
-- **Compras:** `purchases.read/create/cancel`.
+- **Compras:** `purchases.read/create/cancel` (spec 14).
 
 ## 6. Orden de las specs
 
@@ -314,10 +317,9 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
 5. **Módulo de gastos,** dividido en dos specs:
    - **spec 12 (Terminada):** categorías, separación de retiros y del histórico, opción "pagado desde caja" y gasto desde el POS;
    - **spec 13 (Terminada):** reporte de gastos (`reports.expenses`) y **utilidad neta** en el reporte de la spec 1, contando solo las categorías que cuentan en la utilidad neta.
-6. **Módulo de compras:**
-   - costo promedio ponderado;
-   - se quita el motivo "Compra a proveedor" de Inventario;
-   - reporte de compras por proveedor y de "con quién gasto más".
+6. **Módulo de compras,** dividido en dos specs:
+   - **spec 14 (Terminada):** compras con sus líneas, entrada al inventario, costo promedio ponderado, opción "pagado desde caja", compra desde el POS, se quita el motivo "Compra a proveedor" de Inventario y se desactiva la categoría de gasto "Pago a proveedor (mercancía)";
+   - **spec 16:** reporte de compras por proveedor (`reports.purchases`) y de "con quién gasto más".
 
 **Fuera por ahora, como posibles specs futuras:** cuentas por pagar (#7), exportación (#30), módulo de promociones (#25) y ubicaciones físicas (#24).
 
@@ -352,6 +354,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
    - "A quién le compro más" se calcula con compras.
    - "Con quién gasto más" suma compras y los gastos que tengan proveedor, así que los gastos llevan **proveedor opcional**.
    - **Mientras no exista Compras** (spec 12, decisión 2): un pago de mercancía a un proveedor se registra en Gastos con la categoría "Pago a proveedor (mercancía)", que no cuenta en la utilidad neta.
+   - **Ajustada en la spec 14 (decisión 3):** con Compras, esa categoría se desactiva. Los gastos que ya la tienen la conservan y no se suman en "con quién gasto más", porque esos pagos son compras de mercancía.
 8b. ~~¿Cómo afecta al corte de caja un gasto o compra pagado con efectivo de caja?~~ → **Respondida: opción "pagado desde caja".**
    - Al registrar un gasto o una compra se elige el método de pago.
    - Si se paga con efectivo de la caja abierta, se genera automáticamente la salida de caja ligada a ese gasto o compra. Así el corte cuadra sin capturar dos veces.
@@ -469,6 +472,7 @@ Estas dudas surgieron al decidir crear los dos módulos (#2 y #5).
       - **Cajero:** puede registrar gastos pagados desde su caja.
       - **Almacenista:** puede registrar compras.
     - **Ajustada en la spec 12:** se agrega `expenses.categories`, para administrar las categorías de gasto, que solo tienen admin y superadmin. El cajero tiene `expenses.create` sin `expenses.read`: registra gastos desde el POS, pagados desde su caja, y no ve el menú Gastos.
+    - **Ajustada en la spec 14 (decisiones 2 y 11):** el cajero tiene `purchases.create` sin `purchases.read`: registra desde el POS las compras pagadas desde su caja y no ve el menú Compras. El almacenista tiene `purchases.read` y `purchases.create`, sin `cancel`.
 34. ~~¿Se pueden editar o cancelar?~~ → **Respondida: solo cancelar, con motivo.**
     - No se editan: se cancelan y se vuelven a capturar.
     - Cancelar una compra revierte la entrada de inventario, si hay stock suficiente.

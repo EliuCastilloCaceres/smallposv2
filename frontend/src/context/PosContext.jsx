@@ -181,6 +181,12 @@ export const PosContextProvider = ({ children }) => {
   const [paymentMethods,     setPaymentMethods]     = useState([])
   const [visibleCategories,  setVisibleCategories]  = useState([])
 
+  // Sube cada vez que el stock cambia fuera de una venta, como una compra
+  // desde Movimientos de caja, para que la pantalla de venta lo vuelva a leer
+  // (specs/14-modulo-de-compras.md, requisito 27)
+  const [stockVersion, setStockVersion] = useState(0)
+  const notifyStockChanged = useCallback(() => setStockVersion(v => v + 1), [])
+
   // [FIX-persistencia] Antes arrancaba en `branchId` (el valor del primer
   // render, casi siempre null porque BranchContext todavía no resuelve
   // selectedBranch). Eso hacía que el efecto de abajo confundiera "la
@@ -464,7 +470,7 @@ export const PosContextProvider = ({ children }) => {
       // Sucursal
       branchId,
       // Catálogo de apoyo
-      paymentMethods, visibleCategories,
+      paymentMethods, visibleCategories, stockVersion, notifyStockChanged,
       // Caja / sesión
       registers, registersLoading, activeRegister, activeRegisterId, sessionId,
       isRegisterOpen, registerError,

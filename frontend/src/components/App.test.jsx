@@ -1,6 +1,7 @@
 // src/components/App.test.jsx
-// El menú muestra Reportes con cualquier permiso de reportes (spec 04, T4) y
-// Gastos solo con expenses.read (spec 12, T3).
+// El menú muestra Reportes con cualquier permiso de reportes (spec 04, T4),
+// Gastos solo con expenses.read (spec 12, T3) y Compras solo con
+// purchases.read (spec 14, T2).
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -23,6 +24,7 @@ const renderMenu = () => render(<MemoryRouter initialEntries={['/']}><App /></Me
 
 const reportLinks = () => screen.queryAllByRole('link', { name: /Reportes/ })
 const expenseLinks = () => screen.queryAllByRole('link', { name: /Gastos/ })
+const purchaseLinks = () => screen.queryAllByRole('link', { name: /Compras/ })
 
 describe('App menu', () => {
   beforeEach(() => { permissions = ['dashboard.read'] })
@@ -98,5 +100,22 @@ describe('App menu', () => {
     renderMenu()
 
     expect(expenseLinks()).toEqual([])
+  })
+
+  it('shows Compras to a user with purchases.read', () => {
+    permissions.push('purchases.read')
+
+    renderMenu()
+
+    expect(purchaseLinks().length).toBeGreaterThan(0)
+    expect(purchaseLinks()[0]).toHaveAttribute('href', '/purchases')
+  })
+
+  it('hides Compras from a user who can only register purchases, like a cashier', () => {
+    permissions.push('purchases.create')
+
+    renderMenu()
+
+    expect(purchaseLinks()).toEqual([])
   })
 })

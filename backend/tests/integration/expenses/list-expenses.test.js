@@ -185,8 +185,10 @@ describe('expenses permissions and options', () => {
 
     expect(res.status).toBe(200);
     const { categories, payment_methods, providers, registers, branches } = res.body.data;
-    expect(categories.map(c => c.name)).toContain('Pago a proveedor (mercancía)');
+    expect(categories.map(c => c.name)).toContain('Renta');
     expect(categories.map(c => c.name)).not.toContain('Vieja');
+    // Inactiva desde la spec 14 (migración 015): los pagos de mercancía son compras
+    expect(categories.map(c => c.name)).not.toContain('Pago a proveedor (mercancía)');
     expect(payment_methods.map(m => m.code).sort()).toEqual(['card', 'cash', 'transfer']);
     expect(providers.map(p => p.name)).toContain('Pepsi');
     expect(registers).toEqual([expect.objectContaining({ cash_register_id: 1, name: 'Caja 1', branch_id: 1 })]);

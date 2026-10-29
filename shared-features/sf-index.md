@@ -42,8 +42,8 @@ Si se decide **no** implementarla, se anota en el resumen del archivo y se deja 
 | Archivo | Tipo | Estado | Origen | Resumen |
 |---|---|---|---|---|
 | [feat-filtro-metodo-pago-ventas.md](feat-filtro-metodo-pago-ventas.md) | feat | Borrador | smallposv2 · `60aa180` | Filtro por método de pago en Ventas; el pie suma solo el método filtrado. |
-| [feat-totales-credito.md](feat-totales-credito.md) | feat | Borrador | smallposv2 · `60aa180` | Pie de totales (Total, Pagado, Saldo pendiente) en Créditos. |
-| [feat-filtro-cliente-credito.md](feat-filtro-cliente-credito.md) | feat | Borrador | smallposv2 · `60aa180` | Dropdown de clientes con crédito para filtrar el listado de Créditos. |
+| [feat-totales-credito.md](feat-totales-credito.md) | feat | Implementada | smallposv2 · `60aa180` | Pie de totales (Total, Pagado, Saldo pendiente) en Créditos. |
+| [feat-filtro-cliente-credito.md](feat-filtro-cliente-credito.md) | feat | Implementada | smallposv2 · `60aa180` | Dropdown de clientes con crédito para filtrar el listado de Créditos. |
 | [fix-sesion-al-recargar.md](fix-sesion-al-recargar.md) | fix | Implementada | smallposv2 · `c4c34d5`–`265e89f` | Un solo refresh en curso por pestaña para que recargar no cierre la sesión; la revocación por reutilización conserva `revoked_at`. |
 | [fix-costos-e-indices.md](fix-costos-e-indices.md) | fix | Implementada | smallposv2 · `deb907d`–`5e756ea` | El servidor toma el costo de venta del catálogo, los apartados lo congelan al crearse, índices de fecha y runner de migraciones SQL. |
 | [feat-reporte-ventas-y-utilidad.md](feat-reporte-ventas-y-utilidad.md) | feat | Borrador | smallposv2 · spec 04 | Pestaña Ventas y utilidad (utilidad bruta y margen por producto, categoría, sucursal y proveedor), permiso por reporte, guard de `/reports` y alcance por sucursal de Sesiones de caja. |

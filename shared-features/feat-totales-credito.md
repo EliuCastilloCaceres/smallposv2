@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
 
 ## Resumen
 
@@ -53,7 +53,24 @@ Ninguno.
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 15 (`specs/15-credits-totals-and-customer-filter.md`), el 2026-10-29, junto con [feat-filtro-cliente-credito.md](feat-filtro-cliente-credito.md).
+
+- [x] En `marksexpress`, con cada filtro de estado, el pie muestra los mismos Total, Pagado y Saldo pendiente que una consulta directa a la base:
+  - Activos y vencidos, y Activos: $227, $0 y $227 (2 créditos).
+  - Vencidos: $0 en los tres.
+  - Pagados: $885, $885 y $0 (10 créditos).
+  - Cancelados: $180, $0 y $0 (1 crédito).
+  - Se revisó por la API, con un token de solo lectura, y el usuario lo vio en la app (2026-10-29).
+- [x] Con `limit=5`, todas las páginas de un mismo filtro devuelven los mismos totales. Por ejemplo, Pagados: 10 créditos en 2 páginas, con los mismos totales en las dos.
+- [x] Un crédito cancelado cuenta en Total y en Pagado, pero no en el Saldo pendiente.
+  - El usuario hizo una venta a crédito de prueba (90367, crédito #32, $180, Sucursal Norte) y la canceló.
+  - Con "Cancelados", el pie muestra $180, $0 y $0, aunque en la base su `balance` es $180.
+- [x] Tests en `creditList.test.js`: las tres sumas con `COALESCE`, el mismo `WHERE` y los mismos parámetros que el listado, y `totals` en la respuesta. En `Credits.test.jsx`: el pie muestra los totales de la respuesta y no aparece sin resultados.
+- [x] Los tests del backend y del frontend pasan, en Docker: backend 877/877 (47 suites) y frontend 338/338 (37 archivos).
+
+**Diferencias con smallposv2:**
+- **Ninguna en el comportamiento:** la consulta, la respuesta, el pie y sus estilos son los mismos.
+- **Tests:** saas los agrega, con la BD simulada en el backend.
 
 ## Notas para portar a smallpos-saas
 

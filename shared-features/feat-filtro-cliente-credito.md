@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | `60aa180` | 2026-10-16 |
 
 ## Resumen
 
@@ -55,7 +55,23 @@ Ninguno. El endpoint y la función nuevos viven en archivos existentes.
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 15 (`specs/15-credits-totals-and-customer-filter.md`), el 2026-10-29, junto con [feat-totales-credito.md](feat-totales-credito.md).
+
+- [x] El select solo ofrece clientes con créditos. En `marksexpress` aparece solo "samir castillo", de 3 clientes, y en `rbac09demo` los 2 que tienen créditos.
+- [x] Al elegir un cliente, el listado y el pie son solo suyos. Al cambiar de sucursal, la lista se recarga y la selección se borra. Lo probó el usuario en `marksexpress` (2026-10-29).
+- [x] Un usuario con `credit.read` y sin `customers.read` usa el filtro sin errores. Con un token que solo tiene `credit.read`:
+  - `GET /api/credits/customers` (con sucursal y sin ella), `GET /api/credits?customer_id=8` y `GET /api/branches/list` responden 200;
+  - `GET /api/customers` responde 403, como se espera.
+- [x] La ruta va antes de `/:creditSaleId`: el test `does not reach getById` y la foto de accesos (`GET /api/credits/customers → perm credit.read`).
+- [x] Tests en `creditList.test.js`: `cs.customer_id = ?` en el `WHERE` del conteo y del listado, un `customer_id` inválido se ignora, el endpoint con `credit.read`, el 403 sin él y `?branch_id`. En `Credits.test.jsx`: las opciones, elegir un cliente (página 1) y cambiar de sucursal.
+- [x] Los tests del backend y del frontend pasan, en Docker: backend 877/877 (47 suites) y frontend 338/338 (37 archivos).
+
+**Diferencias con smallposv2:**
+- **Sucursal:** no hay `resolveUnrestrictedBranchId`. `?branch_id` se lee con `parseBranchId` como un filtro de los datos, no como la sucursal activa, porque Créditos es de todo el tenant (Spec 12 de saas, RF-5).
+- **`customer_id`:** también se lee con `parseBranchId`, así que solo cuenta un entero positivo. En smallposv2, `parseInt` deja pasar `1.5` como 1 y `-3` como -3.
+- **Ruta:** `createSecureRouter` con `{ perm: 'credit.read' }`, y también antes de `/:creditSaleId`.
+- **Nombres repetidos:** igual que en smallposv2, solo "Nombre Apellido".
+- **Tests:** saas los agrega, con la BD simulada en el backend.
 
 ## Notas para portar a smallpos-saas
 

@@ -206,7 +206,25 @@ const getExpenseReport = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// GET /reports/purchases
+const getPurchaseReport = async (req, res, next) => {
+  try {
+    const { start_date: startDate, end_date: endDate, group_by: groupBy, page, limit } = req.query;
+
+    const result = await reportService.getPurchaseReport({
+      startDate,
+      endDate,
+      branchId: resolveOptionalBranchId(req),
+      groupBy:  groupBy || 'provider',
+      page:  intOrNull(page)  ?? 1,
+      limit: intOrNull(limit) ?? 20,
+    });
+
+    res.json({ status: 'success', ...result });
+  } catch (err) { next(err); }
+};
+
 module.exports = {
   getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
-  getExpenseReport,
+  getExpenseReport, getPurchaseReport,
 };

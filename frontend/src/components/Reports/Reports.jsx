@@ -8,6 +8,7 @@ import TrendTab from './tabs/TrendTab'
 import InventoryTab from './tabs/InventoryTab'
 import RotationTab from './tabs/RotationTab'
 import ExpensesTab from './tabs/ExpensesTab'
+import PurchasesTab from './tabs/PurchasesTab'
 import { getVisibleReportTabs } from './reportTabs'
 import './reports.css'
 
@@ -19,6 +20,7 @@ const TAB_CONTENT = {
   inventory:       InventoryTab,
   rotation:        RotationTab,
   expenses:        ExpensesTab,
+  purchases:       PurchasesTab,
 }
 
 const Reports = () => {
@@ -39,7 +41,7 @@ const Reports = () => {
       <div className="rpt-header">
         <div>
           <h1 className="rpt-header__title">Reportes</h1>
-          <span className="rpt-header__sub">Sesiones de caja, ventas, inventario y gastos</span>
+          <span className="rpt-header__sub">Sesiones de caja, ventas, inventario, gastos y compras</span>
         </div>
       </div>
 

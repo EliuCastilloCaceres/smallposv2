@@ -1546,7 +1546,168 @@ const getExpenseReport = async ({
   };
 };
 
+// ─── Compras ───────────────────────────────────────────────────────────────
+
+// Compras de un periodo, agrupadas por proveedor, producto o sucursal
+// (specs/16-reporte-de-compras.md). Cuentan las compras activas (no
+// canceladas) cuya fecha de la compra cae en el periodo; como la fecha del
+// gasto, es un día de México sin hora y se compara directo. El monto de una
+// compra es su total, la suma de sus líneas. Los gastos no se suman: el
+// reporte solo cuenta compras (requisito 24).
+
+// Cada agrupación: de dónde salen las filas, la llave del grupo, lo que suma
+// cada grupo (alias t) y cómo sacar su nombre (alias g)
+const PURCHASE_GROUPS = {
+  provider: {
+    from: 'purchases pu',
+    key:  'pu.provider_id',
+    sums: "COUNT(*) AS count, SUM(pu.total) AS total, DATE_FORMAT(MAX(pu.purchase_date), '%Y-%m-%d') AS last_date",
+    join: 'JOIN providers g ON g.provider_id = t.group_id',
+    cols: 'g.name AS name, g.is_active',
+  },
+  // Las variantes se suman a su producto: el costo es del producto
+  product: {
+    from: 'purchases pu JOIN purchase_items pi ON pi.purchase_id = pu.purchase_id',
+    key:  'pi.product_id',
+    sums: 'COUNT(DISTINCT pu.purchase_id) AS count, SUM(pi.quantity) AS quantity, SUM(pi.subtotal) AS total',
+    join: 'JOIN products g ON g.product_id = t.group_id',
+    cols: 'g.name AS name, g.sku, g.uom, g.is_active',
+  },
+  branch: {
+    from: 'purchases pu',
+    key:  'pu.branch_id',
+    sums: 'COUNT(*) AS count, SUM(pu.total) AS total',
+    join: 'JOIN branches g ON g.branch_id = t.group_id',
+    cols: 'g.name AS name',
+  },
+};
+
+// Fila del desglose de cada agrupación, con su % del total
+const PURCHASE_ROWS = {
+  provider: (r, share) => ({
+    groupId:          r.group_id,
+    name:             r.name,
+    isActive:         r.is_active === 1,
+    count:            Number(r.count),
+    total:            round2(r.total),
+    share,
+    average:          round2(Number(r.total) / Number(r.count)),
+    lastPurchaseDate: r.last_date,
+  }),
+  product: (r, share) => ({
+    groupId:     r.group_id,
+    name:        r.name,
+    sku:         r.sku,
+    uom:         r.uom,
+    isActive:    r.is_active === 1,
+    quantity:    round3(r.quantity),
+    count:       Number(r.count),
+    total:       round2(r.total),
+    share,
+    averageCost: Number(r.quantity) === 0 ? null : round2(Number(r.total) / Number(r.quantity)),
+  }),
+  branch: (r, share) => ({
+    groupId: r.group_id,
+    name:    r.name,
+    count:   Number(r.count),
+    total:   round2(r.total),
+    share,
+    average: round2(Number(r.total) / Number(r.count)),
+  }),
+};
+
+// WHERE de las compras activas del periodo y la sucursal (null = todas)
+const activePurchasesWhere = ({ startDate, endDate, branchId = null }) => {
+  const where  = ["pu.status = 'active'", 'pu.purchase_date BETWEEN ? AND ?'];
+  const params = [startDate, endDate];
+  if (branchId !== null) { where.push('pu.branch_id = ?'); params.push(branchId); }
+  return { whereSql: where.join(' AND '), params };
+};
+
+// Fecha ('YYYY-MM-DD') de la compra activa más antigua de la sucursal (null =
+// todas), o null si no hay ninguna. Para el aviso de los periodos que empiezan
+// antes de que se registraran compras (requisito 18).
+const getFirstPurchaseDate = async (branchId = null) => {
+  const [[row]] = await db.query(
+    `SELECT DATE_FORMAT(MIN(pu.purchase_date), '%Y-%m-%d') AS first_date
+       FROM purchases pu
+      WHERE pu.status = 'active' ${branchId !== null ? 'AND pu.branch_id = ?' : ''}`,
+    branchId !== null ? [branchId] : []
+  );
+  return row.first_date;
+};
+
+// branchId = null → consolidado (admin central). Un usuario con sucursal
+// asignada llega aquí con la suya ya forzada por el controller. Resumen y
+// desglose de los requisitos 9, 11, 12, 14 y 15.
+const getPurchaseReport = async ({
+  startDate,
+  endDate,
+  branchId = null,
+  groupBy = 'provider',
+  page = 1,
+  limit = 20,
+}) => {
+  if (!DATE_RE.test(startDate ?? '') || !DATE_RE.test(endDate ?? '')) {
+    throw new ValidationError('start_date y end_date son requeridos, formato YYYY-MM-DD');
+  }
+  if (startDate > endDate) throw new ValidationError('start_date no puede ser posterior a end_date');
+  if (branchId !== null && !isPositiveInt(branchId)) throw new ValidationError('branch_id inválido');
+  const group = PURCHASE_GROUPS[groupBy];
+  if (!group) throw new ValidationError('group_by debe ser provider, product o branch');
+
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+  const safePage  = Math.max(parseInt(page) || 1, 1);
+  const { whereSql, params } = activePurchasesWhere({ startDate, endDate, branchId });
+
+  const [[summary]] = await db.query(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(pu.total), 0) AS total, COUNT(DISTINCT pu.provider_id) AS providers
+       FROM purchases pu
+      WHERE ${whereSql}`,
+    params
+  );
+  const total = Number(summary.total);
+  const count = Number(summary.count);
+
+  // Mayor total primero; group_id desempata para que la paginación sea estable
+  const [rows] = await db.query(
+    `SELECT t.*, ${group.cols}
+       FROM (
+         SELECT ${group.key} AS group_id, ${group.sums}
+           FROM ${group.from}
+          WHERE ${whereSql}
+          GROUP BY ${group.key}
+       ) t
+       ${group.join}
+      ORDER BY t.total DESC, t.group_id
+      LIMIT ? OFFSET ?`,
+    [...params, safeLimit, (safePage - 1) * safeLimit]
+  );
+
+  const [[{ groups }]] = await db.query(
+    `SELECT COUNT(DISTINCT ${group.key}) AS \`groups\` FROM ${group.from} WHERE ${whereSql}`,
+    params
+  );
+
+  return {
+    data: rows.map(r => PURCHASE_ROWS[groupBy](r, total === 0 ? null : round2(Number(r.total) / total * 100))),
+    pagination: {
+      page:       safePage,
+      limit:      safeLimit,
+      total:      Number(groups),
+      totalPages: Math.max(1, Math.ceil(Number(groups) / safeLimit)),
+    },
+    summary: {
+      total:     round2(total),
+      count,
+      average:   count === 0 ? null : round2(total / count),
+      providers: Number(summary.providers),
+    },
+    firstPurchaseDate: await getFirstPurchaseDate(branchId),
+  };
+};
+
 module.exports = {
   getCashSessions, getCashSessionDetail, getProfitReport, getTrendReport, getInventoryReport, getRotationReport,
-  getExpenseReport,
+  getExpenseReport, getPurchaseReport,
 };

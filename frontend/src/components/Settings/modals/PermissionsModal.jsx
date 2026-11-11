@@ -43,6 +43,7 @@ const ACTION_LABELS = {
   rotation:  'Rotación',
   categories: 'Categorías',
   expenses:   'Gastos',
+  purchases:  'Compras',
 }
 
 const MODULE_ICONS = {

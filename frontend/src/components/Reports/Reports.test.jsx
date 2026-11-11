@@ -17,6 +17,7 @@ vi.mock('./tabs/TrendTab',        () => ({ default: () => <p>contenido tendencia
 vi.mock('./tabs/InventoryTab',    () => ({ default: () => <p>contenido inventario</p> }))
 vi.mock('./tabs/RotationTab',     () => ({ default: () => <p>contenido rotación</p> }))
 vi.mock('./tabs/ExpensesTab',     () => ({ default: () => <p>contenido gastos</p> }))
+vi.mock('./tabs/PurchasesTab',    () => ({ default: () => <p>contenido compras</p> }))
 
 const renderReports = () => render(
   <MemoryRouter initialEntries={['/reports']}>
@@ -121,6 +122,28 @@ describe('Reports module access', () => {
     expect(tabNames().at(-1)).toBe('Gastos')
     fireEvent.click(screen.getByRole('tab', { name: 'Gastos' }))
     expect(screen.getByText('contenido gastos')).toBeInTheDocument()
+  })
+
+  it('shows the purchases tab after expenses with every report permission (spec 16)', () => {
+    permissions = [
+      'reports.basic', 'reports.profit', 'reports.trend', 'reports.inventory', 'reports.rotation',
+      'reports.expenses', 'reports.purchases',
+    ]
+
+    renderReports()
+
+    expect(tabNames().slice(-2)).toEqual(['Gastos', 'Compras'])
+    fireEvent.click(screen.getByRole('tab', { name: 'Compras' }))
+    expect(screen.getByText('contenido compras')).toBeInTheDocument()
+  })
+
+  it('opens on the purchases tab when it is the only one allowed', () => {
+    permissions = ['reports.purchases']
+
+    renderReports()
+
+    expect(tabNames()).toEqual(['Compras'])
+    expect(screen.getByText('contenido compras')).toBeInTheDocument()
   })
 
   it('opens on the expenses tab when it is the only one allowed', () => {

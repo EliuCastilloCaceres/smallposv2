@@ -69,4 +69,23 @@ describe('PermissionsModal', () => {
     expect(screen.getByText('Compras')).toBeInTheDocument()
     expect(screen.getByText('Registrar compras')).toBeInTheDocument()
   })
+
+  it('shows the purchases report action as "Compras" inside Reportes (spec 16)', () => {
+    const reports = [
+      { permission_id: 202, module: 'reports', action: 'expenses',  description: 'Reporte de gastos' },
+      { permission_id: 203, module: 'reports', action: 'purchases', description: 'Reporte de compras' },
+    ]
+    render(
+      <PermissionsModal
+        role={{ role_id: 3, name: 'supervisor', permissions: [] }}
+        allPermissions={{ flat: reports, grouped: { reports } }}
+        onSaved={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Reportes')).toBeInTheDocument()
+    expect(screen.getByText('Compras')).toBeInTheDocument()
+    expect(screen.getByText('Reporte de compras')).toBeInTheDocument()
+  })
 })

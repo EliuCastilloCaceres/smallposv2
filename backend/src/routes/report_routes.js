@@ -55,4 +55,11 @@ router.get(
   reportController.getExpenseReport
 );
 
+// GET /reports/purchases?start_date=&end_date=&branch_id=&group_by=&page=&limit=
+router.get(
+  '/purchases',
+  requirePermission('reports', 'purchases'),
+  reportController.getPurchaseReport
+);
+
 module.exports = router;

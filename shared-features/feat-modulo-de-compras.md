@@ -6,7 +6,7 @@
 
 ## Resumen
 
-Agrega el módulo **Compras** para registrar lo que se compra a cada proveedor, con sus productos, cantidades y costos. Cada compra sube el inventario y recalcula el costo del producto con el **promedio ponderado global**. Desde ahora, las compras solo se registran aquí: se quita el motivo "Compra a proveedor" de los ajustes de inventario y se desactiva la categoría de gasto "Pago a proveedor (mercancía)". El reporte de compras por proveedor y "con quién gasto más" van en la spec 16.
+Agrega el módulo **Compras** para registrar lo que se compra a cada proveedor, con sus productos, cantidades y costos. Cada compra sube el inventario y recalcula el costo del producto con el **promedio ponderado global**. Desde ahora, las compras solo se registran aquí: se quita el motivo "Compra a proveedor" de los ajustes de inventario y se desactiva la categoría de gasto "Pago a proveedor (mercancía)". El reporte de compras por proveedor va en la spec 16.
 
 - **Cada compra** guarda:
   - proveedor activo, obligatorio; puede ser el genérico;

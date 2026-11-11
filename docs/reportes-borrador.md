@@ -319,7 +319,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
    - **spec 13 (Terminada):** reporte de gastos (`reports.expenses`) y **utilidad neta** en el reporte de la spec 1, contando solo las categorías que cuentan en la utilidad neta.
 6. **Módulo de compras,** dividido en dos specs:
    - **spec 14 (Terminada):** compras con sus líneas, entrada al inventario, costo promedio ponderado, opción "pagado desde caja", compra desde el POS, se quita el motivo "Compra a proveedor" de Inventario y se desactiva la categoría de gasto "Pago a proveedor (mercancía)";
-   - **spec 16:** reporte de compras por proveedor (`reports.purchases`) y de "con quién gasto más".
+   - **spec 16 (Terminada):** reporte de compras por proveedor (`reports.purchases`). También iba a responder "con quién gasto más", pero el 2026-11-10 se dejó solo con compras (ver la decisión #8).
 
 **Fuera por ahora, como posibles specs futuras:** cuentas por pagar (#7), exportación (#30), módulo de promociones (#25) y ubicaciones físicas (#24).
 
@@ -355,6 +355,7 @@ Confirmado en la #39: primero lo que ya tiene datos y después los módulos nuev
    - "Con quién gasto más" suma compras y los gastos que tengan proveedor, así que los gastos llevan **proveedor opcional**.
    - **Mientras no exista Compras** (spec 12, decisión 2): un pago de mercancía a un proveedor se registra en Gastos con la categoría "Pago a proveedor (mercancía)", que no cuenta en la utilidad neta.
    - **Ajustada en la spec 14 (decisión 3):** con Compras, esa categoría se desactiva. Los gastos que ya la tienen la conservan y no se suman en "con quién gasto más", porque esos pagos son compras de mercancía.
+   - **Ajustada en la spec 16 (requisito 24, 2026-11-10):** el reporte de compras cuenta solo compras. Sumar los gastos con proveedor dejaba fuera los que no tienen, y no cuadraba con el módulo de Gastos. Por ahora "con quién gasto más" no tiene reporte; los gastos por proveedor se ven en el reporte de Gastos.
 8b. ~~¿Cómo afecta al corte de caja un gasto o compra pagado con efectivo de caja?~~ → **Respondida: opción "pagado desde caja".**
    - Al registrar un gasto o una compra se elige el método de pago.
    - Si se paga con efectivo de la caja abierta, se genera automáticamente la salida de caja ligada a ese gasto o compra. Así el corte cuadra sin capturar dos veces.

@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 06 (un solo commit) | 2026-10-23 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 06 (un solo commit) | 2026-10-23 |
 
 ## Resumen
 
@@ -60,7 +60,20 @@ Spec completa: [`specs/06-costo-en-tabla-productos.md`](../specs/06-costo-en-tab
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 17 (`specs/17-product-cost-and-margin.md`), junto con [`feat-filtro-de-costo-en-productos.md`](feat-filtro-de-costo-en-productos.md), el 2026-11-12.
+
+- [x] En Productos, la tabla muestra Costo y Margen, también a un usuario con solo `products.read`. Lo probó el usuario en `marksexpress` (2026-11-12). Con los permisos del rol Cajero, `GET /api/products` responde 200.
+- [x] Un producto con costo 0 muestra "$0.00" en naranja, con la ayuda "Sin costo", y margen "—". Lo probó el usuario.
+- [x] La tabla, las tarjetas, el detalle y el formulario calculan el margen con `utils/productMargin.js`, así que coinciden. El detalle muestra "—" sin costo o con precio 0, en lugar de 100.0%, "NaN%" o "-Infinity%". Lo probó el usuario.
+- [x] Un margen negativo sale en rojo. "bolsa de regalo desc suelt" (costo $76, precio $2) da −3700.0%.
+- [x] El filtro "Sin costo" (`cost_issue=no_cost`) da lo mismo que una consulta directa a la base: 850 productos activos, 289 inactivos y 172 en la categoría Accesorios.
+- [x] En el celular, las tarjetas muestran el costo y el margen. Lo probó el usuario por `nip.io`.
+- [x] Tests en `productMargin.test.js` (6), `ProductDetailModal.test.jsx` (3), `ProductModal.test.jsx` (5), `Products.test.jsx` (11) y `productList.test.js` (10). Los tests del backend y del frontend pasan, en Docker: backend 903/903 (49 suites) y frontend 367/367 (42 archivos).
+
+**Diferencias con smallposv2:**
+- **Filtro:** saas no tiene `no_cost=true`. Las dos fichas se portaron juntas, así que la pantalla usa `cost_issue` desde el principio, con las cuatro opciones de la ficha del filtro de costo, y `no_cost` se ignora como cualquier parámetro desconocido.
+- **Acciones:** la columna de acciones depende de `canAct` (editar o `products.status`), como ya estaba en saas. Las columnas nuevas no dependen de eso.
+- **Tests:** el del backend simula la base (`productList.test.js`) en lugar de ser de integración, y los del frontend usan el `can()` de saas.
 
 ## Notas para portar a smallpos-saas
 

@@ -28,6 +28,6 @@ Stack:
   - Si la respuesta es sí, créalo como `feat-<tema>.md` o `fix-<tema>.md`, siguiendo la estructura de `shared-features/sf-index.md`, y agrégalo a la tabla del índice.
 
 ## Al terminar cualquier tarea
-- Ejecuta los tests de los dos lados y confirma en tu respuesta que todo pasa (detalles en `docs/tests.md`):
+- Ejecuta los tests de los dos lados y confirma en tu respuesta que todo pasa, salvo que los cambios hayan sido únicamente de documentación (detalles en `docs/tests.md`):
   - **Backend:** `docker compose --profile test up -d --wait mysql_test` y después `npm test` en `backend/`.
   - **Frontend:** `npm test` en `frontend/`.

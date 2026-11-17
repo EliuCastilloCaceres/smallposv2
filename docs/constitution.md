@@ -36,6 +36,6 @@ El agente **pregunta y espera respuesta** antes de continuar. No asume, no elige
 - Mensajes visibles para el usuario final y documentación (`docs/`, `specs/`): **español**.
 
 ## 7. Tests
-- Cada tarea termina con sus tests escritos y **en verde**.
+- Cada tarea termina con sus tests escritos y **en verde**. Los tests se corren salvo que los cambios hayan sido únicamente de documentación.
 - Está prohibido avanzar a la siguiente tarea o spec con tests en rojo.
 - No se desactivan ni se borran tests para ponerlos en verde.

@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 08 (un solo commit) | 2026-10-26 |
+| **En progreso** | feat | smallposv2 | smallpos-saas | Commit de la spec 08 (un solo commit) | 2026-10-26 |
 
 ## Resumen
 
@@ -71,7 +71,29 @@ El usuario encontró las dos pestañas confusas: "hay menús de abajo que cambia
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+En progreso en smallpos-saas:
+- la Spec 18 (`specs/18-profit-report.md`) portó, el 2026-11-17, la parte de Ventas y utilidad y las piezas comunes, junto con [`feat-reporte-ventas-y-utilidad.md`](feat-reporte-ventas-y-utilidad.md);
+- Tendencia de ventas llega con la Spec 19, y la ficha pasa a "Implementada" al cerrarse esa spec.
+
+- [x] **Ventas y utilidad con el diseño nuevo:**
+  - la tarjeta de filtros arriba, con las fechas del periodo;
+  - el resumen como cuenta, con el aviso de ventas sin costo y "Excluirlas" o "Incluirlas";
+  - el desglose con "Ver por", el número de filas y el orden desde los encabezados (en móvil, el selector "Ordenar");
+  - el costo en naranja en lugar de la pastilla y el SKU sin repetir.
+
+  Lo revisó el usuario en escritorio y en el celular (2026-11-14). `ProfitTab.test.jsx`, 40 tests.
+- [x] **Piezas comunes** en `Reports/components/` (`FilterCard`, `Sorting`, `ButtonGroup` y `SummaryNote`) y `fmtRangeLabel` en `utils/dateRanges.js`. Tests: `FilterCard.test.jsx` (3), `Sorting.test.jsx` (6) y `dateRanges.test.js` (12).
+- [x] La tabla se dibuja con la agrupación de las filas que ya llegaron.
+- [ ] Tendencia de ventas con el diseño nuevo. Entra con la Spec 19 de saas.
+- [x] Los tests del backend y del frontend pasan, en Docker: backend 956/956 (51 suites) y frontend 435/435 (47 archivos).
+
+**Diferencias con smallposv2 (hasta ahora):**
+- **Piezas comunes:** en smallposv2 salieron de Valuación de inventario; en saas se crearon nuevas, porque saas todavía no tiene Valuación. Valuación las usará al portarse, con la Spec 20 de saas ([`feat-valuacion-de-inventario.md`](feat-valuacion-de-inventario.md)).
+  - `SummaryNote` va sin el botón de cerrar, que llega con el Reporte de compras (Spec 26 de saas).
+  - Los estilos de la gráfica (`rpt-chart-card`) llegan con la Spec 19.
+- **Sucursal:** la tarjeta de filtros lleva el `ScopeSelector` en lugar del selector de sucursal. "Ver por sucursal" aparece cuando el alcance cubre más de una sucursal.
+- **Al recargar:** las filas anteriores se quedan atenuadas hasta que llega la respuesta, en lugar del esqueleto, que solo sale en la primera carga.
+- **Tests:** los de Ventas y utilidad usan el `can()` de saas y `useScope`. Los de las piezas comunes se portaron tal cual, más la dirección descendente y que el botón "Filtros" y el selector "Ordenar" solo se muestran en móvil.
 
 ## Notas para portar a smallpos-saas
 

@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 04 (un solo commit) | 2026-10-20 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 04 (un solo commit) | 2026-10-20 |
 
 ## Resumen
 
@@ -89,7 +89,45 @@ Spec completa: [`specs/04-reporte-ventas-y-utilidad.md`](../specs/04-reporte-ven
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 18 (`specs/18-profit-report.md`) el 2026-11-17, ya con el diseño de [`feat-rediseno-ventas-y-tendencia.md`](feat-rediseno-ventas-y-tendencia.md).
+
+- [x] **Permiso:** `reports.profit` está en el catálogo y en la plantilla de Supervisor. La migración `003-add-reports-profit-permission.sql` se aplicó a los dos tenants locales, después de un backup, y la segunda corrida dijo "Al día". En `marksexpress` lo tienen Administrador y Supervisor, y no lo tienen Cajero, Almacenista ni los roles personalizados "Supervisor_Ventas" y "Cajero N3".
+- [x] **Acceso:** un Supervisor ve las pestañas Sesiones de caja y Ventas y utilidad, un Cajero solo Sesiones de caja y un Almacenista no ve Reportes. Lo probó el usuario (2026-11-14). Sin `reports.profit`, `GET /api/reports/profit` responde 403.
+- [x] **Cifras de `marksexpress`:** del 1 al 31 de octubre de 2026, con todas las sucursales, son las mismas que da una consulta directa:
+  - $52,028.00 de ventas netas − $29,054.74 de costo = $22,973.26 de utilidad y 44.2% de margen. Las ventas netas son iguales a las del Dashboard;
+  - 638 líneas sin costo suman $14,597.00. Si se excluyen: $37,431.00 − $29,054.74 = $8,376.26 y 22.4%;
+  - las cuatro agrupaciones suman lo mismo que el resumen, y el resumen no cambia entre páginas.
+- [x] **Cálculo a mano:** coinciden al centavo con el reporte:
+  - la venta 87182 de `marksexpress`, con descuento de orden (se cobró 141/143 de cada línea);
+  - la venta 90362 de `marksexpress`, con devolución parcial;
+  - la venta 7 de `rbac09demo`, que registró el usuario en la app. Tiene dos devoluciones parciales y una de ellas cobra $5 de tarifa de restock: da $45 de venta neta, $20 de costo, $25 de utilidad y 55.56% de margen, y el Dashboard da los mismos $45.
+- [x] **Sucursales:** en octubre, Sucursal Central ($51,363.00) y Sucursal Norte ($665.00) suman el consolidado. Un usuario que pide en `X-Branch-Id` una sucursal que no es suya recibe 403.
+- [x] **Productos vendidos:** con `soldLines.js` da las mismas filas, en el mismo orden, y los mismos totales que antes en `marksexpress`. Se probaron cinco casos, de octubre de 2026 y de toda la historia.
+- [x] **Presets:** el Dashboard da los mismos rangos que antes. Se compararon la función anterior y la de `utils/dateRanges.js` en cada día de 2026, a tres horas distintas y en tres zonas horarias.
+- [x] **Pantalla:** la pestaña se ve y se usa bien en escritorio (1366 px) y en el celular, y Sesiones de caja se ve igual que antes. Lo revisó el usuario (2026-11-14).
+- [x] **Tests:** `profitReport.test.js` (42), `soldLines.test.js` (6), `Reports.test.jsx` (5), `ProfitTab.test.jsx` (40) y `dateRanges.test.js` (12), más los casos de permisos, menú y migración. Los tests del backend y del frontend pasan, en Docker: backend 956/956 (51 suites) y frontend 435/435 (47 archivos).
+
+**Diferencias con smallposv2:**
+- **Permisos:**
+  - el código va en `rbac/catalog.js`, con la descripción "Ver el reporte de ventas y utilidad", y `permissionCodes.js` se regenera;
+  - la migración lo asigna por nombre de rol a Administrador, Administrador de sucursal y Supervisor, sin el Propietario;
+  - no se borra `reports.advanced`, porque saas ya no lo tenía (Spec 09), y no se porta la etiqueta de `PermissionsModal.jsx`.
+- **Acceso:** no hay `<Navigate>` en `Reports.jsx`. La ruta la protegen `modules.js` y `RequirePermission`, y el `anyOf` de Reportes sale de `REPORT_TABS` (`visibleReportTabs({ canAny })`).
+- **Sucursal:**
+  - va en `X-Branch-Id` con `useScope` y `ScopeSelector`, y el backend filtra con `branchIds`;
+  - "Ver por sucursal" aparece cuando el alcance cubre más de una sucursal, no por ser administrador central. Si el alcance deja de cubrirlas, la agrupación vuelve a Producto sin pedir el reporte por sucursal.
+- **Sesiones de caja:** su alcance por sucursal ya estaba resuelto en saas (Spec 12), así que no se tocó.
+- **Utilidad neta:** no se portó `includeNet`. Llega con la Spec 23 de saas.
+- **Diseño:**
+  - se portó directamente el de la ficha del rediseño, así que no hay pastilla "Sin costo": el costo sale en naranja, con su ayuda;
+  - el margen usa `fmtMargin` de `utils/productMargin.js`, igual que Productos.
+- **Al recargar:** las filas anteriores se quedan atenuadas, con su agrupación, hasta que llega la respuesta. El esqueleto solo sale en la primera carga.
+- **Error:** si la API falla, se vacían las filas y el resumen y solo se ve el mensaje.
+- **Costos estimados:** no se portó la estimación del costo de la spec 11 de smallposv2. Las ventas sin costo se quedan en 0 y solo se marcan o se excluyen.
+- **"Top productos" del Dashboard:** conserva su propia copia de la fórmula, igual que en smallposv2. Quedó anotado en la deuda técnica del plan de saas.
+- **Tests:**
+  - los del backend simulan la base en lugar de ser de integración, y los cálculos se comprobaron contra `marksexpress` y `rbac09demo`;
+  - el Dashboard de saas no tiene tests, así que sus rangos se comprobaron comparando la función de antes y la de después.
 
 ## Notas para portar a smallpos-saas
 

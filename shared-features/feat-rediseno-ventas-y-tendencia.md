@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **En progreso** | feat | smallposv2 | smallpos-saas | Commit de la spec 08 (un solo commit) | 2026-10-26 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 08 (un solo commit) | 2026-10-26 |
 
 ## Resumen
 
@@ -71,9 +71,9 @@ El usuario encontró las dos pestañas confusas: "hay menús de abajo que cambia
 
 ## Criterios de aceptación
 
-En progreso en smallpos-saas:
-- la Spec 18 (`specs/18-profit-report.md`) portó, el 2026-11-17, la parte de Ventas y utilidad y las piezas comunes, junto con [`feat-reporte-ventas-y-utilidad.md`](feat-reporte-ventas-y-utilidad.md);
-- Tendencia de ventas llega con la Spec 19, y la ficha pasa a "Implementada" al cerrarse esa spec.
+Implementada en smallpos-saas en dos partes, el 2026-11-17:
+- la Spec 18 (`specs/18-profit-report.md`) portó la parte de Ventas y utilidad y las piezas comunes, junto con [`feat-reporte-ventas-y-utilidad.md`](feat-reporte-ventas-y-utilidad.md);
+- la Spec 19 (`specs/19-sales-trend-report.md`) portó Tendencia de ventas, junto con [`feat-tendencia-de-ventas.md`](feat-tendencia-de-ventas.md).
 
 - [x] **Ventas y utilidad con el diseño nuevo:**
   - la tarjeta de filtros arriba, con las fechas del periodo;
@@ -84,16 +84,22 @@ En progreso en smallpos-saas:
   Lo revisó el usuario en escritorio y en el celular (2026-11-14). `ProfitTab.test.jsx`, 40 tests.
 - [x] **Piezas comunes** en `Reports/components/` (`FilterCard`, `Sorting`, `ButtonGroup` y `SummaryNote`) y `fmtRangeLabel` en `utils/dateRanges.js`. Tests: `FilterCard.test.jsx` (3), `Sorting.test.jsx` (6) y `dateRanges.test.js` (12).
 - [x] La tabla se dibuja con la agrupación de las filas que ya llegaron.
-- [ ] Tendencia de ventas con el diseño nuevo. Entra con la Spec 19 de saas.
-- [x] Los tests del backend y del frontend pasan, en Docker: backend 956/956 (51 suites) y frontend 435/435 (47 archivos).
+- [x] **Tendencia de ventas con el diseño nuevo:**
+  - la tarjeta de filtros arriba, con los presets, las fechas del periodo y el alcance;
+  - la tarjeta de la gráfica con la métrica, "Por" y "Comparar" como botones, la granularidad que no cabe deshabilitada con su explicación, el título con la métrica, la granularidad y el periodo, y los KPIs, el aviso y la gráfica dentro.
 
-**Diferencias con smallposv2 (hasta ahora):**
+  Lo revisó el usuario en escritorio y en el celular (2026-11-17). `TrendTab.test.jsx`, 20 tests.
+- [x] Los tests del backend y del frontend pasan, en Docker. Al cerrar la Spec 18: backend 956/956 (51 suites) y frontend 435/435 (47 archivos). Al cerrar la Spec 19: backend 1016/1016 (54 suites) y frontend 476/476 (50 archivos).
+
+**Diferencias con smallposv2:**
 - **Piezas comunes:** en smallposv2 salieron de Valuación de inventario; en saas se crearon nuevas, porque saas todavía no tiene Valuación. Valuación las usará al portarse, con la Spec 20 de saas ([`feat-valuacion-de-inventario.md`](feat-valuacion-de-inventario.md)).
   - `SummaryNote` va sin el botón de cerrar, que llega con el Reporte de compras (Spec 26 de saas).
-  - Los estilos de la gráfica (`rpt-chart-card`) llegan con la Spec 19.
-- **Sucursal:** la tarjeta de filtros lleva el `ScopeSelector` en lugar del selector de sucursal. "Ver por sucursal" aparece cuando el alcance cubre más de una sucursal.
-- **Al recargar:** las filas anteriores se quedan atenuadas hasta que llega la respuesta, en lugar del esqueleto, que solo sale en la primera carga.
-- **Tests:** los de Ventas y utilidad usan el `can()` de saas y `useScope`. Los de las piezas comunes se portaron tal cual, más la dirección descendente y que el botón "Filtros" y el selector "Ordenar" solo se muestran en móvil.
+  - Los estilos de la gráfica (`rpt-chart-card`) llegaron con la Spec 19.
+- **Sucursal:** la tarjeta de filtros lleva el `ScopeSelector` en lugar del selector de sucursal. "Ver por sucursal" y "Comparar por sucursal" aparecen cuando el alcance cubre más de una sucursal.
+- **Al recargar:** en Ventas y utilidad, las filas anteriores se quedan atenuadas hasta que llega la respuesta, en lugar del esqueleto, que solo sale en la primera carga. En Tendencia, lo mismo con el título, los KPIs y la gráfica (`rpt-chart-card--loading`).
+- **Aviso de ventas sin costo de Tendencia:** usa `SummaryNote`, en lugar de `rpt-notice`.
+- **Tests:** los de las dos pestañas usan el `can()` de saas y `useScope`. Los de las piezas comunes se portaron tal cual, más la dirección descendente y que el botón "Filtros" y el selector "Ordenar" solo se muestran en móvil.
+- **Filas que se deslizan de lado:** en la revisión, el usuario pidió un indicador para las filas que no caben en el celular (las pestañas de Reportes, por ejemplo). En saas va en su propia Spec 29, para toda la app.
 
 ## Notas para portar a smallpos-saas
 

@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 05 (un solo commit) | 2026-10-21 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 05 (un solo commit) | 2026-10-21 |
 
 ## Resumen
 
@@ -93,7 +93,34 @@ También se ampliaron `frontend/src/utils/dateRanges.test.js` (presets de tenden
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 19 (`specs/19-sales-trend-report.md`) el 2026-11-17, ya con el diseño de [`feat-rediseno-ventas-y-tendencia.md`](feat-rediseno-ventas-y-tendencia.md). Las cifras son de `marksexpress` al 17 de noviembre de 2026, con todas las sucursales.
+
+- [x] **Permiso:** `reports.trend` está en el catálogo y en la plantilla de Supervisor. La migración `004-add-reports-trend-permission.sql` se aplicó a los dos tenants locales, después de un backup, y la segunda corrida dijo "Al día". En `marksexpress` lo tienen Administrador y Supervisor; Cajero, Almacenista, "Supervisor_Ventas" y "Cajero N3" no.
+- [x] **Acceso:** un Supervisor ve Sesiones de caja, Ventas y utilidad y Tendencia de ventas; un Cajero, solo Sesiones de caja; y un Almacenista no ve Reportes. Lo probó el usuario. Sin `reports.trend`, `GET /api/reports/trend` responde 403.
+- [x] **Mismas cifras que el Dashboard y Ventas y utilidad:** en los últimos 12 meses, $1,166,217.18, 33,837 ventas y $34.47 de ticket, igual que el Dashboard, y $354,795.61 de utilidad, igual que Ventas y utilidad. Los 12 meses suman los totales, y el mejor es junio de 2026 ($132,002.50).
+- [x] **Días de México:** en octubre de 2026, las ventas de cada día coinciden con la fecha de México calculada aparte, incluidas 7 ventas después de las 18:00, que en UTC ya son del día siguiente. Los días sin ventas valen 0 y su ticket queda sin valor.
+- [x] **Semanas, parciales, en curso y futuros:** en los últimos 3 meses, 14 semanas de lunes a domingo; la primera (1 al 6 de septiembre) y la última (30 de noviembre) parciales; la de hoy en curso y las siguientes sin valor.
+- [x] **Año anterior:** por mes, cada mes contra el mismo mes, con los KPIs a la fecha iguales a una consulta directa ($1,100,115.50 y 35,796 ventas); junio de 2026 trae junio de 2025 ($104,568.00). Por día, 364 días antes, siempre el mismo día de la semana.
+- [x] **Por sucursal:** Sucursal Central y Sucursal Norte suman el consolidado en cada mes. Con una sola sucursal en el alcance, la API responde 400.
+- [x] **Límites:** 92/93 días por día, 731/732 por semana y 1,827/1,828 en total: el primero responde 200 y el segundo 400. En pantalla, la granularidad que no cabe sale deshabilitada con su explicación.
+- [x] **Ventas sin costo:** con Utilidad bruta, el aviso dice cuántas líneas hay (13,127 por $290,742.50 en los últimos 12 meses, igual que Ventas y utilidad).
+- [x] **Dashboard:** da lo mismo que antes de usar `orderNet.js` (salida completa idéntica en 10 casos) y conserva la misma paleta.
+- [x] **Pantalla:** la pestaña se ve y se usa bien en escritorio y en el celular. Lo revisó el usuario (2026-11-17).
+- [x] **Tests:** `periods.test.js` (15), `orderNet.test.js` (5), `trendReport.test.js` (35), `trendData.test.js` (7), `TrendTab.test.jsx` (20), `chartColors.test.js` (2) y `dateRanges.test.js`, más los casos de permisos, menú y migración. Los tests del backend y del frontend pasan, en Docker: backend 1016/1016 (54 suites) y frontend 476/476 (50 archivos).
+
+**Diferencias con smallposv2:**
+- **Permisos:**
+  - el código va en `rbac/catalog.js`, con la descripción "Ver el reporte de tendencia de ventas";
+  - una migración por tenant (`004`) lo asigna por nombre de rol a Administrador, Administrador de sucursal y Supervisor, en lugar de un paso en `migrate-rbac.js`;
+  - no se porta la etiqueta "Tendencia" de `PermissionsModal.jsx`.
+- **Acceso:** la pestaña va en `REPORT_TABS`, y el menú la toma de ahí; no hubo que tocar `modules.js`.
+- **Sucursal:**
+  - va en `X-Branch-Id` con `useScope` y `ScopeSelector`, y el backend filtra con `branchIds`, también en las series por sucursal;
+  - "Por sucursal" aparece cuando el alcance cubre más de una sucursal, no por ser administrador central. El backend responde 400 con un alcance de una sola sucursal, y si el alcance deja de cubrirlas, la comparación vuelve a "Ninguna" sin pedir la del alcance nuevo.
+- **Fórmula del Dashboard:** `getKpis` usa `orderNet.js` en sus totales y `SOLD_STATUSES_SQL` también en la hora pico. "Ventas por hora" conserva su copia, igual que en smallposv2; en saas se unifica con otras cuatro copias en una spec propia.
+- **Diseño:** se portó directamente con el rediseño. El aviso de ventas sin costo usa `SummaryNote`, en lugar de `rpt-notice`.
+- **Recarga y error:** el título, los KPIs y la gráfica anteriores se quedan atenuados hasta que llega la respuesta, y si la API falla solo se ve el mensaje.
+- **Tests:** los del backend simulan la base en lugar de ser de integración, y los cálculos se comprobaron contra `marksexpress`; `periods.test.js` y `trendData.test.js` se portaron tal cual. El Dashboard de saas no tiene tests: `getKpis` se comparó antes y después, y la paleta con un test de `chartColors.js`.
 
 ## Notas para portar a smallpos-saas
 

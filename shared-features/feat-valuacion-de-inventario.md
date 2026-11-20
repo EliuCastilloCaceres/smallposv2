@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 07 (un solo commit) | 2026-10-23 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 07 (un solo commit) | 2026-10-23 |
 
 ## Resumen
 
@@ -66,7 +66,43 @@ Spec completa: [`specs/07-valuacion-de-inventario.md`](../specs/07-valuacion-de-
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 20 (`specs/20-inventory-valuation-report.md`) el 2026-11-19, con el diseño final de smallposv2: las piezas comunes del rediseño, el nombre "Costo mayor al precio" y `ProductEdit.jsx`. Las cifras son de `marksexpress` al 17 de noviembre de 2026, antes de la edición de prueba; el apartado se probó en `rbac09demo`.
+
+- [x] **Permiso:**
+  - `reports.inventory` está en el catálogo y en las plantillas de Supervisor y Almacenista;
+  - la migración `005-add-reports-inventory-permission.sql` se aplicó a los dos tenants locales, después de un backup, y la segunda corrida dijo "Al día";
+  - en `marksexpress` lo tienen Administrador, Supervisor y Almacenista; Cajero, "Supervisor_Ventas" y "Cajero N3" no;
+  - sin el permiso, `GET /api/reports/inventory` responde 403.
+- [x] **Mismas cifras que SQL y que Inventario:**
+  - sin filtros, 2,192 artículos, 17,422 pza · 628 par · 4 paq · 1 kg, $243,856.57 al costo y $643,444.46 a venta (62.1% de margen), igual que un cálculo SQL;
+  - las 17,964 unidades de Sucursal Central coinciden con su stock en Inventario.
+- [x] **Variantes:** buscando "10109", el resumen cuenta 8 artículos y la tabla tiene una sola fila con sus 10 unidades.
+- [x] **Sin costo:** al excluirlos, el resumen pasa a 1,246 artículos y 10.28% de margen (antes 62.1%), y la alerta sigue en 946 ($371,651.00 a precio de venta).
+- [x] **Alertas:** 946 sin costo, 8 con el costo mayor al precio ($33,631.50 al costo) y 149 inactivos con stock ($9,244.54). La vista de cada una trae solo sus artículos y el resumen no cambia.
+- [x] **Filtros:** Abarrotes da 644 artículos y $40,090.12; excluyendo Recargas quedan 2,178 artículos y $154,501.57 al costo, y la alerta "Sin costo" baja a 938.
+- [x] **Por sucursal:** Sucursal Central (2,190 artículos) y Sucursal Norte (8, $1,823.04). El consolidado cuenta una vez los 6 artículos que están en las dos. Con una sola sucursal en el alcance, la API responde 400, y una sucursal ajena, 403.
+- [x] **Apartado:** `marksexpress` no tiene apartados activos, así que se probó en `rbac09demo` con un apartado de 3 pza a $9.00 (costo de hoy $5.00, precio de hoy $10.00):
+  - activo, el apartado dice 3 pza, $15.00 al costo y $30.00 a venta, con el precio de hoy y no los $27.00 del apartado;
+  - el total en tienda es disponible + apartado: 5 + 3 = 8 pza;
+  - al cancelarlo, el apartado vuelve a 0 y el disponible a 8 pza.
+- [x] **Editar productos:** el usuario corrigió desde el desglose el costo de dos productos de "Costo mayor al precio", el mentos de $50.00 a $0.50 y la bolsa de regalo de $76.00 a $1.00. El valor al costo bajó de $243,856.57 a $212,406.07 y la alerta, de 8 a 6. `InventoryTab.test.jsx` cubre el botón, el formulario y la valuación que se vuelve a pedir al guardar.
+- [x] **Pantalla y acceso por rol:** el usuario lo revisó en la app el 2026-11-19. Un Supervisor y un Almacenista ven la pestaña y un Cajero no, y se ve bien en escritorio y en el celular.
+- [x] **Tests:** `inventoryReport.test.js` (56) y `InventoryTab.test.jsx` (42), más los casos de permisos, menú y migración. Los tests del backend y del frontend pasan, en Docker: backend 1077/1077 (55 suites) y frontend 544/544 (53 archivos).
+
+**Diferencias con smallposv2:**
+- **Permisos:**
+  - el código va en `rbac/catalog.js`, con la descripción "Ver el reporte de valuación de inventario";
+  - una migración por tenant (`005`) lo asigna por nombre de rol a Administrador, Administrador de sucursal, Supervisor y Almacenista, en lugar de un paso en `migrate-rbac.js`;
+  - no se porta la etiqueta "Inventario" de `PermissionsModal.jsx`.
+- **Acceso:** la pestaña va en `REPORT_TABS`, y el menú la toma de ahí; no hubo que tocar `modules.js`.
+- **Sucursal:**
+  - va en `X-Branch-Id` con `useScope` y `ScopeSelector`, y el backend filtra con `branchIds`: `i.branch_id` en el stock y `l.branch_id` en los apartados;
+  - "Ver por sucursal" aparece cuando el alcance cubre más de una sucursal, no por ser administrador central. El backend responde 400 con un alcance de una sola sucursal, y si el alcance deja de cubrirlas, la agrupación vuelve a Producto sin pedir la del alcance nuevo.
+- **Apartado:** saas ya guarda el costo del apartado (`layaway_details.purchase_price`), pero lo apartado se valora con el costo y el precio actuales, como aquí.
+- **Validaciones:** los ids se validan como en Ventas y utilidad de saas, así que un `category_id` vacío o con ceros a la izquierda responde 400.
+- **Diseño:** se portó con las piezas comunes que saas ya tenía de Ventas y utilidad, y `ProductEdit.jsx` llegó con esta ficha, no con Rotación. La regla de la cifra principal va dentro de `.rpt-summary__main`, para no cambiar el resumen de Ventas y utilidad. El margen usa `fmtMargin` de saas.
+- **Recarga y error:** como Ventas y utilidad de saas. El esqueleto solo sale en la primera carga y después el desglose anterior se queda atenuado; si la API falla, se vacían el resumen, las alertas y la tabla.
+- **Tests:** los del backend simulan la base en lugar de ser de integración, y los cálculos se comprobaron contra `marksexpress`. Los del frontend se adaptaron al `can()` de saas y a `useScope`.
 
 ## Notas para portar a smallpos-saas
 

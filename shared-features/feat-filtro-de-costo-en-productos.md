@@ -51,7 +51,7 @@ Spec completa: [`specs/09-filtro-de-costo-en-productos.md`](../specs/09-filtro-d
 
 ## Criterios de aceptación
 
-Implementada en smallpos-saas con la Spec 17 (`specs/17-product-cost-and-margin.md`), junto con [`feat-costo-en-tabla-productos.md`](feat-costo-en-tabla-productos.md), el 2026-11-12. El nombre de la alerta de Valuación queda pendiente: saas todavía no tiene Valuación de inventario, y su plan lo deja para la Spec 20.
+Implementada en smallpos-saas con la Spec 17 (`specs/17-product-cost-and-margin.md`), junto con [`feat-costo-en-tabla-productos.md`](feat-costo-en-tabla-productos.md), el 2026-11-12. El nombre de la alerta de Valuación llegó con la Spec 20 (`specs/20-inventory-valuation-report.md`), al portar Valuación de inventario (2026-11-17).
 
 - [x] En `marksexpress`, por la API, las tres opciones de `cost_issue` dan lo mismo que una consulta directa a la base:
   - activos: 850 sin costo, 10 con el costo mayor al precio y 860 con alguno de los dos;
@@ -60,12 +60,12 @@ Implementada en smallpos-saas con la Spec 17 (`specs/17-product-cost-and-margin.
 - [x] Un costo mayor al precio sale en rojo, con la ayuda "Costo mayor al precio de venta", en la tabla y en las tarjetas. Incluye un precio 0: "vive100 ultra" muestra $12.00 en rojo y margen "—". El costo 0 sigue en naranja. Lo probó el usuario (2026-11-12).
 - [x] En escritorio (1366 px) los cinco filtros se ven completos, y en el celular las tarjetas muestran el costo en rojo. Lo probó el usuario.
 - [x] Un valor desconocido o vacío responde 400 *"cost_issue debe ser no_cost, above_price o any"*.
-- [ ] En Valuación de inventario, la alerta dice "Costo mayor al precio". Entra con la Spec 20 de saas.
+- [x] En Valuación de inventario, la alerta dice "Costo mayor al precio" y cuenta lo mismo que en smallposv2 (`alert=below_cost`, `sale_price < purchase_price`). En `marksexpress` da 8 artículos y $33,631.50 al costo. `InventoryTab.test.jsx` usa el nombre en el acceso y en el aviso "Mostrando solo" (Spec 20, 2026-11-17).
 - [x] Los tests del backend y del frontend pasan, en Docker: backend 903/903 (49 suites) y frontend 367/367 (42 archivos).
 
 **Diferencias con smallposv2:**
 - **`no_cost=true`:** no existe en saas; se ignora como cualquier parámetro desconocido. `cost_issue=no_cost` hace lo mismo.
-- **Valuación de inventario:** el nombre de la alerta todavía no aplica (Spec 20 de saas).
+- **Valuación de inventario:** el nombre de la alerta llegó después, con la Spec 20 de saas.
 - **Tests:** el del backend simula la base (`productList.test.js`) en lugar de ser de integración, y los del frontend usan el `can()` de saas.
 
 ## Notas para portar a smallpos-saas

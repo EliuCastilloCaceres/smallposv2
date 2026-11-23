@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 10 (un solo commit) | 2026-10-27 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 10 (un solo commit) | 2026-10-27 |
 
 ## Resumen
 
@@ -74,7 +74,50 @@ Spec completa: [`specs/10-rotacion-de-inventario.md`](../specs/10-rotacion-de-in
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 21 (`specs/21-inventory-rotation-report.md`) el 2026-11-23. Las cifras son de `marksexpress` el 23 de noviembre de 2026, antes de las pruebas del usuario. Las ventas reales de esa copia terminan el 2026-10-15, así que con 30 días casi todo el stock sale sin movimiento.
+
+- [x] **Permiso:**
+  - `reports.rotation` está en el catálogo y en las plantillas de Supervisor y Almacenista;
+  - la migración `006-add-reports-rotation-permission.sql` se aplicó a los dos tenants locales, después de un backup, y la segunda corrida dijo "Al día";
+  - en `marksexpress` lo tienen Administrador, Supervisor y Almacenista; Cajero, "Supervisor_Ventas" y "Cajero N3" no;
+  - sin el permiso, `GET /api/reports/rotation` responde 403.
+- [x] **Índice de la última venta:** la migración `007-add-last-sale-indexes.sql` agrega `order_details (product_id, order_id)`, y el `EXPLAIN` de la última venta lo usa. Con las tablas de `marksexpress`, la búsqueda por producto baja de 338 a 202 ms.
+- [x] **Mismas cifras que SQL:** con 30, 60, 90 y 180 días, los productos sin movimiento, los nunca vendidos, el valor al costo, el valor a venta y la parte del inventario coinciden con un cálculo SQL. Con 30 días: 1,975 productos (318 nunca vendidos), 17,279 pza · 618 par · 4 paq · 1 kg, $210,077.53 al costo, $636,456.46 a venta y 98.9% del inventario. Con 90 días: 1,105 productos, $91,335.76 y 43%.
+- [x] **Última venta y nunca vendidos:**
+  - "12875", producto variable con ventas sin variante, tiene su última venta el 2026-08-25;
+  - "Acetona" cuenta desde su primer movimiento (2026-08-26) y "Recarga500" desde su alta (2024-07-15). Los dos dicen "Nunca vendido".
+- [x] **Rebaja:** "mentos menta 2.64g" a $0.90 (−10%), "LENTES100" a $70.00 (−30%) y "Nescafe clasico" hasta el costo ($43.30, −13.4%). "12875" pide capturar el costo y "Lapicero Austro" dice que el precio no supera el costo.
+- [x] **Promoción:** con 90 días, los productos de Abarrotes de Sucursal Central sugieren fritos chip. (54 órdenes), cheetos xt. fla. (52) y doritos nach. (49), igual que un cálculo SQL.
+- [x] **Traspaso:** con 30 días, "coca 1.75 desc" de Sucursal Central sugiere traspasar a Sucursal Norte (3 ventas). "Alma1", que solo tiene Sucursal Central, también lo recibe.
+- [x] **Filtros:** coinciden con SQL:
+  - Abarrotes da 642 productos con 30 días;
+  - excluyendo Recargas quedan 1,961 productos, $120,722.53 al costo y 98.11% del inventario sin Recargas;
+  - con "Productos sin costo" excluidos quedan 1,208 productos, y el aviso sigue en 767.
+- [x] **Sucursales:** la columna Sucursal aparece con "Todas mis sucursales" de más de una sucursal, y una sucursal ajena en `X-Branch-Id` responde 403.
+- [x] **Rendimiento:** con 30 días, la API responde en 277–329 ms, y la consulta con la última venta tarda 254–286 ms.
+- [x] **Editar productos:** el usuario editó desde la lista dos productos de `marksexpress` el 2026-11-23:
+  - el precio de "rifle,luz,sonido" pasó de $160.00 a $120.00, y la rotación sugiere rebajarlo hasta el costo ($100.00);
+  - el de "14018" pasó de $250.00 a $125.00, igual a su costo, y dice que el precio no supera el costo.
+
+  `RotationTab.test.jsx` cubre el botón, el formulario y la rotación que se vuelve a pedir al guardar.
+- [x] **Pantalla y acceso por rol:** el usuario lo revisó en la app el 2026-11-23. Un Supervisor y un Almacenista ven la pestaña y un Cajero no, y se ve bien en escritorio y en el celular.
+- [x] **Tests:** `rotationReport.test.js` (81) y `RotationTab.test.jsx` (44), más los casos de permisos, menú y migraciones. Pasan los del backend (1165/1165, 56 suites) y los del frontend (592/592, 54 archivos), en Docker.
+
+**Diferencias con smallposv2:**
+- **Permisos:**
+  - el código va en `rbac/catalog.js`, con la descripción "Ver el reporte de rotación de inventario";
+  - una migración por tenant (`006`) lo asigna por nombre de rol a Administrador, Administrador de sucursal, Supervisor y Almacenista;
+  - no se porta la etiqueta "Rotación" de `PermissionsModal.jsx`.
+- **Acceso:** la pestaña va en `REPORT_TABS`, y el menú la toma de ahí; no hubo que tocar `modules.js`.
+- **Sucursal:**
+  - va en `X-Branch-Id` con `useScope` y `ScopeSelector`. El backend filtra el stock con `branchIds`, y la última venta se busca en la sucursal de cada fila, que ya está en el alcance;
+  - la columna Sucursal aparece cuando el alcance cubre más de una sucursal, no por ser administrador central;
+  - el traspaso, como aquí, se busca en cualquier sucursal activa, aunque esté fuera del alcance del usuario.
+- **Última venta con un índice:** se busca producto por producto, solo para las filas del disponible, con el índice nuevo `order_details (product_id, order_id)` (migración `007`), en lugar de agregar todo el historial de ventas. Un índice de `orders` que también se probó no se usaba y se quitó.
+- **Recarga y error:** como Valuación de saas. El esqueleto solo sale en la primera carga, y después la lista anterior se queda atenuada; si la API falla, se vacían el resumen y la lista.
+- **Filtros en escritorio:** cuando la tarjeta se angosta, la fila de selectores baja de línea en lugar de salirse, y la búsqueda dentro de la fila ocupa el espacio que sobra. Es la regla compartida de la tarjeta, así que también corrige Valuación.
+- **Validaciones:** los ids se validan como en Valuación de saas, y no hay `branch_id`.
+- **Tests:** los del backend simulan la base con la fecha de hoy fija, y los cálculos se comprobaron contra `marksexpress`. Los del frontend se adaptaron al `can()` de saas y a `useScope`.
 
 ## Notas para portar a smallpos-saas
 

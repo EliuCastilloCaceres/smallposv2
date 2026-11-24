@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 13 (un solo commit) | 2026-10-27 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 13 (un solo commit) | 2026-10-27 |
 
 ## Resumen
 
@@ -72,7 +72,54 @@ Spec completa: [`specs/13-reporte-de-gastos-y-utilidad-neta.md`](../specs/13-rep
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 23 (`specs/23-expenses-report-and-net-profit.md`) el 2026-11-24. Las cifras se comprobaron en `marksexpress` con el servicio del reporte y contra SQL directo, y el usuario revisó la app. Los gastos de prueba son los que el usuario registró en la app.
+
+- [x] **Permiso:**
+  - la migración `012` se aplicó a los dos tenants locales, y la segunda corrida dijo "Al día";
+  - `reports.expenses` lo tienen Administrador y Supervisor, sin asignaciones duplicadas. Cajero, Almacenista y los roles personalizados no lo tienen.
+- [x] **Pestaña Gastos:**
+  - septiembre de 2026 en Sucursal Central, la del histórico: $90,216.00 en 166 gastos, $543.47 de promedio, y $15,921.00 que cuentan en la utilidad neta y $74,295.00 que no;
+  - por categoría, Pago a proveedor (mercancía) es el 82.35% ("82.4%" en pantalla), con la marca "No cuenta en la utilidad neta". Por proveedor, todo en "Sin proveedor";
+  - con "Todas mis sucursales" se suma exactamente un gasto de prueba de $450.00 en Sucursal Norte.
+- [x] **Gasto cancelado:** un gasto de prueba de Renta de $3,500.00, pagado desde caja, se canceló con su reingreso y dejó de contar en los dos reportes.
+- [x] **Utilidad neta:**
+  - septiembre en Sucursal Central: $42,196.88 − $15,921.00 = $26,275.88, con 20.9% de margen neto;
+  - con "Todas", $42,196.88 − $16,371.00 = $25,825.88;
+  - los gastos son iguales a "Cuenta en la utilidad neta" de la pestaña Gastos, en el consolidado y por sucursal.
+- [x] **Por sucursal:** con el gasto de prueba, Norte aparece en septiembre sin ventas, con $450.00 de gastos y −$450.00 de utilidad neta. Las filas suman lo mismo que el resumen.
+- [x] **Filtro de categoría y permiso:**
+  - con un filtro de categoría no hay utilidad neta, y el aviso lo explica, con "Quitar el filtro";
+  - sin `reports.expenses`, Ventas y utilidad queda como antes y `GET /api/reports/expenses` responde 403. Lo prueban los tests, porque ningún rol local tiene `reports.profit` sin `reports.expenses`.
+- [x] **Sucursales:** con solo Sucursal Norte, las dos pestañas traen solo sus gastos. Una sucursal ajena en `X-Branch-Id` responde 403, y "Ver por sucursal" solo sale con un alcance de más de una sucursal.
+- [x] **Aviso del primer gasto:** sale en las dos pestañas para un periodo anterior al 2026-08-25. En `rbac09demo`, sin gastos, Ventas y utilidad avisa que la utilidad neta es igual a la bruta.
+- [x] **Pantalla:** el usuario revisó en la app, el 2026-11-24, la pestaña Gastos y la utilidad neta de Ventas y utilidad.
+- [x] **Tests:**
+  - **backend:** `expenseReport.test.js` (35) y 23 nuevos en `profitReport.test.js`, más los de la migración, el catálogo y las rutas;
+  - **frontend:** `ExpensesTab.test.jsx` (30), 12 nuevos en `ProfitTab.test.jsx`, y los de `Reports.test.jsx` y `App.test.jsx`;
+  - **resultado:** en Docker pasan los del backend (1377/1377, 63 suites) y los del frontend (681/681, 63 archivos).
+
+**Diferencias con smallposv2:**
+- **Con histórico:**
+  - en saas, la Spec 22 convirtió las salidas de caja viejas en gastos, así que agosto a octubre de 2026 en `marksexpress` ya tienen utilidad neta;
+  - el aviso del primer gasto sigue la misma regla. En `marksexpress` sale con un periodo anterior al 2026-08-25, porque las ventas empiezan en 2024.
+- **Permiso:**
+  - va en `rbac/catalog.js`, con la descripción "Ver el reporte de gastos", y `permissionCodes.js` se regenera;
+  - la `012` lo asigna por nombre de rol a Administrador, Administrador de sucursal y Supervisor;
+  - la utilidad neta se decide con `req.user.can('reports.expenses')` y `can('reports.expenses')`, sin atajo por nombre de rol;
+  - no se porta la etiqueta de `PermissionsModal.jsx`, porque saas muestra la descripción del catálogo.
+- **Pestaña:**
+  - va en `REPORT_TABS`, después de Rotación de inventario, y el menú la toma de ahí;
+  - usa el ícono `bi-cash-coin`, el del módulo Gastos, porque `bi-wallet2` es el de Suscripción. El mensaje sin gastos usa el mismo;
+  - el subtítulo de Reportes dice "Sesiones de caja, ventas, inventario y gastos".
+- **Sucursales:**
+  - el alcance va en `X-Branch-Id` con `useScope('expenses-report')`, porque la llave `expenses` es la del módulo Gastos;
+  - el backend filtra con `branchIds`;
+  - "Ver por sucursal" sale cuando el alcance cubre más de una sucursal, no por ser administrador central.
+- **Carga y error:** como en Valuación y Rotación de saas. El esqueleto solo sale en la primera carga, las filas anteriores se quedan atenuadas, y si la API falla se vacían el resumen y el desglose.
+- **Presets:** van en `ScrollHint`, como en las demás pestañas de saas.
+- **Tests:**
+  - los del backend simulan la base, y la migración se prueba revisando su SQL (`migrationFiles.test.js`);
+  - los del frontend se adaptaron al `can()` de saas y a `useScope`.
 
 ## Notas para portar a smallpos-saas
 

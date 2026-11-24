@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 12 (un solo commit) | 2026-10-27 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 12 (un solo commit) | 2026-10-27 |
 
 ## Resumen
 
@@ -143,7 +143,90 @@ Spec completa: [`specs/12-modulo-de-gastos.md`](../specs/12-modulo-de-gastos.md)
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 22 (`specs/22-expenses-module.md`) el 2026-11-24. Las pruebas por la API se hicieron en `marksexpress` con usuarios reales y datos marcados con "(QA spec 22)". Al terminar, esos datos se borraron restaurando el backup tomado justo antes.
+
+- [x] **Gasto en el módulo:**
+  - un Supervisor registró fuera de caja un gasto de Renta de $3,500.00 por transferencia, con proveedor, folio y un PDF;
+  - lo vio en la lista y en su detalle, y descargó el mismo PDF con su nombre original;
+  - lo canceló con motivo. Cancelarlo otra vez responde 400.
+- [x] **Gasto desde el POS:**
+  - un Cajero abrió su caja con $500 y registró desde ella un gasto de $120 con foto. El esperado bajó a $380, y la salida dice "Gasto #id: Servicios – descripción";
+  - no ve el menú Gastos;
+  - la lista, un gasto fuera de caja y otra sucursal le responden 403.
+- [x] **Reingreso:**
+  - con la sesión abierta, cancelar el gasto registró "Reingreso del gasto #id" y el esperado subió $120;
+  - con la sesión ya cerrada, cancelar otro gasto no registró reingreso y la sesión no cambió. La pantalla avisa que el dinero que regresó se registra como Entrada.
+- [x] **Retiros:**
+  - el retiro manual y el del corte se guardan como `withdrawal`;
+  - un movimiento manual `expense` responde 400;
+  - un corte con dos gastos, un reingreso y dos retiros cuadró: esperado $350, contado $350 y diferencia $0.
+- [x] **Histórico:**
+  - la migración `010` convirtió las 294 salidas de `marksexpress` en 36 retiros ($67,373.68) y 258 gastos ($141,719.00), cada gasto ligado a su salida y con la categoría que el usuario revisó;
+  - de los 258 gastos, 67 ($25,726.50) cuentan en la utilidad neta;
+  - el esperado de las 104 sesiones no cambió, y la segunda corrida dijo "Al día".
+- [x] **Categorías:**
+  - un Administrador creó una categoría, la renombró, le quitó la marca y la desactivó;
+  - un nombre repetido responde 400;
+  - la categoría inactiva no aparece al registrar, y un gasto con ella responde 400;
+  - el Supervisor recibe 403 en `/api/expense-categories`.
+- [x] **Permisos y sucursales:**
+  - la migración `011` se aplicó a los dos tenants locales. Administrador tiene los 4; Supervisor, read, create y cancel; Cajero, create; los demás roles, ninguno;
+  - un usuario de una sola sucursal no ve, no descarga ni registra gastos de otra.
+- [x] **Comprobante privado:**
+  - queda en `backend/storage/{subdominio}/expense-receipts`, y ninguna URL pública lo entrega;
+  - `npm run backup` lo copió y `npm run restore` lo regresó con el mismo SHA-256.
+- [x] **Pantalla:** el usuario la revisó en la app el 2026-11-24. El módulo Gastos y el gasto del POS se ven y se usan bien en escritorio (1366 px) y en el celular.
+- [x] **Runbooks:**
+  - `runbook-backup.md` dice que se respaldan los comprobantes;
+  - `runbook-tenant-migrations.md` pide correr la vista previa del histórico antes de aplicar la `010` o de importar un dump con salidas de caja viejas.
+- [x] **Tests:**
+  - **backend:** `expenses.test.js` (58), `expenseCategories.test.js` (21), `uploadReceipt.test.js` (13), `cashMovements.test.js` (12) y `previewCashHistory.test.js` (6), más los de migraciones, permisos y backup;
+  - **frontend:** `Expenses`, `ExpenseFormModal`, `ExpenseDetailModal`, `ExpenseCategoriesTab`, `CashMovementsModal` y los de las etiquetas;
+  - **resultado:** en Docker pasan los del backend (1314/1314, 62 suites) y los del frontend (634/634, 62 archivos).
+
+**Diferencias con smallposv2:**
+- **El histórico se convierte en gastos:**
+  - **sin `legacy_expense`:** ese tipo no existe en saas;
+  - **reglas:** la migración `010-convert-cash-outflows.sql` clasifica cada salida `expense` vieja por su descripción. Son 11 reglas en orden, escritas para las descripciones de `marksexpress` (RF-25 de la spec):
+    - pasan a retiro el corte, los ajustes, las recargas, los juguetes y zapatos y las entregas de dinero a una persona;
+    - comida, renta, luz, super, agua y hojas pasan a su categoría;
+    - "PAGO …" y "COMPRA(S) …" pasan a Pago a proveedor (mercancía);
+    - lo demás pasa a Otros;
+  - **datos de cada gasto:** toma de su salida la sucursal de la caja, la fecha en hora de México, el método Efectivo, la descripción, el usuario y la hora;
+  - **por qué no la regla del plan:** era más simple, pero dejaba $83,905.18 en Otros, contando en la utilidad neta compras de mercancía, recargas y ajustes de caja.
+- **Vista previa del histórico:**
+  - `scripts/preview-cash-history.js` imprime, por tenant, cada descripción con su destino;
+  - lee las reglas del archivo de la `010`.
+- **Piezas genéricas:**
+  - `helpers/cashOutflows.js` (validaciones, caja abierta y reingreso) y `middlewares/uploadReceipt.js` (comprobante privado) nacen genéricos, para que Compras los use. En smallposv2 se separaron con la spec 14;
+  - `uploadExpenseReceipt.js` solo fija la carpeta.
+- **Comprobantes por tenant:**
+  - van en `backend/storage/{subdominio}/expense-receipts/`; la raíz se cambia con `STORAGE_DIR`;
+  - la descarga solo busca en la carpeta del tenant de la petición;
+  - el middleware ata `next` al contexto de la petición con `keepAsyncContext`, de `uploadImage.js`. Sin eso, el servicio pierde el tenant;
+  - el volumen de producción es `./backend/storage:/app/storage`;
+  - `npm run backup` copia la carpeta de cada tenant y `npm run restore` la regresa.
+- **Sucursales:**
+  - registrar va en `X-Branch-Id` (`branch: 'required'`); ver, descargar y cancelar, con el alcance (`branch: 'scope'`);
+  - la columna de sucursal aparece cuando el alcance cubre más de una sucursal;
+  - con "Todas mis sucursales", el formulario pide la sucursal del gasto entre las del usuario.
+- **Permisos:**
+  - van en `rbac/catalog.js`, y `permissionCodes.js` se regenera;
+  - la `011` los asigna por nombre de rol, y **Administrador de sucursal** recibe lo mismo que Supervisor;
+  - no se portan las etiquetas de `PermissionsModal.jsx` ni `requireAnyPermission`, porque saas tiene `anyPerm`.
+- **Menú y Configuración:**
+  - Gastos va en `MODULES` de `auth/modules.js`, después de Devoluciones, de donde salen la ruta y el menú. No se tocan `main.jsx` ni `App.jsx`;
+  - usa el ícono `bi-cash-coin`, porque `bi-wallet2` ya es el de Suscripción;
+  - la pestaña Categorías de gasto va en `settingsTabs.js`.
+- **POS:**
+  - en saas, los movimientos de efectivo eran "Entrada" y "Salida", y la salida se guardaba como `expense`. Pasan a Entrada, Retiro y Gasto;
+  - el aviso de la sesión cerrada pide registrar el dinero como Entrada, no como Ingreso manual.
+- **Efectivo esperado:** en saas, el estado de la sesión y el detalle de Sesiones de caja contaban como salida cualquier tipo que no fuera de entrada. Con `helpers/cashMovements.js`, un tipo que no está en ninguna lista ya no cuenta.
+- **Estilos del módulo:** usa la `FilterCard` de Reportes, así que importa `reports.css` y su raíz lleva `rpt-root exp-root`.
+- **Tests:**
+  - los del backend simulan la base;
+  - las migraciones se prueban revisando su SQL (`migrationFiles.test.js`), y contra MySQL al aplicarlas a los tenants locales;
+  - los del frontend se adaptaron al `can()` de saas, a `useScope` y a `BranchContext`.
 
 ## Notas para portar a smallpos-saas
 

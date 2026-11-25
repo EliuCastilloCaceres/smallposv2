@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de las specs 14 y 15 (un solo commit) | 2026-10-28 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de las specs 14 y 15 (un solo commit) | 2026-10-28 |
 
 ## Resumen
 
@@ -128,7 +128,64 @@ Spec completa: [`specs/14-modulo-de-compras.md`](../specs/14-modulo-de-compras.m
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 24 (`specs/24-purchases-module.md`) el 2026-11-25. Las pruebas por la API se hicieron en `marksexpress` con usuarios y productos reales, después de un backup, y las compras de prueba llevan `QA-24` en el folio o en las notas. Esos datos se quedaron (decisión del usuario): mientras corrían las pruebas, el usuario registró compras reales en la app, y restaurar el backup las habría borrado.
+
+- [x] **Migraciones:**
+  - la `013`, la `014` y la `015` se aplicaron a `marksexpress` y a `rbac09demo`, y la segunda corrida dijo "Al día";
+  - Administrador y Supervisor tienen los 3 permisos; Almacenista, read y create; Cajero, create. Los roles personalizados no tienen ninguno, y no hay asignaciones duplicadas;
+  - "Pago a proveedor (mercancía)" quedó inactiva, y sus 191 gastos de `marksexpress` ($115,992.50) no cambiaron.
+- [x] **Compra en el módulo:** un Almacenista de Sucursal Central registró una compra de $1,002.00 por transferencia, con folio, un PDF y 3 líneas, dos de ellas de variantes de un mismo producto:
+  - el stock de Central subió, y cada línea tiene su entrada `purchase` con el motivo "Compra #id – proveedor";
+  - el costo quedó en el promedio ponderado calculado a mano con la existencia de las dos sucursales: (12 × 17 + 12 × 18) / 24 = $17.50 y, una sola vez para las dos variantes, (12 × 125 + 6 × 131) / 18 = $127.00;
+  - la compra aparece en la lista, la búsqueda por el SKU de una variante la encuentra, y el detalle muestra el costo antes y después. El PDF se descarga con su nombre original.
+- [x] **Costo $0 y sin existencia:** un producto con costo $0 y uno sin existencia tomaron el costo de su compra ($12.50 y $36.00).
+- [x] **Compra desde el POS:** un Cajero abrió su caja con $500 y registró desde ella una compra de $46.80 con foto:
+  - el stock y el costo subieron, el esperado bajó a $453.20, y la salida dice "Compra #id: proveedor";
+  - un corte con dos compras y un reingreso cuadró: esperado $470, contado $470 y diferencia $0;
+  - no ve el menú Compras. La lista, el detalle, una compra fuera de caja, otra sucursal y cancelar le responden 403, y un movimiento manual `purchase`, 400.
+- [x] **Cancelación:**
+  - con la sesión abierta registró "Reingreso de la compra #id" y el esperado volvió a $500. El stock se revirtió y el costo no cambió;
+  - con la sesión cerrada, se canceló sin reingreso (`session_closed`) y la sesión no cambió;
+  - fuera de caja, se canceló con motivo y guardó quién, cuándo y por qué. Cancelarla otra vez, o sin motivo, responde 400;
+  - con una línea sin stock suficiente, respondió 409 (*"No hay stock suficiente de «producto» para revertir la compra."*) y no canceló nada.
+- [x] **"Compra a proveedor":** el ajuste individual y el masivo responden 400 con cualquier combinación de mayúsculas y espacios, las pantallas ya no lo ofrecen, y los 920 movimientos históricos (541 `purchase` y 379 `entry`) no cambiaron.
+- [x] **Categoría de mercancía:** no aparece al registrar un gasto, ni en el módulo ni en el POS. Sus 191 gastos se ven igual en Gastos y en el reporte de Gastos, sin contar en la utilidad neta.
+- [x] **Sucursales:**
+  - un Almacenista de Sucursal Norte no ve, no descarga ni cancela una compra de Central (404), y pedir la lista de Central o registrar en ella responde 403. En Norte registró una, y el costo usó la existencia de las dos sucursales;
+  - un Supervisor con "Todas mis sucursales" ve las de las dos, y registrar sin elegir sucursal responde 400. Eligió Sucursal Norte y la compra quedó ahí.
+- [x] **Comprobante privado:**
+  - queda en `backend/storage/{subdominio}/purchase-receipts/` con un nombre generado, y ninguna URL pública lo entrega;
+  - `npm run backup` lo copió y `npm run restore` lo regresó con el mismo SHA-256.
+- [x] **Pantalla:** el usuario la revisó en la app el 2026-11-25. El módulo Compras y la compra del POS se ven y se usan bien en escritorio (1366 px) y en el celular, los botones de Movimientos de efectivo caben y la cuadrícula del POS muestra el stock nuevo sin recargar.
+- [x] **Runbook:** `runbook-backup.md` dice que se respaldan los comprobantes de compras.
+- [x] **Tests:**
+  - **backend:** `purchases.test.js` (89), `adjustmentReasons.test.js` (9) y `cashMovements.test.js` (14), más los de migraciones, permisos, backup y la matriz de rutas;
+  - **frontend:** `Purchases` (11), `PurchaseFormModal` (16), `PurchaseDetailModal` (9), `CashMovementsModal`, `PosContext`, `AdjustDrawer`, `BulkAdjustModal`, `OutOfStockModal` y los de las etiquetas;
+  - **resultado:** en Docker pasan los del backend (1499/1499, 65 suites) y los del frontend (731/731, 71 archivos).
+
+**Diferencias con smallposv2:**
+- **Solo la spec 14:** su código quedó en el mismo commit que el de la spec 15. `PUT /api/purchases/:id/receipt` y las columnas `receipt_uploaded_by` y `receipt_uploaded_at` van en la Spec 25 de saas.
+- **El histórico no se convierte:** los movimientos "Compra a proveedor" no tienen costo ni proveedor, así que siguen en Movimientos como están, igual que en smallposv2.
+- **Piezas genéricas:** `helpers/cashOutflows.js` y `middlewares/uploadReceipt.js` ya llegaron genéricos con el módulo de gastos (Spec 22). Las compras los usan sin cambiarlos, y los gastos no se tocan.
+- **Comprobantes por tenant:**
+  - van en `backend/storage/{subdominio}/purchase-receipts/`. No hay `PURCHASE_RECEIPTS_DIR`: la raíz es la de `STORAGE_DIR`, como en los gastos;
+  - el volumen de producción (`./backend/storage:/app/storage`) y `npm run backup` y `npm run restore` ya los cubren, sin cambios.
+- **Sucursales:**
+  - registrar va en `X-Branch-Id` (`branch: 'required'`); ver, descargar y cancelar, con el alcance (`branch: 'scope'`);
+  - la columna y el filtro de sucursal aparecen cuando el alcance cubre más de una sucursal, con `useScope` y `ScopeSelector`, no por ser administrador central;
+  - con "Todas mis sucursales", el formulario pide la sucursal de la compra entre las del usuario;
+  - desde el POS, la compra va con la sucursal del POS, así que el error que smallposv2 corrigió el 2026-10-29 no aparece.
+- **Permisos:**
+  - van en `rbac/catalog.js`, y `permissionCodes.js` se regenera;
+  - la `014` los asigna por nombre de rol, y **Administrador de sucursal** recibe lo mismo que Supervisor;
+  - no se portan las etiquetas de `PermissionsModal.jsx` ni `requireAnyPermission`, porque saas muestra la descripción del catálogo y tiene `anyPerm`.
+- **Menú:** Compras va en `MODULES` de `auth/modules.js`, después de Gastos. Usa el ícono `bi-cart-plus`, porque `bi-cart-check` es el de "Vender" en el inicio y el del Dashboard.
+- **Aviso de la sesión cerrada:** pide registrar el dinero como **Entrada**, no como "Ingreso manual", como el gasto.
+- **Estilos del módulo:** usa la `FilterCard` de Reportes, así que importa `reports.css` y su raíz lleva `rpt-root pur-root`. Las variables de `pur-*` también van en `.pur-overlay`, porque el formulario se abre en el POS.
+- **Tests:**
+  - los del backend simulan la base;
+  - las migraciones se prueban revisando su SQL (`migrationFiles.test.js`), y contra MySQL al aplicarlas a los tenants locales;
+  - los del frontend se adaptaron al `can()` de saas, a `useScope` y a `BranchContext`.
 
 ## Notas para portar a smallpos-saas
 

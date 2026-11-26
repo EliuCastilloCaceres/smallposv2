@@ -2,7 +2,7 @@
 
 | Estado | Tipo | Origen | Destino | Commit origen | Fecha |
 |---|---|---|---|---|---|
-| **Borrador** | feat | smallposv2 | smallpos-saas | Commit de la spec 16 (un solo commit) | 2026-10-29 |
+| **Implementada** | feat | smallposv2 | smallpos-saas | Commit de la spec 16 (un solo commit) | 2026-10-29 |
 
 ## Resumen
 
@@ -73,7 +73,36 @@ Spec completa: [`specs/16-reporte-de-compras.md`](../specs/16-reporte-de-compras
 
 ## Criterios de aceptación
 
-_Pendiente. Se llenan después de implementar._
+Implementada en smallpos-saas con la Spec 26 (`specs/26-purchases-report.md`) el 2026-11-25. Las pruebas por la API se hicieron en `marksexpress` con usuarios reales, después de un backup que no se restauró (decisión del usuario), comparando cada respuesta con consultas directas a la base.
+
+- [x] **Migración:** la `018` se aplicó a `marksexpress` y a `rbac09demo`, y la segunda corrida dijo "Al día". `reports.purchases` lo tienen Administrador, Supervisor y Almacenista, una vez cada uno. El Cajero, el Propietario y los roles personalizados no lo tienen.
+- [x] **Resumen y desglose:** un Supervisor con "Todas mis sucursales" vio en noviembre $1,723.46 en 8 compras, compra promedio $215.43 y 6 proveedores, con "Proveedor generico" primero (25.56 %).
+  - El resumen, cada "Ver por" (proveedor, producto y sucursal) y la primera compra coincidieron con la base, también la última compra de cada proveedor y el costo promedio de cada producto.
+  - Las 3 compras canceladas del mes no cuentan.
+- [x] **Variantes:** un Almacenista registró una compra de prueba con 3 de una variante y 2 de otra del mismo producto, por $654.00. Por producto, ese producto salió una sola vez: 5 par, 1 compra, $654.00 y costo promedio $130.80, igual que en la base.
+- [x] **Alcance y permisos:**
+  - un Almacenista de Sucursal Central solo ve las compras de Central, y uno de Sucursal Norte solo las de Norte. Pedir la otra sucursal en `X-Branch-Id` responde 403;
+  - el Cajero, y un Supervisor sin `reports.purchases` aunque tenga `purchases.read` y `reports.expenses`, reciben 403.
+- [x] **Aviso de la primera compra:** con Este mes, el periodo empieza antes de la primera compra (25 nov 2026) y sale el aviso. Con Hoy no sale.
+- [x] **Pantalla:** el usuario la revisó en la app el 2026-11-25, en escritorio (1366 px) y en el celular, con cada "Ver por" y la × del aviso, y todo se ve bien.
+- [x] **Tests:**
+  - **backend:** `purchaseReport.test.js` (38), la `018` en `migrationFiles.test.js` (3), el catálogo, las plantillas y la matriz de rutas;
+  - **frontend:** `PurchasesTab` (29), `SummaryNote` (3), `Reports` y `App`;
+  - **resultado:** en Docker pasan los del backend (1583/1583, 66 suites) y los del frontend (791/791, 74 archivos).
+
+**Diferencias con smallposv2:**
+- **Permiso:**
+  - la descripción es "Ver el reporte de compras", como los demás reportes de saas;
+  - lo recibe también el **Almacenista**, que registra las compras (decisión del plan de saas). La `018` lo asigna por nombre de rol a Administrador, Administrador de sucursal, Supervisor y Almacenista;
+  - la etiqueta de `PermissionsModal.jsx` no se porta: saas muestra la descripción del catálogo.
+- **Ícono:** la pestaña usa `bi-cart-plus`, el del módulo Compras, porque `bi-cart-check` es el de "Vender" en saas.
+- **Sucursales:**
+  - el alcance va en `X-Branch-Id` con `useScope('purchases-report')` y `ScopeSelector`, y el backend filtra con `branchIds`. No hay `branch_id` en el query;
+  - "Ver por sucursal" aparece cuando el alcance cubre más de una sucursal, no por ser administrador central.
+- **Carga y error, como Gastos de saas:** el esqueleto solo sale en la primera carga, y después las filas anteriores se quedan atenuadas. Si la API falla, se vacían el resumen y el desglose.
+- **El aviso vuelve a salir** al cambiar el periodo o el alcance desde sus controles, no con un efecto. Cambiar "Ver por" o la página no lo vuelve a mostrar, como aquí.
+- **Aviso de la primera compra:** dice lo mismo que aquí (decisión del usuario). No menciona los gastos de "Pago a proveedor (mercancía)" que el histórico de caja de saas dejó en Gastos.
+- **Tests:** los del backend simulan la base, y las sumas se comprobaron contra `marksexpress`. Los del frontend se adaptaron al `can()` de saas y a `useScope`.
 
 ## Notas para portar a smallpos-saas
 
